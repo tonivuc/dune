@@ -211,6 +211,8 @@ namespace Sensors
 
           m_samples = 0;
         }
+
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
     };
   }
