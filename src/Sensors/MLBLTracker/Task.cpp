@@ -678,7 +678,7 @@ namespace Sensors
           int8_t progress;
           uint8_t fuel_level;
           uint8_t fuel_conf;
-
+          float rhodamine;
           std::memcpy(&lat, msg_raw + 1, 4);
           std::memcpy(&lon, msg_raw + 5, 4);
           std::memcpy(&depth, msg_raw + 9, 1);
@@ -689,6 +689,7 @@ namespace Sensors
           std::memcpy(&progress, msg_raw + 18, 1);
           std::memcpy(&fuel_level, msg_raw + 19, 1);
           std::memcpy(&fuel_conf, msg_raw + 20, 1);
+          std::memcpy(&rhodamine, msg_raw + 21, 4);
 
           for (int i = 0; i < 2; ++i)
           {
@@ -728,8 +729,14 @@ namespace Sensors
           fuel.confidence = (float)fuel_conf;
           dispatch(fuel);
 
+          IMC::RhodamineDye dye;
+          dye.setSource(m_mimap[src]);
+          dye.value = (float)rhodamine;
+          dispatch(dye);
+
           trace("lat %f | lon %f | depth %f | alt %f | yaw %f", es.lat, es.lon, es.depth, es.alt, es.psi);
           trace("fuel %f | conf %f | plan progress %f", fuel.value, fuel.confidence, pcs.plan_progress);
+          debug("rhodamine is %f", rhodamine);
         }
         else if (code == c_code_plan)
         {
