@@ -241,6 +241,10 @@ namespace Sensors
       float m_fuel_level;
       //! Last fuel level confidence.
       float m_fuel_conf;
+      //! Last Rhodamine level.
+      float m_rhodamine;
+      //! Last maximum Rhodamine level.
+      float m_rhodamine_max;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
@@ -300,7 +304,7 @@ namespace Sensors
         .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Second)
         .defaultValue("60")
-        .minimumValue("30")
+        .minimumValue("10")
         .maximumValue("600")
         .description("Reports periodicity");
 
@@ -358,7 +362,8 @@ namespace Sensors
         m_states[STA_ERR_SRC].state = IMC::EntityState::ESTA_ERROR;
         m_states[STA_ERR_SRC].description = DTR("failed to set modem address");
 
-	m_stop_comms = true;
+        m_stop_comms = true;
+        m_rhodamine_max = -1;
 
         // Process narrow band transponders.
         std::vector<std::string> txponders = ctx.config.options("Narrow Band Transponders");
@@ -375,6 +380,7 @@ namespace Sensors
         bind<IMC::LblConfig>(this);
         bind<IMC::PlanControlState>(this);
         bind<IMC::QueryEntityState>(this);
+        bind<IMC::Voltage>(this);
         bind<IMC::SoundSpeed>(this);
         bind<IMC::VehicleMedium>(this);
       }
@@ -803,6 +809,9 @@ namespace Sensors
         uint8_t fuel = (uint8_t)m_fuel_level;
         uint8_t conf = (uint8_t)m_fuel_conf;
         int8_t prog = (int8_t)m_progress;
+        float rhodamine = m_rhodamine;
+
+        m_rhodamine_max = -1;
 
         for (uint8_t i = 0; i < std::min(2, (int)m_beacons.size()); i++)
         {
@@ -824,6 +833,7 @@ namespace Sensors
         std::memcpy(&msg[18], &prog, 1);
         std::memcpy(&msg[19], &fuel, 1);
         std::memcpy(&msg[20], &conf, 1);
+        std::memcpy(&msg[21], &rhodamine, 4);
 
         std::string hex = String::toHex(msg);
         std::string cmd = String::str("$CCTXD,%u,%u,0,%s\r\n",
@@ -935,7 +945,7 @@ namespace Sensors
         }
 
         if (msg->medium == IMC::VehicleMedium::VM_GROUND)
-	  m_stop_comms = true;
+          m_stop_comms = true;
         else
           m_stop_comms = false;
       }
@@ -951,6 +961,17 @@ namespace Sensors
       {
         m_fuel_level = msg->value;
         m_fuel_conf = msg->confidence;
+      }
+
+      void
+      consume(const IMC::Voltage* msg)
+      {
+        if (msg->getSourceEntity() == resolveEntity("Rhodamine"))
+        {
+          m_rhodamine = msg->value;
+          if (m_rhodamine > m_rhodamine_max)
+            m_rhodamine_max = m_rhodamine;
+        }
       }
 
       void
