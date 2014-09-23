@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <map>
 #include <unistd.h>
+#include <sstream>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -61,6 +62,7 @@ struct MetaData
   std::string vname;
   std::string sname;
   std::string type;
+  bool raw;
 };
 
 void
@@ -76,8 +78,8 @@ writeHeader(std::ofstream& file, MetaData* m, double timestamp)
   std::string time_safe = Time::Format::getTimeSafe(timestamp);
 
   file << c_comment
-       << date_safe[4] << date_safe[5] << "/"
        << date_safe[6] << date_safe[7] << "/"
+       << date_safe[4] << date_safe[5] << "/"
        << date_safe[0] << date_safe[1] << date_safe[2] << date_safe[3]
        << " "
        << time_safe[0] << time_safe[1] << ":" << time_safe[2] << time_safe[3]
@@ -86,30 +88,53 @@ writeHeader(std::ofstream& file, MetaData* m, double timestamp)
   file << c_comment << c_not_valid << std::endl;
 
   file << c_comment
-       << "Time, Latitude, Longitude, Depth, " << m->type << ", Temperature"
+       << "Time, Latitude, Longitude, Depth, " << m->type
+       << "," << m->type << ", Temperature" << std::endl;
+
+  file << c_comment
+       << "seconds, degrees, degrees, meter, ppb, raw, Celsius"
        << std::endl;
 }
 
-template <typename T>
 void
-writeLine(std::ofstream& file, const IMC::EstimatedState* state,
-          const T* rdye, const IMC::Temperature* temp = NULL)
+writeLine(std::ofstream& file, double timestamp, const IMC::EstimatedState* state,
+          const IMC::RhodamineDye* rdye, const IMC::Voltage* raw,
+          const IMC::Temperature* temp = NULL)
 {
-  file << std::fixed << std::setprecision(2)
-       << rdye->getTimeStamp() << ","
-       << std::setprecision(5)
-       << Math::Angles::degrees(state->lat) << ","
-       << Math::Angles::degrees(state->lon) << ","
-       << std::setprecision(2)
-       << state->depth << ","
-       << std::setprecision(3)
-       << rdye->value;
+  double lat;
+  double lon;
+  Coordinates::toWGS84(*state, lat, lon);
 
+  std::string t_str = "";
+  std::stringstream ss;
   if (temp != NULL)
-    file << std::setprecision(3) << "," << temp->value;
-  else
-    file << "," << c_not_valid;
+  {
+    if (timestamp - temp->getTimeStamp() < c_temp_delay)
+    {
+      ss << std::setprecision(3) << "," << temp->value;
+      t_str = ss.str();
+    }
+  }
 
+  file << std::fixed << std::setprecision(2)
+       << timestamp << ","
+       << std::setprecision(5)
+       << Math::Angles::degrees(lat) << ","
+       << Math::Angles::degrees(lon) << ","
+       << std::setprecision(2)
+       << state->depth;
+
+  if (rdye != NULL)
+    file << "," << std::setprecision(3) << rdye->value;
+  else
+    file << "-1";
+
+  if (raw != NULL)
+    file << "," << std::setprecision(3) << raw->value;
+  else
+    file << "-1";
+
+  file << t_str;
   file << std::endl;
 }
 
@@ -134,6 +159,7 @@ main(int32_t argc, char** argv)
   md.vname = "unknown";
   md.sname = "Cyclops 7";
   md.type = "rhodamine";
+  md.raw = true;
 
   std::string output_name = "";
 
@@ -196,10 +222,17 @@ main(int32_t argc, char** argv)
   std::ofstream* csv = NULL;
 
   std::string temp_label = "CTD";
+  std::string rhod_label = "Rhodamine";
   bool wrote_header = false;
+
+  bool write_on_raw = true;
 
   DUNE::IMC::EstimatedState estate;
   DUNE::IMC::Temperature temp;
+  DUNE::IMC::RhodamineDye rdye;
+  DUNE::IMC::Voltage raw;
+  rdye.value = -1.0;
+  raw.value = -1.0;
 
   for (int32_t i = file_index; i < argc; ++i)
   {
@@ -212,6 +245,7 @@ main(int32_t argc, char** argv)
 
     DUNE::IMC::Message* msg = NULL;
     unsigned temp_ent = 0;
+    unsigned rhod_ent = 0;
 
     try
     {
@@ -220,6 +254,7 @@ main(int32_t argc, char** argv)
         if (msg->getId() == DUNE_IMC_ESTIMATEDSTATE)
         {
           estate = *static_cast<IMC::EstimatedState*>(msg);
+
           if (!wrote_header)
           {
             std::string date = Time::Format::getTimeSafe(msg->getTimeStamp());
@@ -237,6 +272,8 @@ main(int32_t argc, char** argv)
           IMC::EntityInfo* ent = static_cast<IMC::EntityInfo*>(msg);
           if (ent->label == temp_label)
             temp_ent = ent->id;
+          else if (ent->label == rhod_label)
+            rhod_ent = ent->id;
         }
         else if (msg->getId() == DUNE_IMC_TEMPERATURE)
         {
@@ -246,21 +283,23 @@ main(int32_t argc, char** argv)
         }
         else if (msg->getId() == DUNE_IMC_RHODAMINEDYE)
         {
-          IMC::RhodamineDye* rdye = static_cast<IMC::RhodamineDye*>(msg);
+          IMC::RhodamineDye* rd = static_cast<IMC::RhodamineDye*>(msg);
+          rdye = *rd;
 
-          if (rdye->getTimeStamp() - temp.getTimeStamp() < c_temp_delay)
-            writeLine(*csv, &estate, rdye, &temp);
-          else
-            writeLine(*csv, &estate, rdye);
+          if (!write_on_raw)
+            writeLine(*csv, rd->getTimeStamp(), &estate, rd, &raw, &temp);
         }
-        else if (msg->getId() == DUNE_IMC_CONDUCTIVITY)
+        else if (msg->getId() == DUNE_IMC_VOLTAGE)
         {
-          IMC::Conductivity* cond = static_cast<IMC::Conductivity*>(msg);
+          IMC::Voltage* vol = static_cast<IMC::Voltage*>(msg);
 
-          if (cond->getTimeStamp() - temp.getTimeStamp() < c_temp_delay)
-            writeLine(*csv, &estate, cond, &temp);
-          else
-            writeLine(*csv, &estate, cond);
+          if (vol->getSourceEntity() == rhod_ent)
+          {
+            raw = *vol;
+
+            if (write_on_raw)
+              writeLine(*csv, vol->getTimeStamp(), &estate, &rdye, vol, &temp);
+          }
         }
 
         delete msg;
