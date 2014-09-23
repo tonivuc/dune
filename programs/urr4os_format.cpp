@@ -88,12 +88,9 @@ writeHeader(std::ofstream& file, MetaData* m, double timestamp)
   file << c_comment << c_not_valid << std::endl;
 
   file << c_comment
-       << "Time, Latitude, Longitude, Depth, " << m->type
-       << "," << m->type << ", Temperature" << std::endl;
-
-  file << c_comment
-       << "seconds, degrees, degrees, meter, ppb, raw, Celsius"
-       << std::endl;
+       << "Time (seconds), Latitude (degrees), Longitude (degrees),"
+       << "Depth (meters), " << m->type << " (ppb),"
+       << m->type << " (raw), Temperature (Celsius)" << std::endl;
 }
 
 void
