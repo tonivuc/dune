@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4ab0411c6256574a5ac1785347d0a9f2                            *
+// IMC XML MD5: 2082508f7ca90365a9b479251a12d1d7                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -6398,6 +6398,74 @@ namespace DUNE
 
     void
     FineOil::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "value", value, nindent__);
+    }
+
+    Turbidity::Turbidity(void)
+    {
+      m_header.mgid = 288;
+      clear();
+    }
+
+    void
+    Turbidity::clear(void)
+    {
+      value = 0;
+    }
+
+    bool
+    Turbidity::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::Turbidity& other__ = static_cast<const Turbidity&>(msg__);
+      if (value != other__.value) return false;
+      return true;
+    }
+
+    int
+    Turbidity::validate(void) const
+    {
+      return false;
+    }
+
+    uint8_t*
+    Turbidity::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(value, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    Turbidity::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    Turbidity::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(value, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    fp64_t
+    Turbidity::getValueFP(void) const
+    {
+      return static_cast<fp64_t>(value);
+    }
+
+    void
+    Turbidity::setValueFP(fp64_t val)
+    {
+      value = static_cast<fp32_t>(val);
+    }
+
+    void
+    Turbidity::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
       IMC::toJSON(os__, "value", value, nindent__);
     }

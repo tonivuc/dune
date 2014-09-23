@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4ab0411c6256574a5ac1785347d0a9f2                            *
+// IMC XML MD5: 2082508f7ca90365a9b479251a12d1d7                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -202,6 +202,8 @@
 #define DUNE_IMC_CRUDEOIL 286
 //! FineOil identification number.
 #define DUNE_IMC_FINEOIL 287
+//! Turbidity identification number.
+#define DUNE_IMC_TURBIDITY 288
 //! CameraZoom identification number.
 #define DUNE_IMC_CAMERAZOOM 300
 //! SetThrusterActuation identification number.
