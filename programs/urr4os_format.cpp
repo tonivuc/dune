@@ -33,6 +33,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <map>
+#include <unistd.h>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
@@ -83,7 +84,7 @@ writeHeader(std::ofstream& file, MetaData* m, double timestamp)
        << std::endl;
 
   file << c_comment << c_not_valid << std::endl;
-  
+
   file << c_comment
        << "Time, Latitude, Longitude, Depth, " << m->type << ", Temperature"
        << std::endl;
@@ -122,7 +123,8 @@ main(int32_t argc, char** argv)
     std::cerr << "Options:" << std::endl
               << "-v" << "\t<vehicle_name>: default is unknown" << std::endl
               << "-s" << "\t<sensor_name>: default is C7" << std::endl
-              << "-d" << "\t<data_type>: rhodamine or refined or crude" << std::endl;
+              << "-d" << "\t<data_type>: rhodamine or refined or crude" << std::endl
+              << "-o" << "\t<out_file>: output file name" << std::endl;
     return 1;
   }
 
@@ -174,6 +176,15 @@ main(int32_t argc, char** argv)
 
       file_index = i + 1;
     }
+  }
+
+  if (md.vname == "unknown")
+  {
+    char host[100];
+
+    int res = gethostname(host, 100);
+    if (res == 0)
+      md.vname = host;
   }
 
   std::cerr << "vehicle name: " << md.vname << std::endl
