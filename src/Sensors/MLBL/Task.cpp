@@ -245,6 +245,8 @@ namespace Sensors
       float m_rhodamine;
       //! Last maximum Rhodamine level.
       float m_rhodamine_max;
+      //! Rhodamine Entity Id
+      float m_rhodamine_eid;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
@@ -513,6 +515,15 @@ namespace Sensors
         {
           inf(DTR("dynamic sound speed corrections are disabled"));
           m_sound_speed = m_args.sound_speed_def;
+        }
+
+        try
+        {
+          m_rhodamine_eid = resolveEntity("Rhodamine");
+        }
+        catch (...)
+        {
+          m_rhodamine_eid = UINT_MAX;
         }
       }
 
@@ -966,7 +977,7 @@ namespace Sensors
       void
       consume(const IMC::Voltage* msg)
       {
-        if (msg->getSourceEntity() == resolveEntity("Rhodamine"))
+        if (msg->getSourceEntity() == m_rhodamine_eid)
         {
           m_rhodamine = msg->value;
           if (m_rhodamine > m_rhodamine_max)
