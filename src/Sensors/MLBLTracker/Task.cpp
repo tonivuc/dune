@@ -655,6 +655,16 @@ namespace Sensors
           dispatch(msg);
           inf("%s %u: %u", DTR("range to"), beacon, range);
         }
+        else if (value & 0x8000)
+        {
+          uint8_t byte = (uint8_t)(value & 0x00ff);
+          float reading = (float)byte;
+          reading *= (5 / 255);
+
+          IMC::RhodamineDye dye;
+          dye.value = reading;
+          dispatch(dye);
+        }
       }
 
       void
