@@ -62,7 +62,7 @@ main(int argc, char** argv)
       fprintf(stdout, "  RegisterManeuver, RemoteActions, RemoteActionsRequest, ReplayControl, RestartSystem\n");
       fprintf(stdout, "  SaveEntityParameters, SetEntityParameters, SetLedBrightness, SetServoPosition\n");
       fprintf(stdout, "  SetThrusterActuation, Sms, SoundSpeed, Target, TeleoperationDone, Temperature\n");
-      fprintf(stdout, "  TextMessage, TrexCommand, VehicleCommand, VehicleMedium\n");
+      fprintf(stdout, "  TextMessage, TrexCommand, UamTxFrame, VehicleCommand, VehicleMedium\n");
       return 1;
     }
 
@@ -736,6 +736,16 @@ main(int argc, char** argv)
     IMC::VehicleMedium* tmsg = new IMC::VehicleMedium;
     msg = tmsg;
     tmsg->medium = atoi(argv[4]);
+  }
+
+  if (strcmp(argv[3], "UamTxFrame") == 0)
+  {
+    IMC::UamTxFrame* tmsg = new IMC::UamTxFrame;
+    msg = tmsg;
+    tmsg->sys_dst = "broadcast";
+    tmsg->data.resize(1);
+    uint8_t* ptr = (uint8_t*)&(tmsg->data[0]);
+    IMC::serialize((uint8_t)(atof(argv[4]) * (127.0 / 5.0)), ptr);
   }
 
   if (msg == NULL)
