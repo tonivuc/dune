@@ -1200,7 +1200,7 @@ namespace Sensors
         uint8_t* ptr = (uint8_t*)&msg->data[0];
         uint16_t length = 1;
         IMC::deserialize(reading, ptr, length);
-        uint16_t code = 0x8000 | reading;
+        uint16_t code = 0x0080 | reading;
 
         std::string cmd = String::str("$CCMUC,%u,%u,%04x\r\n", m_addr, 15, code);
         sendDelayedCommand(cmd, m_args.mpk_delay_bef, m_args.mpk_delay_aft);
