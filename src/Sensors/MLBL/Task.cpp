@@ -474,6 +474,7 @@ namespace Sensors
         bind<IMC::PlanControlState>(this);
         bind<IMC::SoundSpeed>(this);
         bind<IMC::VehicleMedium>(this);
+        bind<IMC::UamTxFrame>(this);
       }
 
       void
@@ -1187,6 +1188,27 @@ namespace Sensors
       {
         m_fuel_level = msg->value;
         m_fuel_conf = msg->confidence;
+      }
+
+      void
+      consume(const IMC::UamTxFrame* msg)
+      {
+        if (msg->data.size() != 1)
+          return;
+
+        uint8_t reading;
+        uint8_t* ptr = (uint8_t*)&msg->data[0];
+        uint16_t length = 1;
+        IMC::deserialize(reading, ptr, length);
+        uint16_t code = 0x0080 | reading;
+
+        std::string cmd = String::str("$CCMUC,%u,%u,%04x\r\n", m_addr, 15, code);
+        sendDelayedCommand(cmd, m_args.mpk_delay_bef, m_args.mpk_delay_aft);
+
+        if (consumeResult(RS_MPK_ACKD) && consumeResult(RS_MPK_STAR) && consumeResult(RS_MPK_SENT))
+          spew("sending reading");
+        else
+          spew("failed to send reading");
       }
 
       void
