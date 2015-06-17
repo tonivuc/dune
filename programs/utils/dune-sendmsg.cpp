@@ -59,7 +59,7 @@ main(int argc, char** argv)
       fprintf(stdout, "  MagneticField, MonitorEntityState, OperationalLimits\n");
       fprintf(stdout, "  PlanControl, PlanGeneration, PopEntityParameters, PowerChannelControl\n");
       fprintf(stdout, "  PushEntityParameters, QueryEntityInfo, QueryEntityParameters\n");
-      fprintf(stdout, "  RegisterManeuver, RemoteActions, RemoteActionsRequest, ReplayControl, RestartSystem\n");
+      fprintf(stdout, "  RegisterManeuver, RemoteActions, RemoteActionsRequest, ReplayControl, RestartSystem, RhodamineDye\n");
       fprintf(stdout, "  SaveEntityParameters, SetEntityParameters, SetLedBrightness, SetServoPosition\n");
       fprintf(stdout, "  SetThrusterActuation, Sms, SoundSpeed, Target, TeleoperationDone, Temperature\n");
       fprintf(stdout, "  TextMessage, TrexCommand, UamTxFrame, VehicleCommand, VehicleMedium\n");
@@ -568,6 +568,14 @@ main(int argc, char** argv)
     IMC::RestartSystem* tmsg = new IMC::RestartSystem;
     msg = tmsg;
   }
+
+  if (strcmp(argv[3], "RhodamineDye") == 0)
+  {
+    IMC::RhodamineDye* tmsg = new IMC::RhodamineDye;
+    msg = tmsg;
+    tmsg->value = atof(argv[4]);
+  }
+
 
   if (strcmp(argv[3], "LeaderState") == 0)
   {
