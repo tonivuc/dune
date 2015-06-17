@@ -42,8 +42,6 @@ namespace Autonomy
 
     struct Arguments
     {
-      // Message to sample.
-      std::vector<std::string> message;
       // Minimum positive samples.
       unsigned pos_samples;
       // Minimum negative samples.
@@ -116,9 +114,6 @@ namespace Autonomy
         .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .description("Type of action to be triggered");
 
-        param("Message to Sample", m_args.message)
-        .defaultValue("");
-
         param("Communication Policy", m_args.comms_policy)
         .values("Always, Never, OnRisingEdge, Detected")
         .defaultValue("OnRisingEdge")
@@ -136,14 +131,16 @@ namespace Autonomy
         param("Maximum Expected Reading", m_args.max_reading)
         .defaultValue("5.0")
         .description("Communication interval for acoustic transmission requests");
+
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+
+        bind<IMC::RhodamineDye>(this);
       }
 
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
-        bind(this, m_args.message);
-
         if (paramChanged(m_args.comms_delta))
           m_delta.setTop(m_args.comms_delta);
 
@@ -164,15 +161,25 @@ namespace Autonomy
         }
       }
 
-      //! Release resources.
-      void
-      onResourceRelease(void)
+      ~Task(void)
       {
         Memory::clear(m_sampler);
       }
 
       void
-      consume(const IMC::Message* msg)
+      onActivation(void)
+      {
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+      }
+
+      void
+      onDeactivation(void)
+      {
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+      }
+
+      void
+      consume(const IMC::RhodamineDye* msg)
       {
         double reading = msg->getValueFP();
         Sampler::SamplerState ss = m_sampler->insert(reading);
@@ -238,6 +245,7 @@ namespace Autonomy
         if (m_args.trigger == "Abort")
         {
           IMC::Abort msg;
+          msg.setDestination(getSystemId());
           dispatch(msg);
         }
         else if (m_args.trigger == "Plan")
