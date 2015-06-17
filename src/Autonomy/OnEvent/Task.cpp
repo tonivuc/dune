@@ -181,6 +181,9 @@ namespace Autonomy
       void
       consume(const IMC::RhodamineDye* msg)
       {
+        if (m_sampler == NULL)
+          return;
+
         double reading = msg->getValueFP();
         Sampler::SamplerState ss = m_sampler->insert(reading);
 
