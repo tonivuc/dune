@@ -688,7 +688,7 @@ namespace Plan
           double maxdepth = params.get("maxdepth", 4.0);
           double mindepth = params.get("mindepth", 1.0);
           double size = params.get("size", 50.0);
-          double speed = params.get("speed", 1.1);
+          double speed = params.get("speed", 1200);
           double rot = params.get("rot", 0.0);
           double popup = params.get("popup", 30);
           double pitch = params.get("pitch", 15);
@@ -707,7 +707,7 @@ namespace Plan
           first->lon = lon;
           first->z = mindepth;
           first->z_units = IMC::Z_DEPTH;
-          first->speed_units = IMC::SUNITS_METERS_PS;
+          first->speed_units = IMC::SUNITS_RPM;
           first->speed = speed;
           WGS84::displace(std::sin(ang) * radius, std::cos(ang) * radius,
                           &(first->lat), &(first->lon));
