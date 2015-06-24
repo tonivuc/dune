@@ -95,11 +95,11 @@ namespace Autonomy
         .description("Minimum consecutive negative samples for no-detection confirmation.");
 
         param("Samples: Positive Threshold", m_args.pos_threshold)
-        .defaultValue("2.5")
+        .defaultValue("1.5")
         .description("Threshold to mark passage from negative to positive samples");
 
         param("Samples: Negative Threshold", m_args.neg_threshold)
-        .defaultValue("2.4")
+        .defaultValue("1.2")
         .description("Threshold to mark passage from positive to negative samples");
 
         param("Event Type Trigger", m_args.event_type)
@@ -129,7 +129,7 @@ namespace Autonomy
         .description("Communication interval for acoustic transmission requests");
 
         param("Maximum Expected Reading", m_args.max_reading)
-        .defaultValue("5.0")
+        .defaultValue("100.0")
         .description("Communication interval for acoustic transmission requests");
 
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
