@@ -659,7 +659,7 @@ namespace Sensors
         {
           uint8_t byte = (uint8_t)(value & 0x007f);
           float reading = (float)byte;
-          reading *= 5.0 / 127.0;
+          reading *= 100.0 / 127.0;
 
           IMC::RhodamineDye dye;
           dye.value = std::ceil(reading * 10.0) / 10.0;
