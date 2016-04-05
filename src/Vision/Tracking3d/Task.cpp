@@ -63,14 +63,21 @@ namespace Vision
       OperationCV* m_operation1;
       OperationCV* m_operation2;
       //! Frame capture Cam1
-      IplImage* frameCam1;
+      IplImage* m_frameCam1;
       //! Frame capture Cam2
-      IplImage* frameCam2;
-      //
-      IplImage* teste1;
-      IplImage* teste2;
-      IplImage* cor1;
-      IplImage* cor2;
+      IplImage* m_frameCam2;
+      //Variables for test seg. color
+      IplImage* m_test_color_1;
+      IplImage* m_test_color_2;
+      IplImage* m_cor1;
+      IplImage* m_cor2;
+      bool m_flag_inic_color_aloc;
+      //Variables for test tpl ( template match)
+      IplImage* m_test_tpl_1;
+      IplImage* m_test_tpl_2;
+      IplImage* m_tpl1;
+      IplImage* m_tpl2;
+      bool m_flag_inic_tpl_aloc;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -126,21 +133,8 @@ namespace Vision
         m_operation1 = new OperationCV(this, "LEFT");
         m_operation2 = new OperationCV(this, "RIGHT");
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-
-        m_operation1->m_valuesRGB.lowBlue = 0;
-        m_operation1->m_valuesRGB.highBlue = 50;
-        m_operation2->m_valuesRGB.lowBlue = 0;
-        m_operation2->m_valuesRGB.highBlue = 50;
-
-        m_operation1->m_valuesRGB.lowGreen = 0;
-        m_operation1->m_valuesRGB.highGreen = 50;
-        m_operation2->m_valuesRGB.lowGreen = 0;
-        m_operation2->m_valuesRGB.highGreen = 50;
-
-        m_operation1->m_valuesRGB.lowRed = 100;
-        m_operation1->m_valuesRGB.highRed = 255;
-        m_operation2->m_valuesRGB.lowRed = 100;
-        m_operation2->m_valuesRGB.highRed = 255;
+        m_flag_inic_color_aloc = 0;
+        m_flag_inic_tpl_aloc = 0;
       }
 
       //! Release resources.
@@ -167,46 +161,56 @@ namespace Vision
         int t = 0;
         while(t < mtimes && !stopping())
         {
-          frameCam1 = m_cap1->capFrame();
-          frameCam2 = m_cap2->capFrame();
-          if(frameCam1 != NULL && frameCam2 != NULL)
+          m_frameCam1 = m_cap1->capFrame();
+          m_frameCam2 = m_cap2->capFrame();
+          if(m_frameCam1 != NULL && m_frameCam2 != NULL)
             t++;
         }
       }
 
       /* mouse handler */
-      void 
+      void
       MouseHandler1( int event, int x, int y)
       {
         /* user clicked the image, save pixel color */
         if ( event == CV_EVENT_LBUTTONUP )
         {
           inf("COORD LEFT: x = %d, y = %d", x, y);
-          if(frameCam1 != NULL)
-            m_operation1->SelectColorPixel(x, y, frameCam1);
+          if(m_frameCam1 != NULL)
+          {
+            if(m_flag_inic_tpl_aloc)
+              m_operation1->MouseHandler(x, y, m_frameCam1, "LEFT");
+            else
+              m_operation1->SelectColorPixel(x, y, m_frameCam1);
+          }
         }
       }
-      void 
+      void
       MouseHandler2( int event, int x, int y)
       {
         /* user clicked the image, save pixel color */
         if ( event == CV_EVENT_LBUTTONUP )
         {
           inf("COORD RIGHT: x = %d, y = %d", x, y);
-          if(frameCam2 != NULL)
-            m_operation2->SelectColorPixel(x, y, frameCam2);
+          if(m_frameCam2 != NULL)
+          {
+            if(m_flag_inic_tpl_aloc)
+              m_operation2->MouseHandler(x, y, m_frameCam2, "RIGHT");
+            else
+              m_operation2->SelectColorPixel(x, y, m_frameCam2);
+          }
         }
       }
       /* mouse handler - STATIC */
-      static void 
-      MouseWrapper1(int event, int x, int y, int , void* opt) 
+      static void
+      MouseWrapper1(int event, int x, int y, int , void* opt)
       {
         Task* cal1 = (Task*)opt; // cast back to 'this'
         // now call your member-function.
         cal1->MouseHandler1(event, x, y);
       }
-      static void 
-      MouseWrapper2(int event, int x, int y, int , void* opt) 
+      static void
+      MouseWrapper2(int event, int x, int y, int , void* opt)
       {
         Task* cal2 = (Task*)opt; // cast back to 'this'
         // now call your member-function.
@@ -217,29 +221,44 @@ namespace Vision
       void
       testeColor()
       {
-        teste1 = m_operation1->FindColor(frameCam1, m_operation1->m_valuesRGB);
-        cvShowImage("teste1 - LEFT", teste1);
-        teste2 = m_operation2->FindColor(frameCam2, m_operation2->m_valuesRGB);
-        cvShowImage("teste2 - RIGHT", teste2);
+        if(!m_flag_inic_color_aloc)
+        {
+          war("Test seg color - active");
+          m_cor1 = cvCreateImage( cvSize(250, 250), 8, 3);
+          m_cor2 = cvCreateImage( cvSize(250, 250), 8, 3);
+          m_flag_inic_color_aloc = 1;
+        }
+        m_test_color_1 = m_operation1->FindColor(m_frameCam1, m_operation1->m_valuesRGB);
+        cvShowImage("m_test_color_1 - LEFT", m_test_color_1);
+        m_test_color_2 = m_operation2->FindColor(m_frameCam2, m_operation2->m_valuesRGB);
+        cvShowImage("m_test_color_2 - RIGHT", m_test_color_2);
 
-        cvShowImage("LEFT Final", m_operation1->FindBlob( m_operation1->m_valuesRGB, frameCam1 ));
-        cvShowImage("RIGHT Final", m_operation2->FindBlob( m_operation2->m_valuesRGB, frameCam2 ));
+        cvShowImage("LEFT Final", m_operation1->FindBlob( m_operation1->m_valuesRGB, m_frameCam1 ));
+        cvShowImage("RIGHT Final", m_operation2->FindBlob( m_operation2->m_valuesRGB, m_frameCam2 ));
         cvSetMouseCallback( "LEFT Final", MouseWrapper1, this);
         cvSetMouseCallback( "RIGHT Final", MouseWrapper2, this);
 
-        cvSet(cor1, cvScalar(m_operation1->m_valuesRGB.b, m_operation1->m_valuesRGB.g, m_operation1->m_valuesRGB.r));
-        cvSet(cor2, cvScalar(m_operation2->m_valuesRGB.b, m_operation2->m_valuesRGB.g, m_operation2->m_valuesRGB.r));
-        cvShowImage("cor 1", cor1);
-        cvShowImage("cor 2", cor2);
-        cvWaitKey(8);
-
-        //war("teste");
+        cvSet(m_cor1, cvScalar(m_operation1->m_valuesRGB.b, m_operation1->m_valuesRGB.g, m_operation1->m_valuesRGB.r));
+        cvSet(m_cor2, cvScalar(m_operation2->m_valuesRGB.b, m_operation2->m_valuesRGB.g, m_operation2->m_valuesRGB.r));
+        cvShowImage("cor 1", m_cor1);
+        cvShowImage("cor 2", m_cor2);
+        //cvWaitKey(8);
       }
 
       void
       testeTplMatch()
       {
-
+        if(!m_flag_inic_tpl_aloc)
+        {
+          war("Test Template Match - active");
+          m_flag_inic_tpl_aloc = 1;
+          m_operation1->inicTplTest(m_frameCam1);
+          m_operation2->inicTplTest(m_frameCam2);
+        }
+        cvSetMouseCallback( "LEFT TEST", MouseWrapper1, this);
+        cvSetMouseCallback( "RIGHT TEST", MouseWrapper2, this);
+        cvShowImage("LEFT TEST", m_operation1->TrackObject(m_frameCam1));
+        cvShowImage("RIGHT TEST", m_operation2->TrackObject(m_frameCam2));
       }
 
       //! Main loop.
@@ -247,32 +266,33 @@ namespace Vision
       onMain(void)
       {
         PreLoadFrame(6);
-        cor1 = cvCreateImage( cvSize(250, 250), 8, 3);
-        cor2 = cvCreateImage( cvSize(250, 250), 8, 3);
+
         while (!stopping())
         {
-          frameCam1 = m_cap1->capFrame();
-          frameCam2 = m_cap2->capFrame();
-          if(frameCam1 != NULL && frameCam2 != NULL)
+          m_frameCam1 = m_cap1->capFrame();
+          m_frameCam2 = m_cap2->capFrame();
+          if(m_frameCam1 != NULL && m_frameCam2 != NULL)
           {
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-            cvShowImage("LEFT", frameCam1);
-            cvShowImage("RIGHT", frameCam2);
-            
-            //Teste Color
-            testeColor();
+            //cvShowImage("LEFT", m_frameCam1);
+            //cvShowImage("RIGHT", m_frameCam2);
 
-            //Teste Templat Match
+            //!Teste Color
+            //testeColor();
+
+            //!Teste Templat Match
             testeTplMatch();
+
+            cvWaitKey(8);
           }
           else
           {
             war("NULL FRAME");
             setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("NULL Frame")));
           }
-            
-          frameCam1 = NULL;
-          frameCam2 = NULL;
+
+          m_frameCam1 = NULL;
+          m_frameCam2 = NULL;
           waitForMessages(0.07);
           //m_operation1->teste();
           //m_operation2->teste();
