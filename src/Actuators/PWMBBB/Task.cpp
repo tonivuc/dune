@@ -61,7 +61,7 @@ namespace Actuators
       bool updateMsg;
       //Value of servo position in deg
       double valuePos;
- 
+
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
@@ -74,48 +74,12 @@ namespace Actuators
 
         bind<IMC::SetServoPosition>(this);
       }
-      
-      //! Update internal state with new parameter values.
-      void
-      onUpdateParameters(void)
-      {
-      }
-      
-      //! Reserve entity identifiers.
-      void
-      onEntityReservation(void)
-      {
-      }
-      
-      //! Resolve entity names.
-      void
-      onEntityResolution(void)
-      {
-        
-      }
-      
-      //! Acquire resources.
-      void
-      onResourceAcquisition(void)
-      {
-      }
-      
-      //! Initialize resources.
-      void
-      onResourceInitialization(void)
-      {
-      }
-      
-      //! Release resources.
-      void
-      onResourceRelease(void)
-      {
-      }
-      
+
       void
       consume(const IMC::SetServoPosition* msg)
       {
-        setAngleServomotor(msg->value);
+        if (msg->id == 24)
+          setAngleServomotor(msg->value);
       }
 
       //!Inic of config to pinout of servomotor
@@ -124,7 +88,7 @@ namespace Actuators
       {
         updateMsg = false;
         valuePos = 0;
-        GPIOPin=m_args.portio[0]; /* GPIO1_28 or pin 12 on the P9 header */ 
+        GPIOPin=m_args.portio[0]; /* GPIO1_28 or pin 12 on the P9 header */
         sprintf(GPIOString, "%d", GPIOPin);
         sprintf(GPIOValue, "/sys/class/gpio/gpio%d/value", GPIOPin);
         sprintf(GPIODirection, "/sys/class/gpio/gpio%d/direction", GPIOPin);
