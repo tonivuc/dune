@@ -76,7 +76,7 @@ namespace Maneuver
         {
           IMC::SetServoPosition setServo;
           setServo.id = 24;
-          setServo.value = 0;
+          setServo.value = 1.570796;
           m_task->dispatch(setServo);
 
           m_task->signalCompletion();
