@@ -75,7 +75,7 @@ namespace Maneuver
         if (pcs->flags & IMC::PathControlState::FL_NEAR)
         {
           IMC::SetServoPosition setServo;
-          setServo.id = 0;
+          setServo.id = 24;
           setServo.value = 0;
           m_task->dispatch(setServo);
 
