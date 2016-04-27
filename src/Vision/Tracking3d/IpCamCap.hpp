@@ -41,83 +41,84 @@ using namespace cv;
 
 namespace Vision
 {
-  namespace Tracking3d 
+  namespace Tracking3d
   {
     //! %Vision Stream Capture Protocol (%IpCamCap).
     class IpCamCap: public Thread
     {
-    public:
-      std::string urlCam;
-      std::string nameCam;
-      //! Constructor.
-      //! @param[in] task parent task.
-      //! @param[in] url of ipcam.
-      //! @param[in] name od ipcam.
-      IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl, std::string camname):
-        m_task(task)
-      {
-        urlCam = ipcamurl;
-        nameCam = camname;
-      }
-
-      //! Destructor.
-      ~IpCamCap(void)
-      {
-        cvReleaseCapture(&capture);
-      }
-
-      //! Capture frame.
-      //! @return frame or NULL if none is available.
-      IplImage*
-      capFrame(void)
-      {
-        if(isCapture == 1)
+      public:
+        std::string urlCam;
+        std::string nameCam;
+        //! Constructor.
+        //! @param[in] task parent task.
+        //! @param[in] url of ipcam.
+        //! @param[in] name od ipcam.
+        IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl,
+            std::string camname) :
+            m_task(task)
         {
-          //isCapture = 0;
-          return frame;
-        }
-        else
-          return NULL;
-      }
-
-    private:
-      //! Parent task.
-      DUNE::Tasks::Task* m_task;
-      //! Frame capture
-      IplImage* frame;
-      //!Capture struct - OpenCV
-      CvCapture* capture;
-      //! state of capture; 
-      bool isCapture;
-
-      void
-      run(void)
-      {
-        isCapture = 0;
-        capture = cvCaptureFromFile(urlCam.c_str());
-        while ( capture == 0 && !isStopping())
-        {
-          m_task->err(DTR("ERROR OPEN IPCAM: %s"), nameCam.c_str());
-          sleep(1);
-          capture = cvCaptureFromFile(urlCam.c_str());
+          urlCam = ipcamurl;
+          nameCam = camname;
         }
 
-        while (!isStopping())
+        //! Destructor.
+        ~IpCamCap(void)
         {
-          frame = cvQueryFrame( capture );               
-          if(frame == NULL)
+          cvReleaseCapture(&capture);
+        }
+
+        //! Capture frame.
+        //! @return frame or NULL if none is available.
+        IplImage*
+        capFrame(void)
+        {
+          if (isCapture == 1)
           {
-            isCapture = 0;
-            m_task->err(DTR("null frame -> url: %s  Name: %s"), urlCam.c_str(), nameCam.c_str());
+            //isCapture = 0;
+            return frame;
           }
           else
+            return NULL;
+        }
+
+      private:
+        //! Parent task.
+        DUNE::Tasks::Task* m_task;
+        //! Frame capture
+        IplImage* frame;
+        //!Capture struct - OpenCV
+        CvCapture* capture;
+        //! state of capture;
+        bool isCapture;
+
+        void run(void)
+        {
+          isCapture = 0;
+          capture = cvCaptureFromFile(urlCam.c_str());
+          while (capture == 0 && !isStopping())
           {
-            isCapture = 1;
-            //m_task->inf(DTR("frame %d: url: %s  Name: %s"), cnt, urlCam.c_str(), nameCam.c_str());
+            m_task->err(DTR("ERROR OPEN IPCAM: %s"), nameCam.c_str());
+            sleep(1);
+            capture = cvCaptureFromFile(urlCam.c_str());
           }
 
+          while (!isStopping())
+          {
+            frame = cvQueryFrame(capture);
+            if (frame == NULL)
+            {
+              isCapture = 0;
+              m_task->err(DTR("null frame -> url: %s  Name: %s"),
+                  urlCam.c_str(), nameCam.c_str());
+            }
+            else
+            {
+              isCapture = 1;
+              //m_task->inf(DTR("frame %d: url: %s  Name: %s"), cnt, urlCam.c_str(), nameCam.c_str());
+            }
+
+          }
         }
-      }
     };
   }
 }
