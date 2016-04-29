@@ -28,7 +28,9 @@
 #ifndef MANEUVER_MULTIPLEXER_DROP_HPP_INCLUDED_
 #define MANEUVER_MULTIPLEXER_DROP_HPP_INCLUDED_
 
+// DUNE headers
 #include <DUNE/DUNE.hpp>
+#include <DUNE/Math/Constants.hpp>
 
 // Local headers
 #include "MuxedManeuver.hpp"
@@ -76,7 +78,7 @@ namespace Maneuver
         {
           IMC::SetServoPosition setServo;
           setServo.id = 24;
-          setServo.value = 1.570796;
+          setServo.value = Math::c_pi;
           m_task->dispatch(setServo);
 
           m_task->signalCompletion();
