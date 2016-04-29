@@ -58,7 +58,7 @@ namespace Vision
     {
 
         Arguments m_args;
-        IMC::GetCoordImage m_getcoord;
+        IMC::GetImageCoords m_getcoord;
         IpCamCap* m_cap1;
         IpCamCap* m_cap2;
         OperationCV* m_operation1;
@@ -88,7 +88,7 @@ namespace Vision
           //.defaultValue("localhost")
           .description("IpCam2 Addresses");
 
-          bind<IMC::SetCoordImage>(this);
+          bind<IMC::SetImageCoords>(this);
         }
 
         //! Update internal state with new parameter values.
@@ -144,7 +144,7 @@ namespace Vision
         }
 
         //! Consume Message
-        void consume( const IMC::SetCoordImage* msg )
+        void consume( const IMC::SetImageCoords* msg )
         {
           war("CAM: %d", msg->camid);
           war("VALUES: %d : %d", msg->x, msg->y);
