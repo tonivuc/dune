@@ -94,7 +94,9 @@ namespace Maneuver
           m_task->signalCompletion();
         }
         else
+        {
           m_task->signalProgress(pcs->eta);
+        }
       }
     };
   }
