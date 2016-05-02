@@ -110,6 +110,8 @@ namespace Maneuver
       PopUpArgs popup;
       //! Dislodge Arguments
       DislodgeArgs dislodge;
+      //! Drop Arguments
+      DropArgs dropM;
     };
 
     struct Task: public DUNE::Maneuvers::Maneuver
@@ -236,6 +238,14 @@ namespace Maneuver
         .units(Units::Meter)
         .description("Safe depth change to consider the maneuver was successful");
 
+        param("Drop -- Servo Id", m_args.dropM.servoId)
+          .defaultValue("24")
+          .description("Servo Id.");
+
+        param("Drop -- Servo Value", m_args.dropM.servoValue)
+          .defaultValue("1.570796")
+          .description("Servo Value in radians.");
+
         m_ctx.config.get("General", "Underwater Depth Threshold", "0.3", m_args.dislodge.depth_threshold);
 
         for (unsigned i = 0; i < TYPE_TOTAL; ++i)
@@ -314,7 +324,7 @@ namespace Maneuver
         m_maneuvers[TYPE_ELEVATOR] = create<Elevator>(&m_args.elevator);
         m_maneuvers[TYPE_POPUP] = create<PopUp>(&m_args.popup);
         m_maneuvers[TYPE_DISLODGE] = create<Dislodge>(&m_args.dislodge);
-        m_maneuvers[TYPE_DROP] = create<Drop>();
+        m_maneuvers[TYPE_DROP] = create<Drop>(&m_args.dropM);
       }
 
       void
