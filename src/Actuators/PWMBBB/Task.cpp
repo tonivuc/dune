@@ -47,6 +47,7 @@ namespace Actuators
         // Servo Id
         int servoId;
       };
+
       Arguments m_args;
       //GPIO for signal of servo
       int GPIOPin;
@@ -128,14 +129,14 @@ namespace Actuators
         valuePos = angle;
         int cntRefreshservo = 0;
         int degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
-        if(degAngle < 0)
+        if (degAngle < 0)
           degAngle = 0;
-        if(degAngle > 180)
+        if (degAngle > 180)
           degAngle = 180;
 
         int valueUP = (10 * degAngle) + 600;
 
-        while(cntRefreshservo < 20 && resultState)
+        while (cntRefreshservo < 20 && resultState)
         {
           if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
           {
@@ -160,7 +161,7 @@ namespace Actuators
           cntRefreshservo++;
         }
 
-        if(resultState)
+        if (resultState)
           updateMsg = true;
 
         return resultState;
@@ -188,14 +189,14 @@ namespace Actuators
       onMain(void)
       {
         IMC::ServoPosition msgServoPos;
-        while(!inicServo())
+        while (!inicServo())
         {
           waitForMessages(1.0);
         }
         while (!stopping())
         {
           waitForMessages(0.1);
-          if(updateMsg)
+          if (updateMsg)
           {
             msgServoPos.value = valuePos;
             dispatch(msgServoPos);
