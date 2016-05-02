@@ -38,15 +38,27 @@ namespace Maneuver
   namespace Multiplexer
   {
     using DUNE_NAMESPACES;
+    //!Variables
+    struct DropArgs
+    {
+      // Servo Id
+      int servoId;
+      // Servo Id
+      float servoValue;
+    };
 
     //! Drop maneuver
-    class Drop: public MuxedManeuver<IMC::Drop, void>
+    class Drop: public MuxedManeuver<IMC::Drop, DropArgs>
     {
     public:
       //! Default constructor.
       //! @param[in] task pointer to Maneuver task
-    	Drop(Maneuvers::Maneuver* task):
-        MuxedManeuver<IMC::Drop, void>(task)
+      //! @param[in] args drop arguments
+      Drop(Maneuvers::Maneuver* task, DropArgs* args):
+        MuxedManeuver<IMC::Drop, DropArgs>(task, args)
+      { }
+
+      ~Drop(void)
       { }
 
       //! Start maneuver function
@@ -75,8 +87,8 @@ namespace Maneuver
         if (pcs->flags & IMC::PathControlState::FL_NEAR)
         {
           IMC::SetServoPosition setServo;
-          setServo.id = 24;
-          setServo.value = 1.570796;
+          setServo.id = m_args->servoId;
+          setServo.value = m_args->servoValue;
           m_task->dispatch(setServo);
 
           m_task->signalCompletion();
@@ -84,9 +96,6 @@ namespace Maneuver
         else
           m_task->signalProgress(pcs->eta);
       }
-
-      ~Drop(void)
-      { }
     };
   }
 }
