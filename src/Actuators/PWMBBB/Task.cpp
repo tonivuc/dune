@@ -42,8 +42,10 @@ namespace Actuators
       //!Variables
       struct Arguments
       {
-        // - PinOut
-        std::vector<int> portio;
+        // PinOut
+        int portio;
+        // Servo Id
+        int servoId;
       };
       Arguments m_args;
       //GPIO for signal of servo
@@ -72,13 +74,17 @@ namespace Actuators
           .defaultValue("60")
           .description("Port to use in PWMBBB");
 
+        param("Servo Id", m_args.servoId)
+          .defaultValue("24")
+          .description("Servo Id to use in Maneuver Drop");
+
         bind<IMC::SetServoPosition>(this);
       }
 
       void
       consume(const IMC::SetServoPosition* msg)
       {
-        if (msg->id == 24)
+        if (msg->id == m_args.servoId)
           setAngleServomotor(msg->value);
       }
 
@@ -88,7 +94,7 @@ namespace Actuators
       {
         updateMsg = false;
         valuePos = 0;
-        GPIOPin=m_args.portio[0]; /* GPIO1_28 or pin 12 on the P9 header */
+        GPIOPin=m_args.portio; /* GPIO1_28 or pin 12 on the P9 header */
         sprintf(GPIOString, "%d", GPIOPin);
         sprintf(GPIOValue, "/sys/class/gpio/gpio%d/value", GPIOPin);
         sprintf(GPIODirection, "/sys/class/gpio/gpio%d/direction", GPIOPin);
