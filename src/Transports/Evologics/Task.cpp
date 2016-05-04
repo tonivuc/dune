@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -84,9 +84,6 @@ namespace Transports
     typedef std::map<std::string, unsigned> MapName;
     typedef std::map<unsigned, std::string> MapAddr;
 
-    //! Broadcast address.
-    static const unsigned c_broadcast = 0x0f;
-
     struct Task: public Tasks::Task
     {
       //! Map of Evologics modems by name.
@@ -117,6 +114,7 @@ namespace Transports
         m_sock(NULL),
         m_address(0),
         m_driver(NULL),
+        m_sound_speed(0),
         m_sound_speed_eid(-1),
         m_ticket(NULL)
       {
@@ -326,6 +324,19 @@ namespace Transports
         return itr->second;
       }
 
+      std::string
+      safeLookup(unsigned addr)
+      {
+        try
+        {
+          return lookupSystemName(addr);
+        }
+        catch (...)
+        { }
+
+        return "unknown";
+      }
+
       void
       consume(const IMC::SoundSpeed* msg)
       {
@@ -381,15 +392,27 @@ namespace Transports
         else if (String::startsWith(msg->value, "RECVPBM"))
           handleInstantMessage(msg->value, true);
         else if (String::startsWith(msg->value, "DELIVEREDIM"))
-          handleInstantMessageDelivered(msg->value);
+          handleMessageDelivered(msg->value);
         else if (String::startsWith(msg->value, "CANCELEDIM"))
-          handleInstantMessageCanceled(msg->value);
+          return;
         else if (String::startsWith(msg->value, "CANCELEDPBM"))
-          handleInstantMessageCanceled(msg->value);
+          return;
         else if (String::startsWith(msg->value, "FAILEDIM"))
-          handleInstantMessageFailed(msg->value);
+          handleMessageFailed(msg->value);
         else if (String::startsWith(msg->value, "SENDEND"))
           handleSendEnd(msg->value);
+        else if (String::startsWith(msg->value, "RECVSTART"))
+          return;
+        else if (String::startsWith(msg->value, "RECVEND"))
+          return;
+        else if (String::startsWith(msg->value, "RECVFAILED"))
+          return;
+        else if (String::startsWith(msg->value, "RECV"))
+          handleBurstMessage(msg->value);
+        else if (String::startsWith(msg->value, "DELIVERED"))
+          handleMessageDelivered(msg->value);
+        else if (String::startsWith(msg->value, "FAILED"))
+          handleMessageFailed(msg->value);
       }
 
       void
@@ -466,7 +489,15 @@ namespace Transports
         sendTxStatus(ticket, IMC::UamTxStatus::UTS_IP);
 
         if (!ticket.pbm)
-          m_driver->sendIM((uint8_t*)&msg->data[0], msg->data.size(), ticket.addr, ticket.ack);
+        {
+          if (msg->data.size() <= 64)
+            m_driver->sendIM((uint8_t*)&msg->data[0], msg->data.size(), ticket.addr, ticket.ack);
+          else
+          {
+            war(DTR("Sending burst message (size=%lu) to %d."), (unsigned long)msg->data.size(), ticket.addr);
+            m_driver->sendBurst((uint8_t*)&msg->data[0], msg->data.size(), ticket.addr);
+          }
+        }
         else
           m_driver->sendPBM((uint8_t*)&msg->data[0], msg->data.size(), ticket.addr);
 
@@ -474,26 +505,20 @@ namespace Transports
       }
 
       void
-      handleInstantMessageFailed(const std::string& str)
+      handleMessageFailed(const std::string& str)
       {
         (void)str;
-
         m_driver->setBusy(false);
         clearTicket(IMC::UamTxStatus::UTS_FAILED);
       }
 
       void
-      handleInstantMessageCanceled(const std::string& str)
-      {
-        (void)str;
-      }
-
-      void
-      handleInstantMessageDelivered(const std::string& str)
+      handleMessageDelivered(const std::string& str)
       {
         //! Query propagation time.
         unsigned dst = 0;
-        if (std::sscanf(str.c_str(), "DELIVEREDIM,%u", &dst) == 1)
+        if ((std::sscanf(str.c_str(), "DELIVEREDIM,%u", &dst) == 1) ||
+            (std::sscanf(str.c_str(), "DELIVERED,%u", &dst) == 1))
         {
           try
           {
@@ -543,25 +568,15 @@ namespace Transports
         IMC::UamRxFrame msg;
         msg.data.assign((char*)&reply.data[0], (char*)&reply.data[0] + reply.data.size());
 
-        // Lookup source system name.
-        try
-        {
-          msg.sys_src = lookupSystemName(reply.src);
-        }
-        catch (...)
-        {
-          msg.sys_src = "unknown";
-        }
+        // Lookup system names.
+        msg.sys_src = safeLookup(reply.src);
+        msg.sys_dst = safeLookup(reply.dst);
 
-        // Lookup destination system name.
-        try
-        {
-          msg.sys_dst = lookupSystemName(reply.dst);
-        }
-        catch (...)
-        {
-          msg.sys_dst = "unknown";
-        }
+        IMC::AcousticLink link;
+        link.integrity = reply.integrity;
+        link.rssi = reply.rssi;
+        link.peer = msg.sys_src;
+        dispatch(link);
 
         // Fill flags.
         if (m_address != reply.dst)
@@ -569,6 +584,30 @@ namespace Transports
 
         if (piggyback)
           msg.flags |= IMC::UamRxFrame::URF_DELAYED;
+
+        dispatch(msg);
+
+        m_driver->getMultipathStructure();
+      }
+
+      void
+      handleBurstMessage(const std::string& str)
+      {
+        RecvIM reply;
+        m_driver->parseReceivedBurst(str, reply);
+
+        IMC::UamRxFrame msg;
+        msg.data.assign((char*)&reply.data[0], (char*)&reply.data[0] + reply.data.size());
+
+        // Lookup system names.
+        msg.sys_src = safeLookup(reply.src);
+        msg.sys_dst = safeLookup(reply.dst);
+
+        IMC::AcousticLink link;
+        link.integrity = reply.integrity;
+        link.rssi = reply.rssi;
+        link.peer = msg.sys_src;
+        dispatch(link);
 
         dispatch(msg);
 

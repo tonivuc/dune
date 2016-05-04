@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -46,23 +46,29 @@ namespace DUNE
 
       config->get(sec, "Time Of Arrival Factor",
                   "5.0", m_time_factor);
+
+      config->get(sec, "Maximum Absolute Speed",
+                  "1.6", m_max_speed);
     }
 
     SpeedModel::SpeedModel(const std::vector<float>& act,
                            const std::vector<float>& rpm,
                            const std::vector<float>& mps,
-                           float time_factor)
+                           float time_factor,
+                           float max_speed)
     {
       m_models[IMC::SUNITS_PERCENTAGE] = act;
       m_models[IMC::SUNITS_METERS_PS] = rpm;
       m_models[IMC::SUNITS_RPM] = mps;
       m_time_factor = time_factor;
+      m_max_speed = max_speed;
     }
 
     float
     SpeedModel::toMPS(float value, uint8_t units) const
     {
-      return convert(value, (IMC::SpeedUnits)units, IMC::SUNITS_METERS_PS);
+      float speed = convert(value, (IMC::SpeedUnits)units, IMC::SUNITS_METERS_PS);
+      return std::min(speed, m_max_speed);
     }
 
     float

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -82,8 +82,6 @@ namespace Sensors
       OFF_STA_IMU = 22
     };
 
-    //! PSU UART baud rate.
-    static const unsigned c_baud_rate = 115200;
     //! IMU address.
     static const uint8_t c_imu_addr = 0x01;
     //! Data Frame Size.

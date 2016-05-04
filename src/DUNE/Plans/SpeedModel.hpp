@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -61,7 +61,8 @@ namespace DUNE
       SpeedModel(const std::vector<float>& act,
                  const std::vector<float>& rpm,
                  const std::vector<float>& mps,
-                 float time_factor = 5.0);
+                 float time_factor = 5.0,
+                 float max_speed = 2.0);
 
       //! Convert to meters per second
       //! @param[in] value speed value from which to convert
@@ -104,10 +105,12 @@ namespace DUNE
       float
       convert(float value, uint8_t from, uint8_t to) const;
 
-      //! Vector of values for each axis
+      //! Vector of values for each axis.
       std::vector<float> m_models[3];
-      //! Time of arrival factor
+      //! Time of arrival factor.
       float m_time_factor;
+      //! Maximum vehicle speed.
+      float m_max_speed;
     };
   }
 }

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 0bb52ca2c789909fdc0b69126b04af22                            *
+// IMC XML MD5: 4663673b775daaf6b93edc177859e286                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -3660,31 +3660,37 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! Remote Command.
-    class RemoteCommand: public RemoteData
+    //! Historic Data Sample.
+    class HistoricSample: public Message
     {
     public:
-      //! Original Source.
-      uint16_t original_source;
-      //! Destination.
-      uint16_t destination;
-      //! Timeout.
-      fp64_t timeout;
-      //! Command.
-      InlineMessage<Message> cmd;
+      //! Original System Id.
+      uint16_t sys_id;
+      //! Priority.
+      int8_t priority;
+      //! X offset.
+      int16_t x;
+      //! Y offset.
+      int16_t y;
+      //! Z offset.
+      int16_t z;
+      //! Time offset.
+      int16_t t;
+      //! Data Sample.
+      InlineMessage<Message> sample;
 
       static uint16_t
       getIdStatic(void)
       {
-        return 188;
+        return 186;
       }
 
-      RemoteCommand(void);
+      HistoricSample(void);
 
       Message*
       clone(void) const
       {
-        return new RemoteCommand(*this);
+        return new HistoricSample(*this);
       }
 
       void
@@ -3708,25 +3714,25 @@ namespace DUNE
       uint16_t
       getId(void) const
       {
-        return RemoteCommand::getIdStatic();
+        return HistoricSample::getIdStatic();
       }
 
       const char*
       getName(void) const
       {
-        return "RemoteCommand";
+        return "HistoricSample";
       }
 
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 12;
+        return 11;
       }
 
       unsigned
       getVariableSerializationSize(void) const
       {
-        return cmd.getSerializationSize();
+        return sample.getSerializationSize();
       }
 
       void
@@ -3760,7 +3766,7 @@ namespace DUNE
       //! Base Timestamp.
       fp32_t base_time;
       //! Data.
-      MessageList<RemoteCommand> data;
+      MessageList<HistoricSample> data;
 
       static uint16_t
       getIdStatic(void)
@@ -3911,101 +3917,6 @@ namespace DUNE
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
     };
 
-    //! Historic Data Sample.
-    class HistoricSample: public RemoteData
-    {
-    public:
-      //! Original System Id.
-      uint16_t sys_id;
-      //! Priority.
-      int8_t priority;
-      //! X offset.
-      int16_t x;
-      //! Y offset.
-      int16_t y;
-      //! Z offset.
-      int16_t z;
-      //! Time offset.
-      int16_t t;
-      //! Data Sample.
-      InlineMessage<Message> sample;
-
-      static uint16_t
-      getIdStatic(void)
-      {
-        return 186;
-      }
-
-      HistoricSample(void);
-
-      Message*
-      clone(void) const
-      {
-        return new HistoricSample(*this);
-      }
-
-      void
-      clear(void);
-
-      bool
-      fieldsEqual(const Message& msg__) const;
-
-      int
-      validate(void) const;
-
-      uint8_t*
-      serializeFields(uint8_t* bfr__) const;
-
-      uint16_t
-      deserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
-
-      uint16_t
-      getId(void) const
-      {
-        return HistoricSample::getIdStatic();
-      }
-
-      const char*
-      getName(void) const
-      {
-        return "HistoricSample";
-      }
-
-      unsigned
-      getFixedSerializationSize(void) const
-      {
-        return 11;
-      }
-
-      unsigned
-      getVariableSerializationSize(void) const
-      {
-        return sample.getSerializationSize();
-      }
-
-      void
-      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
-
-    protected:
-      void
-      setTimeStampNested(double value__);
-
-      void
-      setSourceNested(uint16_t value__);
-
-      void
-      setSourceEntityNested(uint8_t value__);
-
-      void
-      setDestinationNested(uint16_t value__);
-
-      void
-      setDestinationEntityNested(uint8_t value__);
-    };
-
     //! Historic Data Query.
     class HistoricDataQuery: public Message
     {
@@ -4084,6 +3995,95 @@ namespace DUNE
       getVariableSerializationSize(void) const
       {
         return data.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! Remote Command.
+    class RemoteCommand: public Message
+    {
+    public:
+      //! Original Source.
+      uint16_t original_source;
+      //! Destination.
+      uint16_t destination;
+      //! Timeout.
+      fp64_t timeout;
+      //! Command.
+      InlineMessage<Message> cmd;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 188;
+      }
+
+      RemoteCommand(void);
+
+      Message*
+      clone(void) const
+      {
+        return new RemoteCommand(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return RemoteCommand::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "RemoteCommand";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 12;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return cmd.getSerializationSize();
       }
 
       void

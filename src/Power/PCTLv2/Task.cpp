@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -184,7 +184,7 @@ namespace Power
         param("Minimum Operating Voltage", m_args.vol_min)
         .units(Units::Volt)
         .defaultValue("22")
-        .minimumValue("20")
+        .minimumValue("9")
         .maximumValue("25")
         .description("Once this value is hit the system will enter emergency mode");
 
@@ -636,6 +636,18 @@ namespace Power
           }
         }
 
+        if (msg->name == "all")
+        {
+          if (msg->op == IMC::PowerChannelControl::PCC_OP_SAVE)
+          {
+            uint8_t data = 0;
+            m_proto.sendCommand(CMD_PWR_SAVE, &data, 1);
+            waitForCommand(CMD_PWR_SAVE, 100);
+          }
+
+          return;
+        }
+
         std::map<std::string, PowerChannel*>::const_iterator itr = m_channels.find_by_name(msg->name);
         if (itr == m_channels.end_by_name())
           return;
@@ -653,12 +665,6 @@ namespace Power
           uint8_t data[] = {id, 1};
           m_proto.sendCommand(CMD_PWR_CTL, data, sizeof(data));
           waitForCommand(CMD_PWR_CTL);
-        }
-        else if (msg->op == IMC::PowerChannelControl::PCC_OP_SAVE)
-        {
-          uint8_t data = 0;
-          m_proto.sendCommand(CMD_PWR_SAVE, &data, 1);
-          waitForCommand(CMD_PWR_SAVE, 100);
         }
       }
 

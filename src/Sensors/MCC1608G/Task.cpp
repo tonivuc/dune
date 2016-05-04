@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 OceanScan - Marine Systems & Technology, Lda.        *
+// Copyright 2007-2016 OceanScan - Marine Systems & Technology, Lda.        *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -44,6 +44,8 @@ namespace Sensors
 
     //! Maximum number of ADC channels.
     static const size_t c_adcs_count = 8;
+    //! Alterative USB product id.
+    static const uint16_t c_1608g_alt_pid = 0x0134;
 
     //! Task arguments.
     struct Arguments
@@ -84,12 +86,14 @@ namespace Sensors
         Tasks::Task(name, ctx),
         m_udev(NULL)
       {
-        paramActive(Tasks::Parameter::SCOPE_IDLE,
+        paramActive(Tasks::Parameter::SCOPE_MANEUVER,
                     Tasks::Parameter::VISIBILITY_USER);
 
         param("Sampling Frequency", m_args.sampling_freq)
         .defaultValue("1.0")
         .units(Units::Hertz)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_MANEUVER)
         .description(DTR("Sampling frequency"));
 
         for (size_t i = 0; i < c_adcs_count; ++i)
@@ -126,28 +130,42 @@ namespace Sensors
           uint32_t delay = 1000000 / m_args.sampling_freq;
           m_delay.set(delay);
         }
-      }
 
-      void
-      onResourceInitialization(void)
-      {
+        // Update messages.
+        int eid = -1;
         for (size_t i = 0; i < c_adcs_count; ++i)
         {
           Memory::clear(m_messages[i]);
           if (m_args.adc_messages[i].empty())
             continue;
 
+          try
+          {
+            eid = resolveEntity(m_args.adc_elabels[i]);
+          }
+          catch (Entities::EntityDataBase::NonexistentLabel& e)
+          {
+            (void)e;
+            eid = reserveEntity(m_args.adc_elabels[i]);
+          }
+
           m_messages[i] = IMC::Factory::produce(m_args.adc_messages[i]);
-          int eid = reserveEntity(m_args.adc_elabels[i]);
           m_messages[i]->setSourceEntity(eid);
         }
+      }
 
+      void
+      onResourceInitialization(void)
+      {
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
       }
 
       ~Task(void)
       {
         onResourceRelease();
+
+        for (size_t i = 0; i < c_adcs_count; ++i)
+          Memory::clear(m_messages[i]);
       }
 
       void
@@ -178,9 +196,18 @@ namespace Sensors
       {
         for (size_t i = 0; i < c_adcs_count; ++i)
         {
-          m_scan_list[i].range = getRange(m_args.adc_range[i]);
-          m_scan_list[i].mode = m_args.adc_diff[i] ? DIFFERENTIAL : 0;
           m_scan_list[i].channel = i;
+
+          if (m_messages[i] == NULL)
+          {
+            m_scan_list[i].range = BP_5V;
+            m_scan_list[i].mode = 0;
+          }
+          else
+          {
+            m_scan_list[i].range = getRange(m_args.adc_range[i]);
+            m_scan_list[i].mode = m_args.adc_diff[i] ? DIFFERENTIAL : 0;
+          }
         }
 
         m_scan_list[c_adcs_count - 1].mode |= LAST_CHANNEL;
@@ -198,21 +225,37 @@ namespace Sensors
       scanAnalogueInputs(void)
       {
         double time = Clock::getSinceEpoch();
+
         usbAInScanStart_USB1608G(m_udev, 1, 0, 1, 1 << 0);
-        int rv = usbAInScanRead_USB1608G(m_udev, 1, c_adcs_count, m_adc_data_in);
+        usbAInScanRead_USB1608G(m_udev, 1, c_adcs_count, m_adc_data_in);
+
         for (size_t i = 0; i < c_adcs_count; ++i)
         {
           if (m_messages[i] == NULL)
             continue;
 
           uint8_t gain = m_scan_list[i].range;
-          int k = i * c_adcs_count + i;
-          uint16_t raw_value = rint(m_adc_data_in[k] * m_gain_table[gain][0] + m_gain_table[gain][1]);
-          double volt = volts_USB1608G(m_udev, gain, raw_value);
+          uint16_t raw_value = rint(m_adc_data_in[i] * m_gain_table[gain][0] + m_gain_table[gain][1]);
+          double volt = volts_USB1608G(gain, raw_value);
           m_messages[i]->setTimeStamp(time);
           m_messages[i]->setValueFP(volt);
           dispatch(m_messages[i]);
         }
+      }
+
+      void
+      findDevice(void)
+      {
+        debug("probing MCC device");
+        m_udev = usb_device_find_USB_MCC(USB1608G_PID, NULL);
+        if (m_udev != NULL)
+          return;
+
+        m_udev = usb_device_find_USB_MCC(c_1608g_alt_pid, NULL);
+        if (m_udev != NULL)
+          return;
+
+        throw RestartNeeded(DTR("failed to find valid device"), 5.0, false);
       }
 
       void
@@ -221,12 +264,9 @@ namespace Sensors
         debug("initializing USB library");
         int rv = libusb_init(NULL);
         if (rv < 0)
-          throw std::runtime_error("failed to initialize libusb");
+          throw RestartNeeded(DTR("failed to initialize USB library"), 5.0, false);
 
-        debug("probing MCC device");
-        m_udev = usb_device_find_USB_MCC(USB1608G_PID, NULL);
-        if (m_udev == NULL)
-          throw std::runtime_error("failed to find valid device");
+        findDevice();
 
         debug("initializing MCC device");
         usbInit_1608G(m_udev);

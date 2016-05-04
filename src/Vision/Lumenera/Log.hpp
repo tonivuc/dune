@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -86,6 +86,7 @@ namespace Vision
         m_frame_count(0)
       {
         m_path = getLogPath(folder);
+        folder.create();
         m_parent->debug("starting file: %s", m_path.c_str());
 
         m_encoder = new MJPG::Encoder(m_path.c_str(), width, height, fps);

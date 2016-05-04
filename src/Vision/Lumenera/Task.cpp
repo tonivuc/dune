@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -81,8 +81,6 @@ namespace Vision
       float gain_green;
       //! White balance blue gain.
       float gain_blue;
-      //! LED strobe power channel.
-      std::string strobe_pwr;
       //! Maximum log file size.
       unsigned max_file_size;
       //! Log folder prefix.
@@ -263,11 +261,8 @@ namespace Vision
         .values("OFF, ON, STROBE")
         .visibility(Tasks::Parameter::VISIBILITY_USER)
         .scope(Tasks::Parameter::SCOPE_GLOBAL)
-        .defaultValue("ON")
+        .defaultValue("STROBE")
         .description("LED type");
-
-        param("Power Channel - Strobe", m_args.strobe_pwr)
-        .description("Power channel of the strobe");
 
         param("Maximum Log Size", m_args.max_file_size)
         .defaultValue("524288000")
@@ -499,11 +494,6 @@ namespace Vision
       void
       onActivation(void)
       {
-        if (m_args.camera_capt)
-          changeLogFile();
-
-        setStrobePower(true);
-
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
         inf(DTR("activated"));
         m_cooldown_timer.setTop(10.0);
@@ -522,7 +512,6 @@ namespace Vision
           m_log = NULL;
         }
 
-        setStrobePower(false);
         m_log_dir_updated = false;
 
         if (m_pwr_gpio != NULL)
@@ -546,26 +535,6 @@ namespace Vision
       consume(const IMC::EntityInfo* msg)
       {
         m_slave_entities->onEntityInfo(msg);
-      }
-
-      void
-      setStrobePower(bool value)
-      {
-        if (m_args.led_type != "STROBE")
-          return;
-
-        if (m_args.strobe_pwr.empty())
-          return;
-
-        IMC::PowerChannelControl pcc;
-        pcc.name = m_args.strobe_pwr;
-
-        if (value)
-          pcc.op = IMC::PowerChannelControl::PCC_OP_TURN_ON;
-        else
-          pcc.op = IMC::PowerChannelControl::PCC_OP_TURN_OFF;
-
-        dispatch(pcc);
       }
 
       void
@@ -917,28 +886,6 @@ namespace Vision
         setProperty("output_select", "on");
       }
 
-      Path
-      getLogPath(void)
-      {
-        double now = Clock::getSinceEpoch();
-        Path path;
-
-        while (true)
-        {
-          std::string log_name(c_log_prefix);
-          log_name.append(Format::getDateSafe(now) + Format::getTimeSafe(now));
-          log_name.append(c_log_suffix);
-
-          path = m_log_dir / log_name;
-          if (!path.exists())
-            break;
-
-          now += 1.0;
-        }
-
-        return path;
-      }
-
       void
       changeLogFile(void)
       {
@@ -956,6 +903,15 @@ namespace Vision
       void
       captureAndSave(void)
       {
+        if (m_actual_frame_rate <= 0)
+        {
+          if (!updateActualFrameRate())
+            return;
+        }
+
+        if (m_log == NULL)
+          changeLogFile();
+
         Log::Frame* frame = m_log->getFreeFrame();
 
         try
@@ -1006,6 +962,28 @@ namespace Vision
       }
 
       bool
+      updateActualFrameRate(void)
+      {
+        if (m_http == NULL)
+          return false;
+
+        try
+        {
+          std::string frame_rate_str;
+          getProperty("maximum_framerate", frame_rate_str);
+          m_actual_frame_rate = -1;
+          m_actual_frame_rate = castLexical<int>(frame_rate_str);
+          debug("actual frame rate is '%s'", sanitize(frame_rate_str).c_str());
+          if (m_actual_frame_rate > 0)
+            return true;
+        }
+        catch (...)
+        { }
+
+        return false;
+      }
+
+      bool
       checkCaptureOk(void)
       {
         if (m_http != NULL)
@@ -1013,10 +991,6 @@ namespace Vision
 
         try
         {
-          std::string frame_rate_str;
-          getProperty("maximum_framerate", frame_rate_str);
-          m_actual_frame_rate = castLexical<int>(frame_rate_str);
-          inf("actual frame rate is %s", frame_rate_str.c_str());
           startVideo();
           return true;
         }

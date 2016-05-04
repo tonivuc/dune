@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -209,6 +209,10 @@ namespace Maneuver
         .defaultValue("15.0")
         .units(Units::Meter)
         .description("Maximum distance from station keeping radial circle");
+
+        param("PopUp -- Report at PopUps", m_args.popup.report)
+        .defaultValue("false")
+        .description("Request reports when popping at surface");
 
         param("Dislodge -- Bursts", m_args.dislodge.bursts)
         .defaultValue("5")

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -74,6 +74,7 @@ namespace DUNE
       pthread_cond_t m_cond;
       pthread_condattr_t m_cond_attr;
       pthread_mutex_t m_mutex;
+      bool m_clock_monotonic;
 #endif
 
       // Non - copyable.

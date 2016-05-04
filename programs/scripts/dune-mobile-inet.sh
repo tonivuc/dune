@@ -1,6 +1,6 @@
 #! /bin/sh
 ############################################################################
-# Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      #
+# Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      #
 # Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  #
 ############################################################################
 # This file is part of DUNE: Unified Navigation Environment.               #
@@ -130,6 +130,8 @@ ppp_start()
     /sbin/route del default dev eth0 > /dev/null 2>&1
 
     log info "ppp: starting"
+
+    modprobe ppp_generic > /dev/null 2>&1
 
     /usr/sbin/pppd \
         "$modem" \

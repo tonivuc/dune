@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      #
+# Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      #
 # Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  #
 ############################################################################
 # This file is part of DUNE: Unified Navigation Environment.               #
@@ -164,12 +164,6 @@ macro(dune_probe_functions)
     "signal.h"
     DUNE_SYS_HAS_PTHREAD_SIGMASK)
 
-  dune_test_function(pthread_kill
-    "int"
-    "pthread_t;int"
-    "signal.h"
-    DUNE_SYS_HAS_PTHREAD_KILL)
-
   dune_test_function(pthread_barrier_init
     "int"
     "pthread_barrier_t*;pthread_barrierattr_t*;unsigned"
@@ -205,6 +199,12 @@ macro(dune_probe_functions)
     "pthread_condattr_t*;clockid_t"
     "pthread.h"
     DUNE_SYS_HAS_PTHREAD_CONDATTR_SETCLOCK)
+
+  dune_test_function(pthread_win32_process_attach_np
+    "int"
+    ""
+    "pthread.h"
+    DUNE_SYS_HAS_PTHREAD_WIN32_PROCESS_ATTACH_NP)
 
   dune_test_function(sigaction
     "int"
@@ -745,5 +745,11 @@ macro(dune_probe_functions)
     "double"
     "float.h"
     DUNE_SYS_HAS__ISNAN)
+
+  dune_test_function(popen
+    "FILE*"
+    "char*;char*"
+    "stdio.h"
+    DUNE_SYS_HAS_POPEN)
 
 endmacro(dune_probe_functions)

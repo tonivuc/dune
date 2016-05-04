@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 0bb52ca2c789909fdc0b69126b04af22                            *
+// IMC XML MD5: 4663673b775daaf6b93edc177859e286                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -3464,123 +3464,141 @@ namespace DUNE
       IMC::toJSON(os__, "units", units, nindent__);
     }
 
-    RemoteCommand::RemoteCommand(void)
+    HistoricSample::HistoricSample(void)
     {
-      m_header.mgid = 188;
+      m_header.mgid = 186;
       clear();
-      cmd.setParent(this);
+      sample.setParent(this);
     }
 
     void
-    RemoteCommand::clear(void)
+    HistoricSample::clear(void)
     {
-      original_source = 0;
-      destination = 0;
-      timeout = 0;
-      cmd.clear();
+      sys_id = 0;
+      priority = 0;
+      x = 0;
+      y = 0;
+      z = 0;
+      t = 0;
+      sample.clear();
     }
 
     bool
-    RemoteCommand::fieldsEqual(const Message& msg__) const
+    HistoricSample::fieldsEqual(const Message& msg__) const
     {
-      const IMC::RemoteCommand& other__ = static_cast<const RemoteCommand&>(msg__);
-      if (original_source != other__.original_source) return false;
-      if (destination != other__.destination) return false;
-      if (timeout != other__.timeout) return false;
-      if (cmd != other__.cmd) return false;
+      const IMC::HistoricSample& other__ = static_cast<const HistoricSample&>(msg__);
+      if (sys_id != other__.sys_id) return false;
+      if (priority != other__.priority) return false;
+      if (x != other__.x) return false;
+      if (y != other__.y) return false;
+      if (z != other__.z) return false;
+      if (t != other__.t) return false;
+      if (sample != other__.sample) return false;
       return true;
     }
 
     int
-    RemoteCommand::validate(void) const
+    HistoricSample::validate(void) const
     {
       return false;
     }
 
     uint8_t*
-    RemoteCommand::serializeFields(uint8_t* bfr__) const
+    HistoricSample::serializeFields(uint8_t* bfr__) const
     {
       uint8_t* ptr__ = bfr__;
-      ptr__ += IMC::serialize(original_source, ptr__);
-      ptr__ += IMC::serialize(destination, ptr__);
-      ptr__ += IMC::serialize(timeout, ptr__);
-      ptr__ += cmd.serialize(ptr__);
+      ptr__ += IMC::serialize(sys_id, ptr__);
+      ptr__ += IMC::serialize(priority, ptr__);
+      ptr__ += IMC::serialize(x, ptr__);
+      ptr__ += IMC::serialize(y, ptr__);
+      ptr__ += IMC::serialize(z, ptr__);
+      ptr__ += IMC::serialize(t, ptr__);
+      ptr__ += sample.serialize(ptr__);
       return ptr__;
     }
 
     uint16_t
-    RemoteCommand::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    HistoricSample::deserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(original_source, bfr__, size__);
-      bfr__ += IMC::deserialize(destination, bfr__, size__);
-      bfr__ += IMC::deserialize(timeout, bfr__, size__);
-      bfr__ += cmd.deserialize(bfr__, size__);
+      bfr__ += IMC::deserialize(sys_id, bfr__, size__);
+      bfr__ += IMC::deserialize(priority, bfr__, size__);
+      bfr__ += IMC::deserialize(x, bfr__, size__);
+      bfr__ += IMC::deserialize(y, bfr__, size__);
+      bfr__ += IMC::deserialize(z, bfr__, size__);
+      bfr__ += IMC::deserialize(t, bfr__, size__);
+      bfr__ += sample.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
     uint16_t
-    RemoteCommand::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    HistoricSample::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
     {
       const uint8_t* start__ = bfr__;
-      bfr__ += IMC::reverseDeserialize(original_source, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(destination, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(timeout, bfr__, size__);
-      bfr__ += cmd.reverseDeserialize(bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(sys_id, bfr__, size__);
+      bfr__ += IMC::deserialize(priority, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(z, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(t, bfr__, size__);
+      bfr__ += sample.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
     void
-    RemoteCommand::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    HistoricSample::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
     {
-      IMC::toJSON(os__, "original_source", original_source, nindent__);
-      IMC::toJSON(os__, "destination", destination, nindent__);
-      IMC::toJSON(os__, "timeout", timeout, nindent__);
-      cmd.toJSON(os__, "cmd", nindent__);
+      IMC::toJSON(os__, "sys_id", sys_id, nindent__);
+      IMC::toJSON(os__, "priority", priority, nindent__);
+      IMC::toJSON(os__, "x", x, nindent__);
+      IMC::toJSON(os__, "y", y, nindent__);
+      IMC::toJSON(os__, "z", z, nindent__);
+      IMC::toJSON(os__, "t", t, nindent__);
+      sample.toJSON(os__, "sample", nindent__);
     }
 
     void
-    RemoteCommand::setTimeStampNested(double value__)
+    HistoricSample::setTimeStampNested(double value__)
     {
-      if (!cmd.isNull())
+      if (!sample.isNull())
       {
-        cmd.get()->setTimeStamp(value__);
+        sample.get()->setTimeStamp(value__);
       }
     }
 
     void
-    RemoteCommand::setSourceNested(uint16_t value__)
+    HistoricSample::setSourceNested(uint16_t value__)
     {
-      if (!cmd.isNull())
+      if (!sample.isNull())
       {
-        cmd.get()->setSource(value__);
+        sample.get()->setSource(value__);
       }
     }
 
     void
-    RemoteCommand::setSourceEntityNested(uint8_t value__)
+    HistoricSample::setSourceEntityNested(uint8_t value__)
     {
-      if (!cmd.isNull())
+      if (!sample.isNull())
       {
-        cmd.get()->setSourceEntity(value__);
+        sample.get()->setSourceEntity(value__);
       }
     }
 
     void
-    RemoteCommand::setDestinationNested(uint16_t value__)
+    HistoricSample::setDestinationNested(uint16_t value__)
     {
-      if (!cmd.isNull())
+      if (!sample.isNull())
       {
-        cmd.get()->setDestination(value__);
+        sample.get()->setDestination(value__);
       }
     }
 
     void
-    RemoteCommand::setDestinationEntityNested(uint8_t value__)
+    HistoricSample::setDestinationEntityNested(uint8_t value__)
     {
-      if (!cmd.isNull())
+      if (!sample.isNull())
       {
-        cmd.get()->setDestinationEntity(value__);
+        sample.get()->setDestinationEntity(value__);
       }
     }
 
@@ -3763,144 +3781,6 @@ namespace DUNE
       IMC::toJSON(os__, "data", data, nindent__);
     }
 
-    HistoricSample::HistoricSample(void)
-    {
-      m_header.mgid = 186;
-      clear();
-      sample.setParent(this);
-    }
-
-    void
-    HistoricSample::clear(void)
-    {
-      sys_id = 0;
-      priority = 0;
-      x = 0;
-      y = 0;
-      z = 0;
-      t = 0;
-      sample.clear();
-    }
-
-    bool
-    HistoricSample::fieldsEqual(const Message& msg__) const
-    {
-      const IMC::HistoricSample& other__ = static_cast<const HistoricSample&>(msg__);
-      if (sys_id != other__.sys_id) return false;
-      if (priority != other__.priority) return false;
-      if (x != other__.x) return false;
-      if (y != other__.y) return false;
-      if (z != other__.z) return false;
-      if (t != other__.t) return false;
-      if (sample != other__.sample) return false;
-      return true;
-    }
-
-    int
-    HistoricSample::validate(void) const
-    {
-      return false;
-    }
-
-    uint8_t*
-    HistoricSample::serializeFields(uint8_t* bfr__) const
-    {
-      uint8_t* ptr__ = bfr__;
-      ptr__ += IMC::serialize(sys_id, ptr__);
-      ptr__ += IMC::serialize(priority, ptr__);
-      ptr__ += IMC::serialize(x, ptr__);
-      ptr__ += IMC::serialize(y, ptr__);
-      ptr__ += IMC::serialize(z, ptr__);
-      ptr__ += IMC::serialize(t, ptr__);
-      ptr__ += sample.serialize(ptr__);
-      return ptr__;
-    }
-
-    uint16_t
-    HistoricSample::deserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::deserialize(sys_id, bfr__, size__);
-      bfr__ += IMC::deserialize(priority, bfr__, size__);
-      bfr__ += IMC::deserialize(x, bfr__, size__);
-      bfr__ += IMC::deserialize(y, bfr__, size__);
-      bfr__ += IMC::deserialize(z, bfr__, size__);
-      bfr__ += IMC::deserialize(t, bfr__, size__);
-      bfr__ += sample.deserialize(bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    uint16_t
-    HistoricSample::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
-    {
-      const uint8_t* start__ = bfr__;
-      bfr__ += IMC::reverseDeserialize(sys_id, bfr__, size__);
-      bfr__ += IMC::deserialize(priority, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(x, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(y, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(z, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(t, bfr__, size__);
-      bfr__ += sample.reverseDeserialize(bfr__, size__);
-      return bfr__ - start__;
-    }
-
-    void
-    HistoricSample::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
-    {
-      IMC::toJSON(os__, "sys_id", sys_id, nindent__);
-      IMC::toJSON(os__, "priority", priority, nindent__);
-      IMC::toJSON(os__, "x", x, nindent__);
-      IMC::toJSON(os__, "y", y, nindent__);
-      IMC::toJSON(os__, "z", z, nindent__);
-      IMC::toJSON(os__, "t", t, nindent__);
-      sample.toJSON(os__, "sample", nindent__);
-    }
-
-    void
-    HistoricSample::setTimeStampNested(double value__)
-    {
-      if (!sample.isNull())
-      {
-        sample.get()->setTimeStamp(value__);
-      }
-    }
-
-    void
-    HistoricSample::setSourceNested(uint16_t value__)
-    {
-      if (!sample.isNull())
-      {
-        sample.get()->setSource(value__);
-      }
-    }
-
-    void
-    HistoricSample::setSourceEntityNested(uint8_t value__)
-    {
-      if (!sample.isNull())
-      {
-        sample.get()->setSourceEntity(value__);
-      }
-    }
-
-    void
-    HistoricSample::setDestinationNested(uint16_t value__)
-    {
-      if (!sample.isNull())
-      {
-        sample.get()->setDestination(value__);
-      }
-    }
-
-    void
-    HistoricSample::setDestinationEntityNested(uint8_t value__)
-    {
-      if (!sample.isNull())
-      {
-        sample.get()->setDestinationEntity(value__);
-      }
-    }
-
     HistoricDataQuery::HistoricDataQuery(void)
     {
       m_header.mgid = 187;
@@ -4018,6 +3898,126 @@ namespace DUNE
       if (!data.isNull())
       {
         data.get()->setDestinationEntity(value__);
+      }
+    }
+
+    RemoteCommand::RemoteCommand(void)
+    {
+      m_header.mgid = 188;
+      clear();
+      cmd.setParent(this);
+    }
+
+    void
+    RemoteCommand::clear(void)
+    {
+      original_source = 0;
+      destination = 0;
+      timeout = 0;
+      cmd.clear();
+    }
+
+    bool
+    RemoteCommand::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::RemoteCommand& other__ = static_cast<const RemoteCommand&>(msg__);
+      if (original_source != other__.original_source) return false;
+      if (destination != other__.destination) return false;
+      if (timeout != other__.timeout) return false;
+      if (cmd != other__.cmd) return false;
+      return true;
+    }
+
+    int
+    RemoteCommand::validate(void) const
+    {
+      return false;
+    }
+
+    uint8_t*
+    RemoteCommand::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(original_source, ptr__);
+      ptr__ += IMC::serialize(destination, ptr__);
+      ptr__ += IMC::serialize(timeout, ptr__);
+      ptr__ += cmd.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    RemoteCommand::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(original_source, bfr__, size__);
+      bfr__ += IMC::deserialize(destination, bfr__, size__);
+      bfr__ += IMC::deserialize(timeout, bfr__, size__);
+      bfr__ += cmd.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    RemoteCommand::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(original_source, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(destination, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(timeout, bfr__, size__);
+      bfr__ += cmd.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    RemoteCommand::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "original_source", original_source, nindent__);
+      IMC::toJSON(os__, "destination", destination, nindent__);
+      IMC::toJSON(os__, "timeout", timeout, nindent__);
+      cmd.toJSON(os__, "cmd", nindent__);
+    }
+
+    void
+    RemoteCommand::setTimeStampNested(double value__)
+    {
+      if (!cmd.isNull())
+      {
+        cmd.get()->setTimeStamp(value__);
+      }
+    }
+
+    void
+    RemoteCommand::setSourceNested(uint16_t value__)
+    {
+      if (!cmd.isNull())
+      {
+        cmd.get()->setSource(value__);
+      }
+    }
+
+    void
+    RemoteCommand::setSourceEntityNested(uint8_t value__)
+    {
+      if (!cmd.isNull())
+      {
+        cmd.get()->setSourceEntity(value__);
+      }
+    }
+
+    void
+    RemoteCommand::setDestinationNested(uint16_t value__)
+    {
+      if (!cmd.isNull())
+      {
+        cmd.get()->setDestination(value__);
+      }
+    }
+
+    void
+    RemoteCommand::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!cmd.isNull())
+      {
+        cmd.get()->setDestinationEntity(value__);
       }
     }
 

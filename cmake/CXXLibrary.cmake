@@ -1,5 +1,5 @@
 ############################################################################
-# Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      #
+# Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      #
 # Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  #
 ############################################################################
 # This file is part of DUNE: Unified Navigation Environment.               #
@@ -98,8 +98,17 @@ macro(dune_probe_cxx_lib)
       set(DUNE_CLIB_NAME "MinGW")
       set(DUNE_CLIB_CANONICAL "mingw")
       set(DUNE_CLIB_MINGW 1)
-    endif(MINGW_LIBC)
-  endif(NOT DUNE_CLIB_NAME)
+    endif()
+  endif()
+
+  if(NOT DUNE_CLIB_NAME)
+    check_symbol_exists(__MINGW32__ stdio.h MINGW32_LIBC)
+    if(MINGW32_LIBC)
+      set(DUNE_CLIB_NAME "MinGW")
+      set(DUNE_CLIB_CANONICAL "mingw")
+      set(DUNE_CLIB_MINGW 1)
+    endif()
+  endif()
 
   # Microsoft C library
   if(NOT DUNE_CLIB_NAME)

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -60,6 +60,9 @@ namespace DUNE
 
       void
       consume(const IMC::ControlLoops* message);
+
+      void
+      consume(const IMC::Teleoperation* message);
 
     protected:
       void
@@ -141,6 +144,9 @@ namespace DUNE
       IMC::RemoteActionsRequest m_actions;
       //! Control loops last reference
       uint32_t m_scope_ref;
+
+      //! IMC ID of the teleoperation source
+      uint16_t m_teleop_src;
     };
   }
 }

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -53,12 +53,7 @@ namespace DUNE
       inline static fp64_t
       normalizeRadian(fp64_t a)
       {
-        while (a <= -c_pi)
-          a += c_two_pi;
-        while (a > c_pi)
-          a -= c_two_pi;
-
-        return a;
+        return a - c_two_pi * std::floor((a + c_pi) / c_two_pi);
       }
 
       //! Convert a value given in degree to radian.

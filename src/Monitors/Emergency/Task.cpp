@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -32,6 +32,7 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <Supervisors/Reporter/Client.hpp>
 
 namespace Monitors
 {
@@ -67,12 +68,15 @@ namespace Monitors
       Counter<double> m_lost_coms_timer;
       //! Medium handler.
       DUNE::Monitors::MediumHandler m_hand;
+      //! Reporter API.
+      Supervisors::Reporter::Client* m_reporter;
       //! Task arguments.
       Arguments m_args;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Periodic(name, ctx),
-        m_in_mission(false)
+        m_in_mission(false),
+        m_reporter(NULL)
       {
         paramActive(Tasks::Parameter::SCOPE_IDLE,
                     Tasks::Parameter::VISIBILITY_USER);
@@ -106,8 +110,22 @@ namespace Monitors
         bind<IMC::GpsFix>(this);
         bind<IMC::Heartbeat>(this);
         bind<IMC::PlanControlState>(this);
+        bind<IMC::ReportControl>(this);
         bind<IMC::VehicleMedium>(this);
         bind<IMC::TextMessage>(this);
+      }
+
+      void
+      onResourceRelease(void)
+      {
+        Memory::clear(m_reporter);
+      }
+
+      void
+      onResourceAcquisition(void)
+      {
+        m_reporter = new Supervisors::Reporter::Client(this, Supervisors::Reporter::IS_GSM,
+                                                       2.0, false);
       }
 
       void
@@ -152,7 +170,7 @@ namespace Monitors
 
           Time::BrokenDown bdt;
 
-          m_emsg = String::str("(%s) %02u:%02u:%02u / %d %f, %d %f / f:%u c:%u",
+          m_emsg = String::str("(%s) %02u:%02u:%02u / %d %f, %d %f / f:%d c:%d",
                                getSystemName(),
                                bdt.hour, bdt.minutes, bdt.seconds,
                                lat_deg, lat_min, lon_deg, lon_min,
@@ -160,6 +178,13 @@ namespace Monitors
 
           m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
         }
+      }
+
+      void
+      consume(const IMC::ReportControl* msg)
+      {
+        if (m_reporter != NULL)
+          m_reporter->consume(msg);
       }
 
       void
@@ -193,8 +218,6 @@ namespace Monitors
       void
       sendSMS(const char* prefix, unsigned timeout, std::string recipient = "")
       {
-        inf(DTR("sending SMS %s | %u"), prefix, timeout);
-
         IMC::Sms sms;
         if (recipient.size() == 0)
           sms.number = m_args.recipient;
@@ -211,7 +234,7 @@ namespace Monitors
         {
           std::string msg;
           Time::BrokenDown bdt;
-          msg = String::str("(%s) %02u:%02u:%02u / Unknown Location / f:%u c:%u",
+          msg = String::str("(%s) %02u:%02u:%02u / Unknown Location / f:%d c:%d",
                                getSystemName(),
                                bdt.hour, bdt.minutes, bdt.seconds,
                                (int)m_fuel, (int)m_fuel_conf);
@@ -220,6 +243,9 @@ namespace Monitors
 
           sms.contents = String::str("(%s) %s", prefix, msg.c_str());
         }
+
+        inf(DTR("sending SMS (t:%u) to %s: %s"),
+            timeout, sms.number.c_str(), sms.contents.c_str());
 
         dispatch(sms);
       }
@@ -255,7 +281,7 @@ namespace Monitors
       void
       consume(const IMC::PlanControlState* msg)
       {
-        m_in_mission = (msg->state & IMC::PlanControlState::PCS_EXECUTING) != 0;
+        m_in_mission = msg->state == IMC::PlanControlState::PCS_EXECUTING;
         m_progress = msg->plan_progress;
       }
 
@@ -271,6 +297,20 @@ namespace Monitors
       void
       task(void)
       {
+        std::string number;
+        if (m_reporter != NULL && m_reporter->trigger(&number))
+        {
+          if (!m_hand.isUnderwater())
+          {
+            // Use current emergency number.
+            if (number == "default")
+              number = m_args.recipient;
+
+            sendSMS("R", m_args.sms_lost_coms_ttl, number);
+            spew("sent report to %s", number.c_str());
+          }
+        }
+
         if (!isActive())
           return;
 

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -794,7 +794,7 @@ namespace Plan
         }
         catch (std::runtime_error& e)
         {
-          onFailure(DTR("failed loading from DB: %s"), e.what());
+          onFailure(String::str(DTR("failed loading from DB: %s"), e.what()));
           return false;
         }
 

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -39,8 +39,8 @@ namespace Sensors
 
     //! Serial port baud rate.
     static const unsigned c_baud_rate = 115200;
-    //! Number of hard-iron correction factors.
-    static const unsigned c_hard_iron_count = 3;
+    //! Number of axes.
+    static const unsigned c_axes_count = 3;
     //! Power-up delay (s).
     static const double c_power_up_delay = 2.0;
     //! Hard Iron calibration parameter name.
@@ -76,12 +76,15 @@ namespace Sensors
       std::vector<double> hard_iron;
       //! Rotation matrix values.
       std::vector<double> rotation_mx;
+      //! Number of seconds without data before reporting an error.
+      double timeout_error;
+      //! Number of seconds without data before
+      //! reporting a failure and restarting.
+      double timeout_failure;
     };
 
     struct Task: public Tasks::Task
     {
-      //! Task arguments.
-      Arguments m_args;
       //! Angular velocity.
       IMC::AngularVelocity m_ang_vel;
       //! Acceleration.
@@ -110,19 +113,31 @@ namespace Sensors
       unsigned m_calib_eid;
       //! Rotation Matrix to correct mounting position.
       Math::Matrix m_rotation;
-      //! Euler angles offset.
-      Math::Matrix m_rotation_euler;
-      //! Rotated calibration parameters.
-      float m_hard_iron[3];
       //! Watchdog.
       Counter<double> m_wdog;
+      //! Entity state timer.
+      Counter<double> m_state_timer;
       //! Error counts.
       ErrorCounts m_err_counts;
+      //! Rotated hard-iron calibration parameters.
+      double m_hard_iron[c_axes_count];
+      //! Sample count.
+      size_t m_sample_count;
+      //! Faults count.
+      size_t m_faults_count;
+      //! Timeout count.
+      size_t m_timeout_count;
+      //! Task arguments.
+      Arguments m_args;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_uart(NULL),
-        m_ctl(NULL)
+        m_ctl(NULL),
+        m_state_timer(1.0),
+        m_sample_count(0),
+        m_faults_count(0),
+        m_timeout_count(0)
       {
         // Define configuration parameters.
         param("Serial Port - Device", m_args.uart_dev)
@@ -135,7 +150,7 @@ namespace Sensors
 
         param(c_hard_iron_param, m_args.hard_iron)
         .units(Units::Gauss)
-        .size(c_hard_iron_count)
+        .size(c_axes_count)
         .description("Hard-Iron calibration parameters");
 
         param("Output Frequency", m_args.output_frq)
@@ -154,33 +169,45 @@ namespace Sensors
         .size(9)
         .description("Rotation matrix which is dependent of the mounting position");
 
+        param("Timeout - Error", m_args.timeout_error)
+        .defaultValue("3.0")
+        .minimumValue("1.0")
+        .units(Units::Second)
+        .description("Number of seconds without data before reporting an error");
+
+        param("Timeout - Failure", m_args.timeout_failure)
+        .defaultValue("6.0")
+        .minimumValue("1.0")
+        .units(Units::Second)
+        .description("Number of seconds without data before restarting task");
+
         bind<IMC::MagneticField>(this);
       }
 
       void
       onUpdateParameters(void)
       {
-        m_rotation.fill(3, 3, &m_args.rotation_mx[0]);
-        m_rotation_euler(0) = atan2(m_rotation(2, 1), m_rotation(2, 2));
-        m_rotation_euler(1) = asin(-m_rotation(2, 0));
-        m_rotation_euler(2) = atan2(m_rotation(1, 0), m_rotation(0, 0));
+        m_rotation.fill(c_axes_count, c_axes_count, &m_args.rotation_mx[0]);
 
         // Rotate calibration parameters.
-        Math::Matrix data(3, 1);
-        for (unsigned i = 0; i < 3; i++)
+        Math::Matrix data(c_axes_count, 1);
+        for (unsigned i = 0; i < c_axes_count; i++)
           data(i) = m_args.hard_iron[i];
         data = transpose(m_rotation) * data;
-        for (unsigned i = 0; i < 3; i++)
+        for (unsigned i = 0; i < c_axes_count; i++)
           m_hard_iron[i] = data(i);
 
         if (m_ctl == NULL)
           return;
 
-        if (paramChanged(m_args.hard_iron))
-          setHardIronFactors(m_hard_iron);
+        if (paramChanged(m_args.hard_iron) || paramChanged(m_args.rotation_mx))
+          setHardIronFactors();
 
         if (paramChanged(m_args.output_frq) || paramChanged(m_args.raw_data))
           setOutputFrequency(m_args.output_frq);
+
+        if (paramChanged(m_args.timeout_error))
+          m_wdog.setTop(m_args.timeout_error);
       }
 
       //! Acquire resources.
@@ -225,9 +252,8 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        setHardIronFactors(m_hard_iron);
+        setHardIronFactors();
         setOutputFrequency(m_args.output_frq);
-        m_wdog.setTop(2.0);
       }
 
       void
@@ -236,8 +262,8 @@ namespace Sensors
         if (getEntityId() != msg->getDestinationEntity())
           return;
 
-        double hi_x = m_hard_iron[0] - msg->x;
-        double hi_y = m_hard_iron[1] - msg->y;
+        double hi_x = m_args.hard_iron[0] - msg->x;
+        double hi_y = m_args.hard_iron[1] - msg->y;
 
         IMC::EntityParameter hip;
         hip.name = c_hard_iron_param;
@@ -272,42 +298,42 @@ namespace Sensors
       }
 
       //! Get current Hard-Iron calibration parameters.
-      //! @return hard-iron calibration parameters.
-      std::vector<double>
+      void
       getHardIronFactors(void)
       {
-        std::vector<double> factors;
-
         UCTK::Frame frame;
         frame.setId(PKT_ID_HARD_IRON);
         if (m_ctl->sendFrame(frame))
         {
+          if (frame.getPayloadSize() != (c_axes_count * 2))
+            throw std::runtime_error(String::str("invalid hard iron size: %u", frame.getPayloadSize()));
+
           int16_t tmp = 0;
-          for (unsigned i = 0; i < c_hard_iron_count; ++i)
+          for (unsigned i = 0; i < c_axes_count; ++i)
           {
             frame.get(tmp, i * 2);
-            factors.push_back(tmp / 10e3);
+            m_hard_iron[i] = tmp / 10e3;
           }
         }
-
-        if (factors.size() != c_hard_iron_count)
+        else
+        {
           throw std::runtime_error("failed to retrieve hard-iron factors");
-
-        return factors;
+        }
       }
 
       //! Set Hard-Iron calibration parameters.
-      //! @param[in] factors new calibration values.
       void
-      setHardIronFactors(const float* factors)
+      setHardIronFactors(void)
       {
-        spew("setting hard-iron parameters to %.4f, %.4f, %.4f",
-             factors[0],
-             factors[1],
-             factors[2]);
+        double factors[c_axes_count];
+        factors[0] = m_hard_iron[0];
+        factors[1] = m_hard_iron[1];
+        factors[2] = m_hard_iron[2];
 
-        std::vector<double> old = getHardIronFactors();
-        if ((factors[0] == old[0]) && (factors[1] == old[1]))
+        getHardIronFactors();
+        if ((std::fabs(factors[0] - m_hard_iron[0]) < 1e-3) &&
+            (std::fabs(factors[1] - m_hard_iron[1]) < 1e-3) &&
+            (std::fabs(factors[2] - m_hard_iron[2]) < 1e-3))
         {
           spew("no change in hard-iron parameters");
           return;
@@ -315,12 +341,16 @@ namespace Sensors
 
         UCTK::Frame frame;
         frame.setId(PKT_ID_HARD_IRON);
-        frame.setPayloadSize(6);
-        for (unsigned i = 0; i < c_hard_iron_count; ++i)
+        frame.setPayloadSize(c_axes_count * 2);
+        for (unsigned i = 0; i < c_axes_count; ++i)
           frame.set<int16_t>(static_cast<int16_t>(factors[i] * 10e3), i * 2);
 
         if (!m_ctl->sendFrame(frame))
           throw RestartNeeded(DTR("failed to set hard-iron correction factors"), 5);
+
+        inf(DTR("new hard-iron calibration parameters: %.4f, %.4f, 0.0"),
+            m_args.hard_iron[0],
+            m_args.hard_iron[1]);
       }
 
       //! Decode output data frame.
@@ -331,6 +361,7 @@ namespace Sensors
         double imc_tstamp = Clock::getSinceEpoch();
         float tmp = 0;
         uint16_t tmp_u16 = 0;
+        Math::Matrix data(c_axes_count, 1);
         const uint8_t* ptr = frame.getPayload();
 
         // Timestamp.
@@ -338,74 +369,68 @@ namespace Sensors
         double dev_tstamp = tmp_u16 / 1024.0;
 
         // Angular Velocity.
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_ang_vel.x = Angles::radians(tmp);
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_ang_vel.y = Angles::radians(tmp);
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_ang_vel.z = Angles::radians(tmp);
-        m_ang_vel.time = dev_tstamp;
+        ptr += extractRotatedVector(ptr, data);
         m_ang_vel.setTimeStamp(imc_tstamp);
+        m_ang_vel.x = Angles::radians(data(0));
+        m_ang_vel.y = Angles::radians(data(1));
+        m_ang_vel.z = Angles::radians(data(2));
+        m_ang_vel.time = dev_tstamp;
+        dispatch(m_ang_vel, DF_KEEP_TIME);
 
         // Acceleration.
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_accel.x = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_accel.y = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_accel.z = tmp;
-        m_accel.time = dev_tstamp;
+        ptr += extractRotatedVector(ptr, data);
         m_accel.setTimeStamp(imc_tstamp);
+        m_accel.x = data(0);
+        m_accel.y = data(1);
+        m_accel.z = data(2);
+        m_accel.time = dev_tstamp;
+        dispatch(m_accel, DF_KEEP_TIME);
 
         // Delta Angles.
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_ang.x = Angles::radians(tmp);
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_ang.y = Angles::radians(tmp);
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_ang.z = Angles::radians(tmp);
-        m_delt_ang.time = dev_tstamp;
+        ptr += extractRotatedVector(ptr, data);
         m_delt_ang.setTimeStamp(imc_tstamp);
+        m_delt_ang.x = Angles::radians(data(0));
+        m_delt_ang.y = Angles::radians(data(1));
+        m_delt_ang.z = Angles::radians(data(2));
+        m_delt_ang.time = dev_tstamp;
+        dispatch(m_delt_ang, DF_KEEP_TIME);
 
         // Delta Velocity.
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_vel.x = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_vel.y = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_delt_vel.z = tmp;
-        m_delt_vel.time = dev_tstamp;
+        ptr += extractRotatedVector(ptr, data);
         m_delt_vel.setTimeStamp(imc_tstamp);
+        m_delt_vel.x = data(0);
+        m_delt_vel.y = data(1);
+        m_delt_vel.z = data(2);
+        m_delt_vel.time = dev_tstamp;
+        dispatch(m_delt_vel, DF_KEEP_TIME);
 
         // Magnetic Field.
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_magn.x = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_magn.y = tmp;
-        ptr += ByteCopy::fromLE(tmp, ptr);
-        m_magn.z = tmp;
-        m_magn.time = dev_tstamp;
+        ptr += extractRotatedVector(ptr, data);
         m_magn.setTimeStamp(imc_tstamp);
+        m_magn.x = data(0);
+        m_magn.y = data(1);
+        m_magn.z = data(2);
+        m_magn.time = dev_tstamp;
+        dispatch(m_magn, DF_KEEP_TIME);
 
         // Euler Angles.
         ptr += ByteCopy::fromLE(tmp, ptr);
-        m_euler.phi = tmp;
+        data(0) = tmp;
         ptr += ByteCopy::fromLE(tmp, ptr);
-        m_euler.theta = tmp;
+        data(1) = tmp;
         ptr += ByteCopy::fromLE(tmp, ptr);
-        m_euler.psi_magnetic = tmp;
-        m_euler.psi = tmp;
-        m_euler.time = dev_tstamp;
+        data(2) = tmp;
+
+        Matrix r(c_axes_count, c_axes_count);
+        r = data.toDCM() * transpose(m_rotation);
+
         m_euler.setTimeStamp(imc_tstamp);
-
-        rotateData();
-
+        m_euler.phi = std::atan2(r(2, 1), r(2, 2));
+        m_euler.theta = std::asin(-r(2, 0));
+        m_euler.psi = std::atan2(r(1, 0), r(0, 0));
+        m_euler.psi_magnetic = m_euler.psi;
+        m_euler.time = dev_tstamp;
         dispatch(m_euler, DF_KEEP_TIME);
-        dispatch(m_magn, DF_KEEP_TIME);
-        dispatch(m_delt_vel, DF_KEEP_TIME);
-        dispatch(m_accel, DF_KEEP_TIME);
-        dispatch(m_delt_ang, DF_KEEP_TIME);
-        dispatch(m_ang_vel, DF_KEEP_TIME);
 
         // Temperature.
         ptr += ByteCopy::fromLE(tmp, ptr);
@@ -429,68 +454,7 @@ namespace Sensors
           m_err_counts.increment(ERR_FLAG_SPI_ERR);
 
         m_wdog.reset();
-      }
-
-      //! Correct data according with mounting position.
-      void
-      rotateData(void)
-      {
-        Math::Matrix data(3, 1);
-
-        // Acceleration.
-        data(0) = m_accel.x;
-        data(1) = m_accel.y;
-        data(2) = m_accel.z;
-        data = m_rotation * data;
-        m_accel.x = data(0);
-        m_accel.y = data(1);
-        m_accel.z = data(2);
-
-        // Angular Velocity.
-        data(0) = m_ang_vel.x;
-        data(1) = m_ang_vel.y;
-        data(2) = m_ang_vel.z;
-        data = m_rotation * data;
-        m_ang_vel.x = data(0);
-        m_ang_vel.y = data(1);
-        m_ang_vel.z = data(2);
-
-        // Delta Angles.
-        data(0) = m_delt_ang.x;
-        data(1) = m_delt_ang.y;
-        data(2) = m_delt_ang.z;
-        data = m_rotation * data;
-        m_delt_ang.x = data(0);
-        m_delt_ang.y = data(1);
-        m_delt_ang.z = data(2);
-
-        // Delta Velocity.
-        data(0) = m_delt_vel.x;
-        data(1) = m_delt_vel.y;
-        data(2) = m_delt_vel.z;
-        data = m_rotation * data;
-        m_delt_vel.x = data(0);
-        m_delt_vel.y = data(1);
-        m_delt_vel.z = data(2);
-
-        // Magnetic Field.
-        data(0) = m_magn.x;
-        data(1) = m_magn.y;
-        data(2) = m_magn.z;
-        data = m_rotation * data;
-        m_magn.x = data(0);
-        m_magn.y = data(1);
-        m_magn.z = data(2);
-
-        // Euler angles.
-        data(0) = m_euler.phi;
-        data(1) = m_euler.theta;
-        data(2) = m_euler.psi;
-        data = m_rotation * data - m_rotation_euler;
-        m_euler.phi = data(0);
-        m_euler.theta = data(1);
-        m_euler.psi = data(2);
-        m_euler.psi_magnetic = m_euler.psi;
+        m_sample_count++;
       }
 
       //! Decode output raw data.
@@ -537,6 +501,54 @@ namespace Sensors
         }
       }
 
+      uint8_t
+      extractRotatedVector(const uint8_t* ptr, Matrix& vector)
+      {
+        float raw = 0;
+        ptr += ByteCopy::fromLE(raw, ptr);
+        vector(0) = raw;
+        ptr += ByteCopy::fromLE(raw, ptr);
+        vector(1) = raw;
+        ptr += ByteCopy::fromLE(raw, ptr);
+        vector(2) = raw;
+        vector = m_rotation * vector;
+        return (uint8_t)(c_axes_count * sizeof(float));
+      }
+
+      void
+      reportEntityState(void)
+      {
+        if (m_wdog.overflow())
+        {
+          if (getEntityState() == IMC::EntityState::ESTA_NORMAL)
+            m_faults_count++;
+
+          std::string text = String::str(DTR("%0.1f seconds without valid data"),
+                                         m_wdog.getElapsed());
+
+          if (m_wdog.getElapsed() >= m_args.timeout_failure)
+            throw RestartNeeded(text, 0);
+          else
+            setEntityState(IMC::EntityState::ESTA_ERROR, text);
+
+          return;
+        }
+
+        if (!m_state_timer.overflow())
+          return;
+
+        double time_elapsed = m_state_timer.getElapsed();
+        double frequency = Math::round(m_sample_count / time_elapsed);
+
+        std::string text = String::str(DTR("active | timeouts: %u | faults: %u | frequency: %u"),
+                                       m_timeout_count,
+                                       m_faults_count,
+                                       (unsigned)frequency);
+
+        m_state_timer.reset();
+        m_sample_count = 0;
+      }
+
       void
       onMain(void)
       {
@@ -546,12 +558,10 @@ namespace Sensors
 
           if (Poll::poll(*m_uart, 1.0))
             readInput();
+          else
+            m_timeout_count++;
 
-          if (m_wdog.overflow())
-          {
-            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-            throw RestartNeeded(DTR(Status::getString(Status::CODE_COM_ERROR)), 5);
-          }
+          reportEntityState();
         }
       }
     };

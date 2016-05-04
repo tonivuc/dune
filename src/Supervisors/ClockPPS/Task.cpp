@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 OceanScan - Marine Systems & Technology, Lda.        *
+// Copyright 2007-2016 OceanScan - Marine Systems & Technology, Lda.        *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
 //                                                                          *
@@ -140,8 +140,15 @@ namespace Supervisors
       void
       onResourceAcquisition(void)
       {
-        m_pps = new LinuxPPS(this, m_args.uart_dev, m_args.pps_dev, m_args.pps_prop_delay);
-        m_pps->start();
+        try
+        {
+          m_pps = new LinuxPPS(this, m_args.uart_dev, m_args.pps_dev, m_args.pps_prop_delay);
+          m_pps->start();
+        }
+        catch (std::exception& e)
+        {
+          throw RestartNeeded(e.what(), 5.0, false);
+        }
 
         struct timex tmx;
         std::memset(&tmx, 0, sizeof(tmx));
