@@ -28,10 +28,6 @@
 #ifndef VISION_TRACKING3D_IPCAMCAP_HPP_INCLUDED_
 #define VISION_TRACKING3D_IPCAMCAP_HPP_INCLUDED_
 
-// ISO C++ 98 headers.
-#include <queue>
-#include <unistd.h>
-
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
@@ -44,27 +40,24 @@ namespace Vision
   namespace Tracking3d
   {
     //! %Vision Stream Capture Protocol (%IpCamCap).
-    class IpCamCap: public Thread
+    class IpCamCap : public Thread
     {
       public:
-        std::string urlCam;
-        std::string nameCam;
+        std::string m_urlCam;
         //! Constructor.
         //! @param[in] task parent task.
         //! @param[in] url of ipcam.
         //! @param[in] name od ipcam.
-        IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl,
-            std::string camname) :
-            m_task(task)
+        IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl) :
+          m_task(task)
         {
-          urlCam = ipcamurl;
-          nameCam = camname;
+          m_urlCam = ipcamurl;
         }
 
         //! Destructor.
         ~IpCamCap(void)
         {
-          cvReleaseCapture(&capture);
+          cvReleaseCapture(&m_capture);
         }
 
         //! Capture frame.
@@ -72,50 +65,54 @@ namespace Vision
         IplImage*
         capFrame(void)
         {
-          if (isCapture == 1)
-          {
-            //isCapture = 0;
-            return frame;
-          }
+          if (m_isCapture)
+            return m_frame;
           else
             return NULL;
+        }
+
+        //! check state of connection to ipcam
+        //! @return true if connected to ipcam.
+        bool
+        isConnected(void)
+        {
+          if (m_stateComIpCam)
+            return true;
+          else
+            return false;
         }
 
       private:
         //! Parent task.
         DUNE::Tasks::Task* m_task;
         //! Frame capture
-        IplImage* frame;
-        //!Capture struct - OpenCV
-        CvCapture* capture;
+        IplImage* m_frame;
+        //! Capture struct - OpenCV
+        CvCapture* m_capture;
         //! state of capture;
-        bool isCapture;
+        bool m_isCapture;
+        //! state of connection to ipcam
+        bool m_stateComIpCam;
 
-        void run(void)
+        void
+        run(void)
         {
-          isCapture = 0;
-          capture = cvCaptureFromFile(urlCam.c_str());
-          while (capture == 0 && !isStopping())
+          m_isCapture = false;
+          m_stateComIpCam = false;
+          m_capture = cvCaptureFromFile(m_urlCam.c_str());
+          while (m_capture == 0 && !isStopping())
           {
-            m_task->err(DTR("ERROR OPEN IPCAM: %s"), nameCam.c_str());
-            sleep(1);
-            capture = cvCaptureFromFile(urlCam.c_str());
+            Delay::waitMsec(1000);
+            m_capture = cvCaptureFromFile(m_urlCam.c_str());
           }
 
           while (!isStopping())
           {
-            frame = cvQueryFrame(capture);
-            if (frame == NULL)
-            {
-              isCapture = 0;
-              m_task->err(DTR("null frame -> url: %s  Name: %s"),
-                  urlCam.c_str(), nameCam.c_str());
-            }
+            m_frame = cvQueryFrame(m_capture);
+            if (m_frame == NULL)
+              m_isCapture = false;
             else
-            {
-              isCapture = 1;
-              //m_task->inf(DTR("frame %d: url: %s  Name: %s"), cnt, urlCam.c_str(), nameCam.c_str());
-            }
+              m_isCapture = true;
 
           }
         }
