@@ -27,13 +27,17 @@
 
 // ISO C++ 98 headers.
 #include <queue>
+#include <iostream>
+#include <stdexcept>
+#include <stdio.h>
+#include <string>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
 //OpenCV headers
 #include <opencv2/opencv.hpp>
-#include "../../../vendor/libraries/cvblob/cvblob.h"
+//#include "../../../vendor/libraries/cvblob/cvblob.h"
 
 // Local headers.
 #include "IpCamCap.hpp"
@@ -46,193 +50,261 @@ namespace Vision
     using DUNE_NAMESPACES;
     using namespace cv;
 
+    static const unsigned int c_sleep_time = 1500;
+
     struct Arguments
     {
-        // - IpCam1
-        std::vector<std::string> ipcam1;
-        // - IpCam2
-        std::vector<std::string> ipcam2;
+      //! IpCam1 URL
+      std::string url_ipcam1;
+      //! IpCam2 URL
+      std::string url_ipcam2;
+      //! IpCam1 Name
+      std::string name_ipcam1;
+      //! IpCam2 Name
+      std::string name_ipcam2;
+      //! Size of Tpl match
+      int tpl_size;
+      //! Windows search size
+      int window_search_size;
+      //! Frames to Refresh
+      int frames_to_refresh;
+      //! Path to sysfs temperature.
+      std::string temp_path;
+      //! Entity label of temperature sensor.
+      std::string elabel_temp;
     };
 
-    struct Task: public DUNE::Tasks::Task
+    struct Task : public DUNE::Tasks::Task
     {
+      //! Temperature messages.
+      Arguments m_args;
+      IMC::Temperature m_temp;
+      IMC::GetImageCoords m_getcoord;
+      IpCamCap* m_cap1;
+      IpCamCap* m_cap2;
+      OperationCV* m_operation1;
+      OperationCV* m_operation2;
+      //! buffer for frame of Cam1
+      IplImage* m_frameCam1;
+      //! buffer for frame of Cam2
+      IplImage* m_frameCam2;
+      //! Init tpl values
+      bool m_initValuesTpl;
 
-        Arguments m_args;
-        IMC::GetImageCoords m_getcoord;
-        IpCamCap* m_cap1;
-        IpCamCap* m_cap2;
-        OperationCV* m_operation1;
-        OperationCV* m_operation2;
-        //! Frame capture Cam1
-        IplImage* m_frameCam1;
-        //! Frame capture Cam2
-        IplImage* m_frameCam2;
-        //Variables for test tpl ( template match)
-        IplImage* m_test_tpl_1;
-        IplImage* m_test_tpl_2;
-        IplImage* m_tpl1;
-        IplImage* m_tpl2;
-        bool m_flag_inic_tpl_aloc;
+      //! Constructor.
+      //! @param[in] name task name.
+      //! @param[in] ctx context.
+      Task(const std::string& name, Tasks::Context& ctx) :
+        DUNE::Tasks::Task(name, ctx), m_cap1(NULL), m_cap2(NULL)
+      {
+        param("IpCam1 - URL", m_args.url_ipcam1)
+        .description("IpCam1 Addresses");
 
-        //! Constructor.
-        //! @param[in] name task name.
-        //! @param[in] ctx context.
-        Task(const std::string& name, Tasks::Context& ctx) :
-            DUNE::Tasks::Task(name, ctx), m_cap1(NULL), m_cap2(NULL)
+        param("IpCam2 - URL", m_args.url_ipcam2)
+        .description("IpCam2 Addresses");
+
+        param("IpCam1 - Name", m_args.name_ipcam1)
+        .defaultValue("Cam1")
+        .description("IpCam1 Name");
+
+        param("IpCam2 - Name", m_args.name_ipcam2)
+        .defaultValue("Cma2")
+        .description("IpCam2 Name");
+
+        param("Tpl Size", m_args.tpl_size)
+        .defaultValue("50")
+        .description("Size of TPL match");
+
+        param("Window Search Size", m_args.window_search_size)
+        .defaultValue("90")
+        .description("Size of Window Search Size");
+
+        param("Frames to Refresh", m_args.frames_to_refresh)
+        .defaultValue("30")
+        .description("Number of frames necessary to auto refresh TPL");
+
+        param("Path", m_args.temp_path)
+        .defaultValue("/opt/vc/bin/vcgencmd measure_temp")
+        .description("Path to the sysfs file");
+
+        param("Entity Label - Temperature", m_args.elabel_temp)
+        .defaultValue("Mainboard (Core)")
+        .description("Entity label of temperature sensor");
+
+        bind<IMC::SetImageCoords>(this);
+      }
+
+      //! Update internal state with new parameter values.
+      void
+      onUpdateParameters(void)
+      {
+        //TODO
+      }
+
+      //! Reserve entity identifiers.
+      void
+      onEntityReservation(void)
+      {
+        m_temp.setSourceEntity(reserveEntity(m_args.elabel_temp));
+      }
+
+      //! Initialize resources.
+      void
+      onResourceInitialization(void)
+      {
+        m_cap1 = new IpCamCap(this, m_args.url_ipcam1);
+        m_cap1->start();
+        Delay::waitMsec(c_sleep_time);
+        m_cap2 = new IpCamCap(this, m_args.url_ipcam2);
+        m_cap2->start();
+        m_operation1 = new OperationCV(this, m_args.url_ipcam1, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
+        m_operation2 = new OperationCV(this, m_args.url_ipcam2, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        m_initValuesTpl = false;
+      }
+
+      //! Release resources.
+      void
+      onResourceRelease(void)
+      {
+        if (m_cap1 != NULL)
         {
-          param("IpCam1", m_args.ipcam1)
-          //.defaultValue("localhost")
-          .description("IpCam1 Addresses");
-
-          param("IpCam2", m_args.ipcam2)
-          //.defaultValue("localhost")
-          .description("IpCam2 Addresses");
-
-          bind<IMC::SetImageCoords>(this);
+          m_cap1->stopAndJoin();
+          delete m_cap1;
+          m_cap1 = NULL;
         }
-
-        //! Update internal state with new parameter values.
-        void onUpdateParameters(void)
+        if (m_cap2 != NULL)
         {
+          m_cap2->stopAndJoin();
+          delete m_cap2;
+          m_cap2 = NULL;
         }
+      }
 
-        //! Reserve entity identifiers.
-        void onEntityReservation(void)
+      //! Consume Message
+      void
+      consume(const IMC::SetImageCoords* msg)
+      {
+        if (msg->camid == 1)
         {
-        }
-
-        //! Resolve entity names.
-        void onEntityResolution(void)
-        {
-        }
-
-        //! Acquire resources.
-        void onResourceAcquisition(void)
-        {
-        }
-
-        //! Initialize resources.
-        void onResourceInitialization(void)
-        {
-          //cvNamedWindow( "LEFT" , 0 );
-          //cvNamedWindow( "RIGHT" , 0 );
-          m_cap1 = new IpCamCap(this, m_args.ipcam1[0].c_str(), "LEFT");
-          m_cap1->start();
-          m_cap2 = new IpCamCap(this, m_args.ipcam2[0].c_str(), "RIGHT");
-          m_cap2->start();
-          m_operation1 = new OperationCV(this, "LEFT");
-          m_operation2 = new OperationCV(this, "RIGHT");
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-          m_flag_inic_tpl_aloc = 0;
-        }
-
-        //! Release resources.
-        void onResourceRelease(void)
-        {
-          if (m_cap1 != NULL)
+          if (m_frameCam1 != NULL)
           {
-            m_cap1->stopAndJoin();
-            delete m_cap1;
-            m_cap1 = NULL;
+            if (m_initValuesTpl)
+              m_operation1->setNewTPL(msg->x, msg->y, m_frameCam1, m_args.name_ipcam1);
           }
-          if (m_cap2 != NULL)
+        }
+        else
+        {
+          if (m_frameCam2 != NULL)
           {
-            m_cap2->stopAndJoin();
-            delete m_cap2;
-            m_cap2 = NULL;
+            if (m_initValuesTpl)
+              m_operation2->setNewTPL(msg->x, msg->y, m_frameCam2, m_args.name_ipcam2);
           }
         }
+      }
 
-        //! Consume Message
-        void consume( const IMC::SetImageCoords* msg )
+      void
+      preLoadFrame(int mtimes)
+      {
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("Cleaning buffer")));
+        int t = 0;
+        while (t < mtimes && !stopping())
         {
-          war("CAM: %d", msg->camid);
-          war("VALUES: %d : %d", msg->x, msg->y);
-          if (msg->camid == 1)
+          m_frameCam1 = m_cap1->capFrame();
+          m_frameCam2 = m_cap2->capFrame();
+          if (!m_cap1->isConnected() || !m_cap2->isConnected())
+            setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("Link to IPCam")));
+          if (m_frameCam1 != NULL && m_frameCam2 != NULL)
+            t++;
+        }
+      }
+
+      float
+      getTemperatureCPU(const char* cmd)
+      {
+        float temp = 0;
+        char buffer[64];
+        std::string result = "";
+        FILE* pipe = popen(cmd, "r");
+        if (!pipe)
+        {
+          err("popen() failed!");
+        }
+        else
+        {
+          try
           {
-            inf("COORD LEFT: x = %d, y = %d", msg->x, msg->y);
-            if (m_frameCam1 != NULL)
+            while (!feof(pipe))
             {
-              war("DENTRO 1");
-              if (m_flag_inic_tpl_aloc)
-                m_operation1->MouseHandler(msg->x, msg->y, m_frameCam1, "LEFT");
+              if (fgets(buffer, 64, pipe) != NULL)
+                result += buffer;
             }
+          }
+          catch (...)
+          {
+            pclose(pipe);
+            throw;
+          }
+          pclose(pipe);
+          std::sscanf(buffer, "temp=%f'C", &temp);
+        }
+        return temp;
+      }
+
+      //! Main loop.
+      void
+      onMain(void)
+      {
+        preLoadFrame(60);
+
+        m_operation1->inicTplTest(m_frameCam1);
+        m_operation2->inicTplTest(m_frameCam2);
+        m_initValuesTpl = true;
+
+        while (!stopping())
+        {
+          m_frameCam1 = m_cap1->capFrame();
+          m_frameCam2 = m_cap2->capFrame();
+          if (m_frameCam1 != NULL && m_frameCam2 != NULL)
+          {
+            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+
+            m_operation1->trackObject(m_frameCam1);
+            m_operation2->trackObject(m_frameCam2);
+
+            m_getcoord.setSourceEntity(getEntityId());
+            m_getcoord.camid = 1;
+            m_getcoord.x = m_operation1->m_coordImage.x;
+            m_getcoord.y = m_operation1->m_coordImage.y;
+            dispatch(m_getcoord);
+
+            m_getcoord.setSourceEntity(getEntityId());
+            m_getcoord.camid = 2;
+            m_getcoord.x = m_operation2->m_coordImage.x;
+            m_getcoord.y = m_operation2->m_coordImage.y;
+            dispatch(m_getcoord);
+
+            try
+            {
+              //m_temp.value = getTemperatureCPU(m_args.path.c_str());
+              m_temp.value = 32.7;
+              dispatch(m_temp);
+            }
+            catch (...)
+            {}
           }
           else
           {
-            inf("COORD RIGHT: x = %d, y = %d", msg->x, msg->y);
-            if (m_frameCam2 != NULL)
-            {
-              war("DENTRO 2");
-              if (m_flag_inic_tpl_aloc)
-                m_operation2->MouseHandler(msg->x, msg->y, m_frameCam2, "RIGHT");
-            }
+            war("NULL FRAME");
+            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
           }
+
+          waitForMessages(0.07);
+          m_frameCam1 = NULL;
+          m_frameCam2 = NULL;
+
         }
-
-        void PreLoadFrame(int mtimes)
-        {
-          war("Cleaning buffer ffmpeg");
-          int t = 0;
-          while (t < mtimes && !stopping())
-          {
-            m_frameCam1 = m_cap1->capFrame();
-            m_frameCam2 = m_cap2->capFrame();
-            if (m_frameCam1 != NULL && m_frameCam2 != NULL)
-              t++;
-          }
-        }
-
-        //! Main loop.
-        void onMain(void)
-        {
-          PreLoadFrame(60);
-
-          while (!stopping())
-          {
-            m_frameCam1 = m_cap1->capFrame();
-            m_frameCam2 = m_cap2->capFrame();
-            if (m_frameCam1 != NULL && m_frameCam2 != NULL)
-            {
-              setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-
-              if (!m_flag_inic_tpl_aloc)
-              {
-                war("Test Template Match - active");
-                m_flag_inic_tpl_aloc = 1;
-                m_operation1->inicTplTest(m_frameCam1);
-                m_operation2->inicTplTest(m_frameCam2);
-              }
-
-              cvShowImage("LEFT TEST", m_operation1->TrackObject(m_frameCam1, "Cam1"));
-              cvShowImage("RIGHT TEST", m_operation2->TrackObject(m_frameCam2, "Cam2"));
-              //inf("SEND");
-              m_getcoord.setSourceEntity(getEntityId());
-              m_getcoord.camid = 1;
-              m_getcoord.x = m_operation1->m_coordImage.x;
-              m_getcoord.y = m_operation1->m_coordImage.y;
-              dispatch(m_getcoord);
-
-              m_getcoord.setSourceEntity(getEntityId());
-              m_getcoord.camid = 2;
-              m_getcoord.x = m_operation2->m_coordImage.x;
-              m_getcoord.y = m_operation2->m_coordImage.y;
-              dispatch(m_getcoord);
-
-              cvWaitKey(8);
-            }
-            else
-            {
-              war("NULL FRAME");
-              setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("NULL Frame")));
-            }
-
-            waitForMessages(0.07);
-            m_frameCam1 = NULL;
-            m_frameCam2 = NULL;
-
-          }
-        }
+      }
     };
   }
 }
