@@ -42,28 +42,38 @@ namespace Vision
 {
   namespace Tracking3d
   {
-    //! %Vision Stream Capture Protocol (%IpCamCap).
     class OperationCV
     {
-        struct coordImage
-        {
-            int x;
-            int y;
-        };
+      struct coordImage
+      {
+        int x;
+        int y;
+      };
 
       public:
-        std::string nameCam;
+        // Name of ipcam
+        std::string m_nameCam;
+        // template size
+        int m_tpl_size;
+        // window search size
+        int m_window_search_size;
+        // number of frames before refresh tpl
+        int m_frame_refresh;
         //! Constructor.
         //! @param[in] task parent task.
         //! @param[in] name od ipcam.
-        OperationCV(DUNE::Tasks::Task* task, std::string name) :
-            m_task(task)
+        OperationCV(DUNE::Tasks::Task* task, std::string name, int tpl_size, int window_size, int frame_refresh) :
+          m_task(task)
         {
-          nameCam = name;
+          m_nameCam = name;
+          m_tpl_size = tpl_size;
+          m_window_search_size = window_size;
+          m_frame_refresh = frame_refresh;
         }
 
         //!Draw a dashed line
-        void DashedLine(IplImage* image, CvPoint p1, CvPoint p2, CvScalar color, int interval, bool axis)
+        void
+        dashedLine(IplImage* image, CvPoint p1, CvPoint p2, CvScalar color, int interval, bool axis)
         {
           int cnt = 0;
           //Vertical
@@ -71,8 +81,7 @@ namespace Vision
           {
             while (cnt < p2.y)
             {
-              cvLine(image, cvPoint(p1.x, p1.y + cnt),
-                  cvPoint(p2.x, cnt + interval), color, 1, 8, 0);
+              cvLine(image, cvPoint(p1.x, p1.y + cnt), cvPoint(p2.x, cnt + interval), color, 1, 8, 0);
               cnt = cnt + interval * 2;
             }
           }
@@ -81,8 +90,7 @@ namespace Vision
           {
             while (cnt < p2.x)
             {
-              cvLine(image, cvPoint(p1.x + cnt, p1.y),
-                  cvPoint(cnt + interval, p2.y), color, 1, 8, 0);
+              cvLine(image, cvPoint(p1.x + cnt, p1.y), cvPoint(cnt + interval, p2.y), color, 1, 8, 0);
               cnt = cnt + interval * 2;
             }
           }
@@ -90,123 +98,95 @@ namespace Vision
 
         /* track object in frame image */
         IplImage*
-        TrackObject(IplImage *frame, char* name)
+        trackObject(IplImage *frame)
         {
           if (is_tracking)
           {
-            /*clone Image for debud */
-            if (back == NULL)
-              back = cvCreateImage(cvGetSize(frame), 8, 3);
-
-            back = frame;
-            /* setup position of search window */
+            // setup position of search window
             win_x = object_x - ((window_search_width - tpl_width) / 2);
             win_y = object_y - ((window_search_height - tpl_height) / 2);
 
-            /****************************** Window margins of tracking *******************************/
+            // Window margins of tracking
 
-            if ((win_x + (window_search_width / 2) - (window_search_width / 2))
-                <= 1)
+            if ((win_x + (window_search_width / 2) - (window_search_width / 2)) <= 1)
               flag_track = 1;
             else if ((win_x + window_search_width) >= frame_width)
               flag_track = 2;
-            else if ((win_y + (window_search_height / 2))
-                - (window_search_height / 2) <= 1)
+            else if ((win_y + (window_search_height / 2)) - (window_search_height / 2) <= 1)
               flag_track = 3;
             else if ((win_y + window_search_height) >= frame_height)
               flag_track = 4;
             else
               flag_track = 0;
 
-            //printf("flag_track: %d\n\r", flag_track);
-            /***************************************************************************/
-            /* search object in search window */
+            // search object in search window
             if (flag_track == 0)
             {
-              //printf("AQUI 1\r\n");
               cvReleaseImage(&tm);
-              tm = cvCreateImage(
-                  cvSize(window_search_width - tpl_width + 1,
-                      window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
-              cvSetImageROI(frame,
-                  cvRect(win_x, win_y, window_search_width,
-                      window_search_height));
+              tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
+              cvSetImageROI(frame, cvRect(win_x, win_y, window_search_width, window_search_height));
               cvMatchTemplate(frame, tpl, tm, CV_TM_CCOEFF_NORMED);
               cvErode(tm, tm, 0, 1);
               cvMinMaxLoc(tm, &minval, &maxval, &m_minloc, &m_maxloc, 0);
               cvResetImageROI(frame);
-              //printf("AQUI 2\r\n");
             }
-            /* if object found... */
+
+            // if object found
             if (flag_track == 0 && maxval >= threshold)
             {
-              //printf("AQUI 3\r\n");
-              /* save object's current location */
+              // save object's current location
               object_x = win_x + m_maxloc.x;
               object_y = win_y + m_maxloc.y;
-
-              cvCircle(back,
-                  cvPoint(object_x + tpl_width / 2, object_y + tpl_height / 2),
-                  3, cvScalar(0, 255, 0, 0), 1, 8, 0);
 
               m_coordImage.x = (object_x + tpl_width / 2);
               m_coordImage.y = (object_y + tpl_height / 2);
 
-              /*Refresh TPL*/
+              // Refresh TPL
               cnt_refresh++;
               if (cnt_refresh > rep_tpl && rep_tpl != 0)
               {
                 //printf("REFRESH TPL: %s\n\r", name);
-                cvSetImageROI(frame, cvRect(object_x, object_y, tpl_width, tpl_height));
+                cvSetImageROI( frame, cvRect(object_x, object_y, tpl_width, tpl_height));
                 cvReleaseImage(&tpl);
                 cvReleaseImage(&tm);
                 tm = cvCreateImage( cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
-                tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth,
-                    frame->nChannels);
+                tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth, frame->nChannels);
                 cvCopy(frame, tpl);
                 cvResetImageROI(frame);
                 cnt_refresh = 0;
-                //cvShowImage(name, tpl);
-                //cvWaitKey(2);
               }
-              //printf("AQUI 4\r\n");
             }
             else
             {
-              //printf("AQUI 5\r\n");
               cvReleaseImage(&tm);
-              tm = cvCreateImage(
-                  cvSize(frame_width - tpl_width + 1,
-                      frame_height - tpl_height + 1), IPL_DEPTH_32F, 1);
+              tm = cvCreateImage( cvSize(frame_width - tpl_width + 1, frame_height - tpl_height + 1), IPL_DEPTH_32F, 1);
               cvMatchTemplate(frame, tpl, tm, CV_TM_CCOEFF_NORMED);
               cvErode(tm, tm, 0, 1);
               cvMinMaxLoc(tm, &minval, &maxval, &m_minloc, &m_maxloc, 0);
               if (maxval >= threshold)
               {
-                /* save object's current location */
+                // save object's current location
                 object_x = m_maxloc.x;
                 object_y = m_maxloc.y;
-                /* setup position of search window */
+                // setup position of search window
                 win_x = object_x - ((window_search_width - tpl_width) / 2);
                 win_y = object_y - ((window_search_height - tpl_height) / 2);
                 flag_track = 0;
               }
-              //printf("AQUI 6\r\n");
             }
-            return back;
+            return frame;
           }
-
           return frame;
-
         }
 
         /* mouse handler */
-        void MouseHandler(int x, int y, IplImage *allFrame, char* name)
+        void
+        setNewTPL(int x, int y, IplImage *allFrame, std::string name)
         {
           cvReleaseImage(&tpl);
           tpl = cvCreateImage(cvSize(tpl_width, tpl_height), allFrame->depth, allFrame->nChannels);
           cvReleaseImage(&tm);
-          tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
+          tm = cvCreateImage( cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
           x_mouse = x;
           y_mouse = y;
           object_x = x_mouse - (tpl_width / 2);
@@ -215,31 +195,34 @@ namespace Vision
           if ((tpl_width / 2) + x_mouse > frame_width || (tpl_height / 2) + y_mouse > frame_height
               || x_mouse - (tpl_width / 2) < 0 || y_mouse - (tpl_height / 2) < 0)
           {
-            is_tracking = 0;
-            printf("\nSmall space\n");
+            is_tracking = false;
+            m_task->war("Small space");
           }
           else
           {
-            printf("Setting new TPL\n\r");
-            cvSetImageROI(allFrame,
-                cvRect(object_x, object_y, tpl_width, tpl_height));
+            m_task->inf("Setting new TPL - %s", name.c_str());
+            cvSetImageROI(allFrame, cvRect(object_x, object_y, tpl_width, tpl_height));
             cvCopy(allFrame, tpl, NULL);
             cvResetImageROI(allFrame);
-            is_tracking = 1;
-            //cvShowImage(name, tpl);
+            is_tracking = true;
+            cnt_refresh = 0;
+            flag_track = 1;
+            //TODO
+            /*cvShowImage(name.c_str(), tpl);
+            cvWaitKey(8);*/
           }
         }
 
-        void inicTplTest(IplImage *frame)
+        void
+        inicTplTest(IplImage *frame)
         {
-          tpl_width = 60;
-          tpl_height = 60;
-          window_search_width = 110;
-          window_search_height = 110;
-          tpl_size = 60;
+          tpl_width = m_tpl_size;
+          tpl_height = m_tpl_size;
+          window_search_width = m_window_search_size;
+          window_search_height = m_window_search_size;
           threshold = 0.3;
           flag_track = 0;
-          rep_tpl = 10;
+          rep_tpl = m_frame_refresh;
           //Size of Image capture
           frame_width = frame->width;
           frame_height = frame->height;
@@ -249,14 +232,12 @@ namespace Vision
           x_mouse = frame_width / 2;
           y_mouse = frame_height / 2;
 
-          /* create template image */
-          tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth,
-              frame->nChannels);
-          /* create image for template matching result */
-          tm = cvCreateImage(
-              cvSize(window_search_width - tpl_width + 1,
-                  window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
+          // create template image
+          tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth, frame->nChannels);
+          // create image for template matching result
+          tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
 
+          is_tracking = false;
         }
 
         coordImage m_coordImage;
@@ -264,7 +245,6 @@ namespace Vision
       private:
         //! Parent task.
         DUNE::Tasks::Task* m_task;
-        IplImage* imgThresholded;
         //minimum shift of TPL Track
         CvPoint m_minloc;
         //maximum shift of TPL Track
@@ -285,10 +265,6 @@ namespace Vision
         int window_search_width;
         //search window height
         int window_search_height;
-        //width Inic
-        int inic_width;
-        //height Inic
-        int inic_height;
         //sensibility of detection of tpl
         double threshold;
         //counter refresh TPL
@@ -305,20 +281,16 @@ namespace Vision
         int win_x;
         //coordinate of 1º Pixel Window - Y
         int win_y;
-        //Flag track(0=off,1=on)
+        //Flag track
         int flag_track;
-        //Flag tracking(0=false,1=true)
+        //Flag tracking
         bool is_tracking;
         //minimum value - match
         double minval;
         //maximum value - match
         double maxval;
-        //template size
-        int tpl_size;
         //number of repetitions before the tpl refresh
         int rep_tpl;
-        //IplImage Backup of main for debug
-        IplImage* back;
     };
   }
 }
