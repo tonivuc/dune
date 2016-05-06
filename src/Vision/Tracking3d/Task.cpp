@@ -80,6 +80,7 @@ namespace Vision
       Arguments m_args;
       IMC::Temperature m_temp;
       IMC::GetImageCoords m_getcoord;
+      IMC::GetWorldCoordinates m_getworldcoord;
       IpCamCap* m_cap1;
       IpCamCap* m_cap2;
       OperationCV* m_operation1;
@@ -90,6 +91,11 @@ namespace Vision
       IplImage* m_frameCam2;
       //! Init tpl values
       bool m_initValuesTpl;
+      //! State of tracking Cam1
+      bool m_isTrackingCam1;
+      //! State of tracking Cam2
+      bool m_isTrackingCam2;
+
 
       //! Constructor.
       //! @param[in] name task name.
@@ -161,6 +167,7 @@ namespace Vision
         m_operation2 = new OperationCV(this, m_args.url_ipcam2, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         m_initValuesTpl = false;
+        m_isTrackingCam1 = false;
       }
 
       //! Release resources.
@@ -269,8 +276,8 @@ namespace Vision
           {
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
-            m_operation1->trackObject(m_frameCam1);
-            m_operation2->trackObject(m_frameCam2);
+            m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1);
+            m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2);
 
             m_getcoord.setSourceEntity(getEntityId());
             m_getcoord.camid = 1;
@@ -284,10 +291,26 @@ namespace Vision
             m_getcoord.y = m_operation2->m_coordImage.y;
             dispatch(m_getcoord);
 
+            if (m_isTrackingCam1 && m_isTrackingCam2)
+            {
+              m_getworldcoord.setSourceEntity(getEntityId());
+              m_getworldcoord.tracking = true;
+              m_getworldcoord.x = 1.27;
+              m_getworldcoord.y = 2.46;
+              m_getworldcoord.z = 3.45;
+              dispatch(m_getworldcoord);
+            }
+            else
+            {
+              m_getworldcoord.setSourceEntity(getEntityId());
+              m_getworldcoord.tracking = false;
+              dispatch(m_getworldcoord);
+            }
+
             try
             {
-              //m_temp.value = getTemperatureCPU(m_args.path.c_str());
-              m_temp.value = 32.7;
+              m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
+              //m_temp.value = 32.7;
               dispatch(m_temp);
             }
             catch (...)
@@ -299,7 +322,7 @@ namespace Vision
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
           }
 
-          waitForMessages(0.07);
+          waitForMessages(0.01);
           m_frameCam1 = NULL;
           m_frameCam2 = NULL;
 

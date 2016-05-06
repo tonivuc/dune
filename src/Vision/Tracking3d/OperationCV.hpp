@@ -97,7 +97,7 @@ namespace Vision
         }
 
         /* track object in frame image */
-        IplImage*
+        bool
         trackObject(IplImage *frame)
         {
           if (is_tracking)
@@ -155,6 +155,7 @@ namespace Vision
                 cvResetImageROI(frame);
                 cnt_refresh = 0;
               }
+              return true;
             }
             else
             {
@@ -172,11 +173,11 @@ namespace Vision
                 win_x = object_x - ((window_search_width - tpl_width) / 2);
                 win_y = object_y - ((window_search_height - tpl_height) / 2);
                 flag_track = 0;
+                return true;
               }
             }
-            return frame;
           }
-          return frame;
+          return false;
         }
 
         /* mouse handler */
