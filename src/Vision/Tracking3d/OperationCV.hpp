@@ -22,7 +22,7 @@
 // language governing permissions and limitations at                        *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Pedro Gonçalves                                                  *
+// Author: PGonçalves                                                       *
 //***************************************************************************
 
 #ifndef VISION_TRACKING3D_OPERATIONCV_HPP_INCLUDED_

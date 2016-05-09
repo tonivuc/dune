@@ -37,7 +37,6 @@
 
 //OpenCV headers
 #include <opencv2/opencv.hpp>
-//#include "../../../vendor/libraries/cvblob/cvblob.h"
 
 // Local headers.
 #include "IpCamCap.hpp"
