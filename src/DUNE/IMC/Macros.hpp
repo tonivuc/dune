@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 6c347cdacbdacce16be764ef407e717b                            *
+// IMC XML MD5: 4663673b775daaf6b93edc177859e286                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -82,6 +82,14 @@
 #define DUNE_IMC_REPLAYCONTROL 105
 //! ClockControl identification number.
 #define DUNE_IMC_CLOCKCONTROL 106
+//! HistoricCTD identification number.
+#define DUNE_IMC_HISTORICCTD 107
+//! HistoricTelemetry identification number.
+#define DUNE_IMC_HISTORICTELEMETRY 108
+//! HistoricSonarData identification number.
+#define DUNE_IMC_HISTORICSONARDATA 109
+//! HistoricEvent identification number.
+#define DUNE_IMC_HISTORICEVENT 110
 //! Heartbeat identification number.
 #define DUNE_IMC_HEARTBEAT 150
 //! Announce identification number.
@@ -118,6 +126,16 @@
 #define DUNE_IMC_LINKLATENCY 182
 //! ExtendedRSSI identification number.
 #define DUNE_IMC_EXTENDEDRSSI 183
+//! HistoricData identification number.
+#define DUNE_IMC_HISTORICDATA 184
+//! CompressedHistory identification number.
+#define DUNE_IMC_COMPRESSEDHISTORY 185
+//! HistoricSample identification number.
+#define DUNE_IMC_HISTORICSAMPLE 186
+//! HistoricDataQuery identification number.
+#define DUNE_IMC_HISTORICDATAQUERY 187
+//! RemoteCommand identification number.
+#define DUNE_IMC_REMOTECOMMAND 188
 //! LblRange identification number.
 #define DUNE_IMC_LBLRANGE 200
 //! LblBeacon identification number.
@@ -132,6 +150,8 @@
 #define DUNE_IMC_ACOUSTICSYSTEMSQUERY 212
 //! AcousticSystems identification number.
 #define DUNE_IMC_ACOUSTICSYSTEMS 213
+//! AcousticLink identification number.
+#define DUNE_IMC_ACOUSTICLINK 214
 //! Rpm identification number.
 #define DUNE_IMC_RPM 250
 //! Voltage identification number.
@@ -382,6 +402,8 @@
 #define DUNE_IMC_LAUNCH 485
 //! Drop identification number.
 #define DUNE_IMC_DROP 486
+//! ScheduledGoto identification number.
+#define DUNE_IMC_SCHEDULEDGOTO 487
 //! VehicleState identification number.
 #define DUNE_IMC_VEHICLESTATE 500
 //! VehicleCommand identification number.
