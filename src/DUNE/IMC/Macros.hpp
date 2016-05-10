@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 4663673b775daaf6b93edc177859e286                            *
+// IMC XML MD5: 8a67ab14b801b532f9b27e3381499aa6                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -238,6 +238,8 @@
 #define DUNE_IMC_PHYCOERYTHRIN 292
 //! GpsFixRtk identification number.
 #define DUNE_IMC_GPSFIXRTK 293
+//! ExternalNavData identification number.
+#define DUNE_IMC_EXTERNALNAVDATA 294
 //! CameraZoom identification number.
 #define DUNE_IMC_CAMERAZOOM 300
 //! SetThrusterActuation identification number.
@@ -328,6 +330,8 @@
 #define DUNE_IMC_BRAKE 413
 //! DesiredLinearState identification number.
 #define DUNE_IMC_DESIREDLINEARSTATE 414
+//! DesiredThrottle identification number.
+#define DUNE_IMC_DESIREDTHROTTLE 415
 //! Goto identification number.
 #define DUNE_IMC_GOTO 450
 //! PopUp identification number.
@@ -556,5 +560,11 @@
 #define DUNE_IMC_PARAMETERSXML 893
 //! GetParametersXml identification number.
 #define DUNE_IMC_GETPARAMETERSXML 894
+//! SetImageCoords identification number.
+#define DUNE_IMC_SETIMAGECOORDS 895
+//! GetImageCoords identification number.
+#define DUNE_IMC_GETIMAGECOORDS 896
+//! GetWorldCoordinates identification number.
+#define DUNE_IMC_GETWORLDCOORDINATES 897
 
 #endif
