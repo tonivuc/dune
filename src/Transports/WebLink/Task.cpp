@@ -129,7 +129,7 @@ namespace Transports
         .defaultValue("80");
 
         param("Period Message", m_args.period)
-        .description("Period to send message (ms)")
+        .description("Period to send message (s)")
         .minimumValue("30")
         .defaultValue("60");
 
