@@ -163,11 +163,14 @@ namespace Transports
       void
       process(const IMC::HistoricData* msg)
       {
-        debug("Adding %d messages from %s (%d) to data store.", (int)msg->data.size(),
-              m_ctx.resolver.resolve(msg->getSource()), msg->getSource());
+        if (!m_ctx.resolver.isLocal(msg->getSource()))
+        {
+          debug("Adding %d messages from %s (%d) to data store.", (int)msg->data.size(),
+                m_ctx.resolver.resolve(msg->getSource()), msg->getSource());
 
-        // add all data to local store
-        m_store.addData(msg);
+          // add all data to local store
+          m_store.addData(msg);
+        }
       }
 
       //! Handle incoming HistoricDataQuery messages
