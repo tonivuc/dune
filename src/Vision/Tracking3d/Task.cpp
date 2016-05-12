@@ -61,6 +61,18 @@ namespace Vision
       std::string name_ipcam1;
       //! IpCam2 Name
       std::string name_ipcam2;
+      //! Intrinsic values of IPCam 1.
+      std::vector<double> intrinsicCam1;
+      //! Intrinsic values of IPCam 2.
+      std::vector<double> intrinsicCam2;
+      //! Distortion values of IPCam 1.
+      std::vector<double> distortionCam1;
+      //! Distortion values of IPCam 2.
+      std::vector<double> distortionCam2;
+      //! Position of marks in Pixels.
+      std::vector<double> positionPixels;
+      //! Position of marks in meters.
+      std::vector<double> positionMeters;
       //! Size of Tpl match
       int tpl_size;
       //! Windows search size
@@ -95,7 +107,6 @@ namespace Vision
       //! State of tracking Cam2
       bool m_isTrackingCam2;
 
-
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
@@ -116,6 +127,24 @@ namespace Vision
         .defaultValue("Cma2")
         .description("IpCam2 Name");
 
+        param("IpCam1 - Intrinsic Matrix", m_args.intrinsicCam1)
+        .description("Intrinsic values of IPCam 1");
+
+        param("IpCam2 - Intrinsic Matrix", m_args.intrinsicCam2)
+        .description("Intrinsic values of IPCam 2");
+
+        param("IpCam1 - Distortion Matrix", m_args.distortionCam1)
+        .description("Distortion values of IPCam 1");
+
+        param("IpCam2 - Distortion Matrix", m_args.distortionCam2)
+        .description("Distortion values of IPCam 2");
+
+        param("Position - Pixels", m_args.positionPixels)
+        .description("Position of marks in Pixels");
+
+        param("Position - Meters", m_args.positionMeters)
+        .description("Position of marks in Meters");
+
         param("Tpl Size", m_args.tpl_size)
         .defaultValue("50")
         .description("Size of TPL match");
@@ -128,9 +157,9 @@ namespace Vision
         .defaultValue("30")
         .description("Number of frames necessary to auto refresh TPL");
 
-        param("Path", m_args.temp_path)
+        param("Path Temperature", m_args.temp_path)
         .defaultValue("/opt/vc/bin/vcgencmd measure_temp")
-        .description("Path to the sysfs file");
+        .description("Path to the sysfs file Temperature.");
 
         param("Entity Label - Temperature", m_args.elabel_temp)
         .defaultValue("Mainboard (Core)")
@@ -210,16 +239,15 @@ namespace Vision
       }
 
       void
-      preLoadFrame(int mtimes)
+      preLoadFrame(int ntimes)
       {
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("Cleaning buffer")));
         int t = 0;
-        while (t < mtimes && !stopping())
+        while (t < ntimes && !stopping())
         {
           m_frameCam1 = m_cap1->capFrame();
           m_frameCam2 = m_cap2->capFrame();
           if (!m_cap1->isConnected() || !m_cap2->isConnected())
-            setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("Link to IPCam")));
+            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
           if (m_frameCam1 != NULL && m_frameCam2 != NULL)
             t++;
         }
@@ -263,9 +291,12 @@ namespace Vision
       {
         preLoadFrame(60);
 
-        m_operation1->inicTplTest(m_frameCam1);
-        m_operation2->inicTplTest(m_frameCam2);
-        m_initValuesTpl = true;
+        if (!stopping())
+        {
+          m_operation1->inicTplTest(m_frameCam1);
+          m_operation2->inicTplTest(m_frameCam2);
+          m_initValuesTpl = true;
+        }
 
         while (!stopping())
         {
@@ -308,8 +339,8 @@ namespace Vision
 
             try
             {
-              m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
-              //m_temp.value = 32.7;
+              //m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
+              m_temp.value = 32.7;
               dispatch(m_temp);
             }
             catch (...)
@@ -317,8 +348,8 @@ namespace Vision
           }
           else
           {
-            war("NULL FRAME");
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
+            throw RestartNeeded(DTR("null frame"), 1, true);
           }
 
           waitForMessages(0.01);

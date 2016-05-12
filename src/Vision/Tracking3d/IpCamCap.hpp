@@ -22,7 +22,7 @@
 // language governing permissions and limitations at                        *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Pedro Gonçalves                                                  *
+// Author: PGonçalves                                                       *
 //***************************************************************************
 
 #ifndef VISION_TRACKING3D_IPCAMCAP_HPP_INCLUDED_
@@ -87,7 +87,7 @@ namespace Vision
         DUNE::Tasks::Task* m_task;
         //! Frame capture
         IplImage* m_frame;
-        //! Capture struct - OpenCV
+        //! Capture struct OpenCV
         CvCapture* m_capture;
         //! state of capture;
         bool m_isCapture;
