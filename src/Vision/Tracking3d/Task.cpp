@@ -22,7 +22,7 @@
 // language governing permissions and limitations at                        *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Pedro_Gonçalves                                                 *
+// Author: PGonçalves                                                       *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -133,10 +133,10 @@ namespace Vision
         param("IpCam2 - Intrinsic Matrix", m_args.intrinsicCam2)
         .description("Intrinsic values of IPCam 2");
 
-        param("IpCam1 - Distortion Matrix", m_args.distortionCam1)
+        param("IpCam1 - Distortion Vector", m_args.distortionCam1)
         .description("Distortion values of IPCam 1");
 
-        param("IpCam2 - Distortion Matrix", m_args.distortionCam2)
+        param("IpCam2 - Distortion Vector", m_args.distortionCam2)
         .description("Distortion values of IPCam 2");
 
         param("Position - Pixels", m_args.positionPixels)
@@ -306,8 +306,8 @@ namespace Vision
           {
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
-            m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1);
-            m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2);
+            m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam1);
+            m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam2);
 
             m_getcoord.setSourceEntity(getEntityId());
             m_getcoord.camid = 1;

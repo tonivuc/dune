@@ -98,7 +98,7 @@ namespace Vision
 
         /* track object in frame image */
         bool
-        trackObject(IplImage *frame)
+        trackObject(IplImage *frame, std::string name)
         {
           try
           {
@@ -147,7 +147,6 @@ namespace Vision
                 cnt_refresh++;
                 if (cnt_refresh > rep_tpl && rep_tpl != 0)
                 {
-                  //printf("REFRESH TPL: %s\n\r", name);
                   cvSetImageROI( frame, cvRect(object_x, object_y, tpl_width, tpl_height));
                   cvReleaseImage(&tpl);
                   cvReleaseImage(&tm);
@@ -183,6 +182,7 @@ namespace Vision
           }
           catch ( ... )
           {
+            m_task->war("ERROR: %s", name.c_str());
             return false;
           }
         }
@@ -215,9 +215,6 @@ namespace Vision
             is_tracking = true;
             cnt_refresh = 0;
             flag_track = 1;
-            //TODO
-            /*cvShowImage(name.c_str(), tpl);
-            cvWaitKey(8);*/
           }
         }
 
