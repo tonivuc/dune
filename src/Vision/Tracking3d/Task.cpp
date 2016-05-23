@@ -186,16 +186,18 @@ namespace Vision
       void
       onResourceInitialization(void)
       {
-        m_cap1 = new IpCamCap(this, m_args.url_ipcam1);
+        m_cap1 = new IpCamCap(this, m_args.url_ipcam1, m_args.intrinsicCam1, m_args.distortionCam1);
         m_cap1->start();
         Delay::waitMsec(c_sleep_time);
-        m_cap2 = new IpCamCap(this, m_args.url_ipcam2);
+        m_cap2 = new IpCamCap(this, m_args.url_ipcam2, m_args.intrinsicCam2, m_args.distortionCam2);
         m_cap2->start();
         m_operation1 = new OperationCV(this, m_args.url_ipcam1, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
         m_operation2 = new OperationCV(this, m_args.url_ipcam2, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         m_initValuesTpl = false;
         m_isTrackingCam1 = false;
+        m_cap1->loadIntrinsicParameters();
+        m_cap2->loadIntrinsicParameters();
       }
 
       //! Release resources.
@@ -290,7 +292,6 @@ namespace Vision
       onMain(void)
       {
         preLoadFrame(60);
-
         if (!stopping())
         {
           m_operation1->inicTplTest(m_frameCam1);
@@ -302,6 +303,7 @@ namespace Vision
         {
           m_frameCam1 = m_cap1->capFrame();
           m_frameCam2 = m_cap2->capFrame();
+
           if (m_frameCam1 != NULL && m_frameCam2 != NULL)
           {
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
@@ -339,8 +341,7 @@ namespace Vision
 
             try
             {
-              //m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
-              m_temp.value = 32.7;
+              m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
               dispatch(m_temp);
             }
             catch (...)
