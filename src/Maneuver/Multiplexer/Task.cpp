@@ -247,7 +247,7 @@ namespace Maneuver
           .description("Servo Id.");
 
         param("Drop -- Servo Value", m_args.dropM.servoValue)
-          .defaultValue("1.570796")
+          .defaultValue("3.14159")
           .description("Servo Value in radians.");
 
         m_ctx.config.get("General", "Underwater Depth Threshold", "0.3", m_args.dislodge.depth_threshold);
