@@ -54,11 +54,6 @@ if [ -z "$FWL_INT_ITF" ]; then
     FWL_INT_ITF='eth0'
 fi
 
-if [ -z "$GSM_USBMODESWITCH" ]; then
-    GSM_USBMODESWITCH='ATQ0 V1 E1 S0=0 &C1 &D2 +FCLASS=0'
-fi
-
-
 CHAT_SCRIPT=$(cat <<EOF
 ABORT 'BUSY' \
 ABORT 'NO CARRIER' \
@@ -75,7 +70,7 @@ TIMEOUT 3 \
 'OK' '$GSM_PIN' \
 'OK-AT-OK' 'ATI' \
 'OK' 'ATZ' \
-'OK' '$GSM_USBMODESWITCH' \
+'OK' 'ATQ0 V1 E1 S0=0 &C1 &D2 +FCLASS=0' \
 'OK' '$GSM_MODE' \
 'OK-AT-OK' 'AT+CGDCONT=1,\"IP\",\"$GSM_APN\"' \
 'OK' 'ATDT*99***1#' \
