@@ -22,7 +22,7 @@
 // language governing permissions and limitations at                        *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Pedro Gonçalves                                                  *
+// Author: PGonçalves                                                       *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -37,7 +37,7 @@
 
 namespace Actuators
 {
-  namespace PWMBBB
+  namespace PWM
   {
     using DUNE_NAMESPACES;
     struct Task: public DUNE::Tasks::Task
@@ -46,9 +46,9 @@ namespace Actuators
       struct Arguments
       {
         // - PinOut1
-        std::vector<int> portio1;
+        int portio1;
         // - PinOut2
-        std::vector<int> portio2;
+        int portio2;
       };
 
       Arguments m_args;
@@ -56,15 +56,13 @@ namespace Actuators
       ServoPwm* m_servo1;
       //Servo 2
       ServoPwm* m_servo2;
-      //GPIO for signal of servo
-      int GPIOPin;
       //state of update msg servo position
       bool updateMsg;
       //Value of servo position in deg
       double valuePos;
       //ID servo
       uint8_t idServo;
- 
+
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
@@ -73,52 +71,50 @@ namespace Actuators
       m_servo1(NULL)
       {
         param("PinOut1", m_args.portio1)
-          .defaultValue("60")
-          .description("Port servo1 to use in PWMBBB");
+          .defaultValue("23")
+          .description("Port servo1 to use in PWM");
 
         param("PinOut2", m_args.portio2)
-          .defaultValue("48")
-          .description("Port servo2 to use in PWMBBB");
+          .defaultValue("24")
+          .description("Port servo2 to use in PWM");
 
         bind<IMC::SetServoPosition>(this);
       }
-      
+
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
       }
-      
+
       //! Reserve entity identifiers.
       void
       onEntityReservation(void)
       {
       }
-      
+
       //! Resolve entity names.
       void
       onEntityResolution(void)
       {
       }
-      
+
       //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
       }
-      
+
       //! Initialize resources.
       void
       onResourceInitialization(void)
       {
-        GPIOPin = m_args.portio1[0];
-        m_servo1 = new ServoPwm(this, GPIOPin, 1.745329);
+        m_servo1 = new ServoPwm(this, m_args.portio1, 1.308997);
         m_servo1->start();
-        GPIOPin = m_args.portio2[0];
-        m_servo2 = new ServoPwm(this, GPIOPin, 1.745329);
+        m_servo2 = new ServoPwm(this, m_args.portio2, 1.308997);
         m_servo2->start();
       }
-      
+
       //! Release resources.
       void
       onResourceRelease(void)
@@ -136,7 +132,7 @@ namespace Actuators
           m_servo2 = NULL;
         }
       }
-      
+
       void
       consume(const IMC::SetServoPosition* msg)
       {
@@ -152,7 +148,7 @@ namespace Actuators
           war("SERVO 2: %f", valuePos);
           m_servo2->SetPwmValue(valuePos);
         }
-          
+
         updateMsg = true;
       }
 
@@ -161,7 +157,7 @@ namespace Actuators
       onMain(void)
       {
         IMC::ServoPosition msgServoPos;
-        
+
         while(!m_servo1->CheckGPIOSate() && !stopping())
         {
           setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("GPIO_SET1")));

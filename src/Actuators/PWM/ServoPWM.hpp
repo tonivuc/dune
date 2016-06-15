@@ -22,11 +22,11 @@
 // language governing permissions and limitations at                        *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Pedro Gonçalves                                                  *
+// Author: PGonçalves                                                       *
 //***************************************************************************
 
-#ifndef ACTUATORS_SERVOPWM_HPP_INCLUDED_
-#define ACTUATORS_SERVOPWM_HPP_INCLUDED_
+#ifndef ACTUATORS_PWM_HPP_INCLUDED_
+#define ACTUATORS_PWM_HPP_INCLUDED_
 
 // ISO C++ 98 headers.
 #include <cstring>
@@ -41,7 +41,7 @@ using DUNE_NAMESPACES;
 
 namespace Actuators
 {
-  namespace PWMBBB
+  namespace PWM
   {
     class ServoPwm: public Thread
     {
@@ -49,7 +49,8 @@ namespace Actuators
         int m_gpio;
         double m_value;
         bool m_gpio_state;
-        ServoPwm(DUNE::Tasks::Task* task, int gpio, int value):
+
+        ServoPwm(DUNE::Tasks::Task* task, int gpio, double value):
         m_task(task)
         {
           m_gpio = gpio;
@@ -62,7 +63,7 @@ namespace Actuators
         {
           closeConfigServo();
         }
-        
+
         void
         SetPwmValue( double _value)
         {
@@ -79,13 +80,12 @@ namespace Actuators
         }
 
       private:
-        //! Parent task.
-        DUNE::Tasks::Task* m_task;
-        
         void
         run(void)
         {
-          //int cnt = 0;
+          c_time_delayms = 19500;
+          wdog_tout = 0.02;
+          m_wdog.setTop(wdog_tout);
           while(!inicServo( m_gpio ) && isStopping())
           {
             sleep(1);
@@ -94,7 +94,7 @@ namespace Actuators
 
           while (!isStopping())
           {
-              RefreshPWM(m_value);
+            RefreshPWM(m_value);
           }
         }
 
@@ -147,14 +147,16 @@ namespace Actuators
         void
         RefreshPWM( double angle )
         {
-          int degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
-          
+          m_wdog.reset();
+
+          degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
+
           if(degAngle < 0)
             degAngle = 0;
           if(degAngle > 180)
             degAngle = 180;
 
-          int valueUP = (10 * degAngle) + 600;
+          valueUP = (10 * degAngle) + 600;
 
           if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
           {
@@ -173,10 +175,16 @@ namespace Actuators
           }
           strcpy(setValue, "0"); // Set value low
           fwrite(&setValue, sizeof(char), 1, myOutputHandle);
-          fclose(myOutputHandle);;
-          usleep (20000 - valueUP);
+          fclose(myOutputHandle);
+
+          while(!m_wdog.overflow())
+          {
+            usleep(20);
+          }
         }
 
+        //! Parent task.
+        DUNE::Tasks::Task* m_task;
         //Handle of servo pinout
         FILE *myOutputHandle;
         //Mode in/out of pinout
@@ -186,6 +194,14 @@ namespace Actuators
         char GPIOString[4];
         //Value to put in pinout
         char GPIOValue[64];
+        //! Time of delay to refresh in miliseconds
+        int c_time_delayms;
+        int degAngle;
+        int valueUP;
+        //! Watchdog timeout.
+        double wdog_tout;
+        //! Watchdog.
+        Counter<double> m_wdog;
     };
   }
 }
