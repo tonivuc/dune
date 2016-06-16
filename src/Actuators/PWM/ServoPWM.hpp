@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2015 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -25,8 +25,8 @@
 // Author: PGonçalves                                                       *
 //***************************************************************************
 
-#ifndef ACTUATORS_PWM_HPP_INCLUDED_
-#define ACTUATORS_PWM_HPP_INCLUDED_
+#ifndef ACTUATORS_SERVOPWM_HPP_INCLUDED_
+#define ACTUATORS_SERVOPWM_HPP_INCLUDED_
 
 // ISO C++ 98 headers.
 #include <cstring>
@@ -49,13 +49,15 @@ namespace Actuators
         int m_gpio;
         double m_value;
         bool m_gpio_state;
+        bool m_refresh;
 
-        ServoPwm(DUNE::Tasks::Task* task, int gpio, double value):
+        ServoPwm(DUNE::Tasks::Task* task, int gpio, double value, bool refresh):
         m_task(task)
         {
           m_gpio = gpio;
           m_value = value;
           m_gpio_state = false;
+          m_refresh = refresh;
         }
 
         //! Destructor.
@@ -68,6 +70,7 @@ namespace Actuators
         SetPwmValue( double _value)
         {
           m_value = _value;
+          m_update_angle = true;
         }
 
         bool
@@ -86,16 +89,65 @@ namespace Actuators
           c_time_delayms = 19500;
           wdog_tout = 0.02;
           m_wdog.setTop(wdog_tout);
-          while(!inicServo( m_gpio ) && isStopping())
+          while(!inicServo( m_gpio ) && !isStopping())
           {
-            sleep(1);
+            Delay::wait(1);
           }
           m_gpio_state = true;
+          m_update_angle = true;
 
           while (!isStopping())
           {
-            RefreshPWM(m_value);
+            if (m_refresh)
+              refreshPWM(m_value);
+            else if(!m_refresh && m_update_angle)
+              setAngleServomotor(m_value);
+            else
+              Delay::waitUsec(500);
           }
+        }
+
+        //!Set angle to servomotor
+        void
+        setAngleServomotor( double angle )
+        {
+          m_gpio_state = true;
+          int cntRefreshservo = 0;
+          degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
+          if (degAngle < 0)
+            degAngle = 0;
+          if (degAngle > 180)
+            degAngle = 180;
+
+          valueUP = (10 * degAngle) + 600;
+
+          while (cntRefreshservo < 200 && !isStopping() && m_gpio_state)
+          {
+            if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
+            {
+              m_task->err("ERROR PinOut %d", m_gpio);
+              m_gpio_state = false;
+            }
+            strcpy(setValue, "1"); // Set value high
+            fwrite(&setValue, sizeof(char), 1, myOutputHandle);
+            fclose(myOutputHandle);
+            Delay::waitUsec(valueUP);
+            // Set output to low
+            if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
+            {
+              m_task->err("ERROR PinOut %d", m_gpio);
+              m_gpio_state = false;
+            }
+            strcpy(setValue, "0"); // Set value low
+            fwrite(&setValue, sizeof(char), 1, myOutputHandle);
+            fclose(myOutputHandle);;
+            Delay::waitUsec(20000 - valueUP);
+
+            cntRefreshservo++;
+          }
+
+          if (m_gpio_state)
+            m_update_angle = false;
         }
 
         //!Inic of config to pinout of servomotor
@@ -108,7 +160,7 @@ namespace Actuators
           // Export the pin
           if ((myOutputHandle = fopen("/sys/class/gpio/export", "ab")) == NULL)
           {
-            m_task->err(DTR("Unable to export GPIO pin"));
+            m_task->err("Unable to export GPIO pin (%d)", m_gpio);
             return false;
           }
           strcpy(setValue, GPIOString);
@@ -117,7 +169,7 @@ namespace Actuators
           // Set direction of the pin to an output
           if ((myOutputHandle = fopen(GPIODirection, "rb+")) == NULL)
           {
-            m_task->err(DTR("Unable to open direction handle"));
+            m_task->err("Unable to open direction handle (%d)", m_gpio);
             return false;
           }
           strcpy(setValue,"out");
@@ -134,7 +186,7 @@ namespace Actuators
           // Unexport the pin
           if ((myOutputHandle = fopen("/sys/class/gpio/unexport", "ab")) == NULL)
           {
-            m_task->err(DTR("Unable to unexport GPIO pin"));
+            m_task->err("Unable to unexport GPIO pin (%d)", m_gpio);
             return false;
           }
           strcpy(setValue, GPIOString);
@@ -145,10 +197,10 @@ namespace Actuators
         }
 
         void
-        RefreshPWM( double angle )
+        refreshPWM( double angle )
         {
+          m_gpio_state = true;
           m_wdog.reset();
-
           degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
 
           if(degAngle < 0)
@@ -160,17 +212,17 @@ namespace Actuators
 
           if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
           {
-            m_task->err(DTR("Unable to open value handle"));
+            m_task->err("Unable to open value handle (%d)", m_gpio);
             m_gpio_state = false;
           }
           strcpy(setValue, "1"); // Set value high
           fwrite(&setValue, sizeof(char), 1, myOutputHandle);
           fclose(myOutputHandle);
-          usleep (valueUP);
+          Delay::waitUsec(valueUP);
           // Set output to low
           if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
           {
-            m_task->err(DTR("Unable to open value handle"));
+            m_task->err("Unable to open value handle (%d)", m_gpio);
             m_gpio_state = false;
           }
           strcpy(setValue, "0"); // Set value low
@@ -179,7 +231,7 @@ namespace Actuators
 
           while(!m_wdog.overflow())
           {
-            usleep(20);
+            Delay::waitUsec(20);
           }
         }
 
@@ -196,12 +248,16 @@ namespace Actuators
         char GPIOValue[64];
         //! Time of delay to refresh in miliseconds
         int c_time_delayms;
+        //! Value of angle in degrees
         int degAngle;
+        //! Time to kept in high value
         int valueUP;
         //! Watchdog timeout.
         double wdog_tout;
         //! Watchdog.
         Counter<double> m_wdog;
+        //! State of setAngle function
+        bool m_update_angle;
     };
   }
 }
