@@ -365,9 +365,12 @@ namespace Transports
         {
           // Static address is in list of services.
           if (Node(msg->sys_name, msg->services).check(itr->getAddress(), itr->getPort()))
-            return;
+          {
+        	  war("Not considering announce from %s because it is a static destination.", msg->sys_name.c_str());
+        	  return;
+          }
         }
-
+        inf("Adding visible node %s.", msg->sys_name.c_str());
         m_node_table.addNode(msg->getSource(), msg->sys_name, msg->services);
         m_lcomms->setAnnounce(msg);
       }

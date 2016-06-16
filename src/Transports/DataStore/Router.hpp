@@ -67,6 +67,7 @@ namespace Transports
       process(const IMC::UamRxFrame* msg)
       {
         Concurrency::ScopedRWLock l(m_lock, true);
+        m_parent->inf("System %s is visible over acoustic modem.", msg->sys_src.c_str());
         m_acousticVisibility[msg->sys_src] = msg->getTimeStamp();
       }
 
@@ -75,6 +76,7 @@ namespace Transports
       {
         Concurrency::ScopedRWLock l(m_lock, true);
         m_wifiVisibility[msg->sys_name] = *msg;
+        m_parent->debug("System %s is visible.", msg->sys_name.c_str());
       }
 
 
@@ -103,11 +105,16 @@ namespace Transports
       bool
       routeOverAcoustic(std::string destination, HistoricData* data)
       {
+
         if (!visibleOverAcoustic(destination))
-          return false;
+        {
+        	m_parent->inf("Acoustic gateway %s is not currently visible.", destination.c_str());
+        	return false;
+        }
 
         AcousticOperation acOp;
         acOp.msg.set(data);
+        acOp.setDestination(m_parent->getSystemId());
         acOp.op = AcousticOperation::AOP_MSG;
         acOp.system = destination;
         m_parent->dispatch(acOp);

@@ -107,22 +107,27 @@ namespace Transports
 
         param("WiFi Gateway", m_args.wifi_gateway)
         .description("If set, messages will be forwarded to gateway using wifi")
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("");
 
         param("Acoustic Gateway", m_args.acoustic_gateway)
         .description("If set, messages will be forwarded to gateway using acoustic modem")
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("");
 
         param("WiFi Forward Period", m_args.wifi_forward_period)
         .description("WiFi forwarding period, in seconds")
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("30");
 
-        param("Acoustic Forward Period", m_args.wifi_forward_period)
+        param("Acoustic Forward Period", m_args.acoustic_forward_period)
         .description("Acoustic forwarding period, in seconds")
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("300");
 
         param("Iridium Upload Period", m_args.iridium_upload_period)
         .description("Iridium upload period, in seconds. 0 Deactivates uploading via Iridium.")
+        .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("0");
 
         param("Variable priorities", m_args.variable_priorities)
@@ -260,7 +265,6 @@ namespace Transports
         if (!m_ctx.resolver.isLocal(msg->getSource()))
         {
           inf("Received %lu samples from %s.", msg->data.size(), resolveSystemId(msg->getSource()));
-          msg->toJSON(std::cout);
         }
         else
           debug("Adding %lu samples from %s (%d) to data store.", msg->data.size(),
@@ -335,11 +339,11 @@ namespace Transports
         IMC::HistoricData* data = m_store.pollSamples(1000);
         if (!m_router.routeOverAcoustic(m_args.acoustic_gateway, data))
         {
-          debug("not possible to forward data acoustically at this time.");
+          inf("not possible to forward acoustically through %s at this time.", m_args.acoustic_gateway.c_str());
           m_store.addData(data);
         }
         else
-          inf("Routed %lu samples to %s using Acoustic Modem", data->data.size(), m_args.wifi_gateway.c_str());
+          inf("Routed %lu samples to %s using Acoustic Modem", data->data.size(), m_args.acoustic_gateway.c_str());
 
         Memory::clear(data);
       }
@@ -355,7 +359,7 @@ namespace Transports
           return;
         if (!m_router.routeOverWifi(m_args.wifi_gateway, data))
         {
-          inf("not possible to forward data over WiFi at this time.");
+          inf("not possible to forward data over WiFi to %s at this time.", m_args.wifi_gateway.c_str());
           m_store.addData(data);
         }
         else
@@ -373,9 +377,8 @@ namespace Transports
 
           if (m_args.acoustic_forward_period > 0 && m_acoustic_forward_timer.overflow())
           {
-            m_acoustic_forward_timer.reset();
+        	m_acoustic_forward_timer.reset();
             m_router.forwardCommandsAcoustic(&m_store);
-
             if (!m_args.acoustic_gateway.empty())
               acousticRouting();
           }
@@ -388,6 +391,7 @@ namespace Transports
             if (!m_args.wifi_gateway.empty())
               wifiRouting();
           }
+
 
           if (m_args.iridium_upload_period > 0 && m_iridium_upload_timer.overflow())
           {

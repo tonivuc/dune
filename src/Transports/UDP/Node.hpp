@@ -63,7 +63,10 @@ namespace Transports
           char address[128] = {0};
 
           if (std::sscanf(list[i].c_str(), "%*[^:]://%127[^:]:%u", address, &port) == 2)
-            m_addrs.insert(std::pair<Address, unsigned>(address, port));
+          {
+        	  std::cerr << String::str("Node: Added address for %s: %s:%d", name.c_str(), address, port) << std::endl;
+        	  m_addrs.insert(std::pair<Address, unsigned>(address, port));
+          }
         }
       }
 
