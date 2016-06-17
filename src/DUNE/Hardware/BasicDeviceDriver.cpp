@@ -56,8 +56,7 @@ namespace DUNE
     void
     BasicDeviceDriver::onResourceRelease(void)
     {
-      if (enableLogControl())
-        closeLog();
+      requestDeactivation();
     }
 
     void
