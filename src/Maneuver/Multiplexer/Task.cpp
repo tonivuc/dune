@@ -48,6 +48,7 @@
 #include "PopUp.hpp"
 #include "Dislodge.hpp"
 #include "MuxedManeuver.hpp"
+#include "ScheduledGoto.hpp"
 
 namespace Maneuver
 {
@@ -58,7 +59,7 @@ namespace Maneuver
     static const std::string c_names[] = {"IdleManeuver", "Goto", "Launch", "Loiter",
                                           "StationKeeping", "YoYo", "Rows",
                                           "FollowPath", "Elevator", "PopUp",
-                                          "Dislodge", "Drop"};
+                                          "Dislodge","ScheduledGoto","Drop"};
 
     enum ManeuverType
     {
@@ -86,6 +87,8 @@ namespace Maneuver
       TYPE_DISLODGE,
       //! Type Drop
       TYPE_DROP,
+      //! Type ScheduledGoto
+      TYPE_SCHEDULEDGOTO,
       //! Total number of maneuvers
       TYPE_TOTAL
     };
@@ -98,8 +101,6 @@ namespace Maneuver
       std::vector<std::string> unsupported;
       //! Loiter Arguments
       LoiterArgs loiter;
-      //! Drop Arguments
-      LoiterArgs drop;
       //! StationKeeping Arguments
       StationKeepingArgs sk;
       //! Yoyo Arguments
@@ -111,7 +112,9 @@ namespace Maneuver
       //! Dislodge Arguments
       DislodgeArgs dislodge;
       //! Drop Arguments
-      DropArgs dropM;
+      DropArgs drop;
+      //!
+      ScheduledArgs scheduled;
     };
 
     struct Task: public DUNE::Maneuvers::Maneuver
@@ -170,6 +173,12 @@ namespace Maneuver
         .defaultValue("15")
         .units(Units::Degree)
         .description("Maximum course error admissible");
+
+        param("YoYo -- Minimum Altitude Reference", m_args.yoyo.min_alt)
+        .defaultValue("5.0")
+        .minimumValue("1.0")
+        .units(Units::Meter)
+        .description("Minimum admissible altitude reference");
 
         param("Elevator -- Radius Tolerance", m_args.elevator.radius_tolerance)
         .defaultValue("2.0")
@@ -242,11 +251,26 @@ namespace Maneuver
         .units(Units::Meter)
         .description("Safe depth change to consider the maneuver was successful");
 
-        param("Drop -- Servo Id", m_args.dropM.servoId)
-          .defaultValue("24")
+        param("Dislodge -- Safe Depth Gap", m_args.dislodge.safe_gap)
+        .defaultValue("3.0")
+        .units(Units::Meter)
+        .description("Safe depth change to consider the maneuver was successful");
+
+        param("ScheduledGoto -- Minimum Speed", m_args.scheduled.min_speed)
+        .defaultValue("0.7")
+        .units(Units::MeterPerSecond)
+        .description("Move only at speeds higher than the minimum speed");
+
+        param("ScheduledGoto -- Maximum Speed", m_args.scheduled.max_speed)
+        .defaultValue("1.6")
+        .units(Units::MeterPerSecond)
+        .description("Maximum commanded speed");
+
+        param("Drop -- Servo Id", m_args.drop.servoId)
+          .defaultValue("25")
           .description("Servo Id.");
 
-        param("Drop -- Servo Value", m_args.dropM.servoValue)
+        param("Drop -- Servo Value", m_args.drop.servoValue)
           .defaultValue("3.14159")
           .description("Servo Value in radians.");
 
@@ -328,7 +352,8 @@ namespace Maneuver
         m_maneuvers[TYPE_ELEVATOR] = create<Elevator>(&m_args.elevator);
         m_maneuvers[TYPE_POPUP] = create<PopUp>(&m_args.popup);
         m_maneuvers[TYPE_DISLODGE] = create<Dislodge>(&m_args.dislodge);
-        m_maneuvers[TYPE_DROP] = create<Drop>(&m_args.dropM);
+        m_maneuvers[TYPE_DROP] = create<Drop>(&m_args.drop);
+        m_maneuvers[TYPE_SCHEDULEDGOTO] = create<ScheduledGoto>(&m_args.scheduled);
       }
 
       void
