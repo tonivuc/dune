@@ -39,7 +39,6 @@
 #include "Goto.hpp"
 #include "Launch.hpp"
 #include "Loiter.hpp"
-#include "Drop.hpp"
 #include "StationKeeping.hpp"
 #include "YoYo.hpp"
 #include "Rows.hpp"
@@ -49,6 +48,7 @@
 #include "Dislodge.hpp"
 #include "MuxedManeuver.hpp"
 #include "ScheduledGoto.hpp"
+#include "Drop.hpp"
 
 namespace Maneuver
 {
@@ -267,7 +267,7 @@ namespace Maneuver
         .description("Maximum commanded speed");
 
         param("Drop -- Servo Id", m_args.drop.servoId)
-          .defaultValue("25")
+          .defaultValue("2")
           .description("Servo Id.");
 
         param("Drop -- Servo Value", m_args.drop.servoValue)
