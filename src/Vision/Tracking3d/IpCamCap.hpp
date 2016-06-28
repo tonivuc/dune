@@ -45,20 +45,14 @@ namespace Vision
       public:
         //! Name of camera
         std::string m_urlCam;
-        //! Intrinsic values of IPCam 2.
-        std::vector<double> m_intrinsicCam;
-        //! Distortion values of IPCam 1.
-        std::vector<double> m_distortionCam;
         //! Constructor.
         //! @param[in] task parent task.
         //! @param[in] url of ipcam.
         //! @param[in] name od ipcam.
-        IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl, std::vector<double> intrinsicCam, std::vector<double> distortionCam) :
+        IpCamCap(DUNE::Tasks::Task* task, std::string ipcamurl) :
           m_task(task)
         {
           m_urlCam = ipcamurl;
-          m_intrinsicCam = intrinsicCam;
-          m_distortionCam = distortionCam;
         }
 
         //! Destructor.
@@ -73,7 +67,7 @@ namespace Vision
         capFrame(void)
         {
           if (m_isCapture)
-            return undistortMap(m_frame);
+            return m_frame;
           else
             return NULL;
         }
@@ -89,36 +83,6 @@ namespace Vision
             return false;
         }
 
-        void
-        loadIntrinsicParameters(void)
-        {
-          CvMat *intrinsic = cvCreateMat(3, 3, CV_32FC1);
-          CvMat *distortion = cvCreateMat(1, 5, CV_32FC1);
-
-          unsigned int c = 0;
-          while (c < 9)
-          {
-            intrinsic->data.fl[c] = m_intrinsicCam[c];
-            if (c < 5)
-              distortion->data.fl[c] = m_distortionCam[c];
-            c++;
-          }
-
-          m_mapX = cvCreateImage(cvSize(320, 180), IPL_DEPTH_32F, 1);
-          m_mapY = cvCreateImage(cvSize(320, 180), IPL_DEPTH_32F, 1);
-          cvInitUndistortMap(intrinsic, distortion, m_mapX, m_mapY);
-
-          m_finalRemap = cvCreateImage(cvSize(320, 180), IPL_DEPTH_8U, 3);
-        }
-
-        IplImage*
-        undistortMap(IplImage* image)
-        {
-          cvRemap(image, m_finalRemap, m_mapX, m_mapY);
-
-          return m_finalRemap;
-        }
-
       private:
         //! Parent task.
         DUNE::Tasks::Task* m_task;
@@ -130,12 +94,6 @@ namespace Vision
         bool m_isCapture;
         //! state of connection to ipcam
         bool m_stateComIpCam;
-        //! Undistort map for x
-        IplImage* m_mapX;
-        //! Undistort map for y
-        IplImage* m_mapY;
-        //! Final image Undistort
-        IplImage *m_finalRemap;
 
         void
         run(void)
@@ -150,8 +108,6 @@ namespace Vision
             m_capture = cvCaptureFromFile(m_urlCam.c_str());
           }
 
-          loadIntrinsicParameters();
-
           while (!isStopping())
           {
             m_frame = cvQueryFrame(m_capture);
@@ -161,7 +117,6 @@ namespace Vision
               m_isCapture = true;
 
             Delay::waitUsec(500);
-
           }
         }
     };
