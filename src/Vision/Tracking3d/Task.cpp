@@ -41,6 +41,7 @@
 // Local headers.
 #include "IpCamCap.hpp"
 #include "OperationCV.hpp"
+#include "StereoMatch.hpp"
 
 namespace Vision
 {
@@ -69,10 +70,22 @@ namespace Vision
       std::vector<double> distortionCam1;
       //! Distortion values of IPCam 2.
       std::vector<double> distortionCam2;
-      //! Position of marks in Pixels.
-      std::vector<double> positionPixels;
-      //! Position of marks in meters.
-      std::vector<double> positionMeters;
+      //! Position of marks in Pixels (X) CAM 1.
+      std::vector<double> positionPixelsX1;
+      //! Position of marks in Pixels (Y) CAM 1.
+      std::vector<double> positionPixelsY1;
+      //! Position of marks in Pixels (X) CAM 2.
+      std::vector<double> positionPixelsX2;
+      //! Position of marks in Pixels (Y) CAM 2.
+      std::vector<double> positionPixelsY2;
+      //! Position of marks in meters (X).
+      std::vector<double> positionMetersX;
+      //! Position of marks in meters (Y).
+      std::vector<double> positionMetersY;
+      //! Position of marks in meters (Z).
+      std::vector<double> positionMetersZ;
+      //! OffSet of Y axis in meters
+      float offSetY;
       //! Size of Tpl match
       int tpl_size;
       //! Windows search size
@@ -90,12 +103,13 @@ namespace Vision
       //! Temperature messages.
       Arguments m_args;
       IMC::Temperature m_temp;
-      IMC::GetImageCoords m_getcoord;
+      IMC::GetImageCoords m_getImgCoord;
       IMC::GetWorldCoordinates m_getworldcoord;
       IpCamCap* m_cap1;
       IpCamCap* m_cap2;
       OperationCV* m_operation1;
       OperationCV* m_operation2;
+      StereoMatch* m_stereo_match;
       //! buffer for frame of Cam1
       IplImage* m_frameCam1;
       //! buffer for frame of Cam2
@@ -106,6 +120,7 @@ namespace Vision
       bool m_isTrackingCam1;
       //! State of tracking Cam2
       bool m_isTrackingCam2;
+
 
       //! Constructor.
       //! @param[in] name task name.
@@ -139,11 +154,29 @@ namespace Vision
         param("IpCam2 - Distortion Vector", m_args.distortionCam2)
         .description("Distortion values of IPCam 2");
 
-        param("Position - Pixels", m_args.positionPixels)
+        param("Position IpCam1 - Pixels X", m_args.positionPixelsX1)
         .description("Position of marks in Pixels");
 
-        param("Position - Meters", m_args.positionMeters)
+        param("Position IpCam1 - Pixels Y", m_args.positionPixelsY1)
+        .description("Position of marks in Pixels");
+
+        param("Position IpCam2 - Pixels X", m_args.positionPixelsX2)
+        .description("Position of marks in Pixels");
+
+        param("Position IpCam2 - Pixels Y", m_args.positionPixelsY2)
+        .description("Position of marks in Pixels");
+
+        param("Position - Meters X", m_args.positionMetersX)
         .description("Position of marks in Meters");
+
+        param("Position - Meters Y", m_args.positionMetersY)
+        .description("Position of marks in Meters");
+
+        param("Position - Meters Z", m_args.positionMetersZ)
+        .description("Position of marks in Meters");
+
+        param("OffSet Y", m_args.offSetY)
+        .description("OffSet of Y in Meters");
 
         param("Tpl Size", m_args.tpl_size)
         .defaultValue("50")
@@ -186,18 +219,21 @@ namespace Vision
       void
       onResourceInitialization(void)
       {
-        m_cap1 = new IpCamCap(this, m_args.url_ipcam1, m_args.intrinsicCam1, m_args.distortionCam1);
-        m_cap1->start();
-        Delay::waitMsec(c_sleep_time);
-        m_cap2 = new IpCamCap(this, m_args.url_ipcam2, m_args.intrinsicCam2, m_args.distortionCam2);
-        m_cap2->start();
+        m_cap1 = new IpCamCap(this, m_args.url_ipcam1);
+        m_cap2 = new IpCamCap(this, m_args.url_ipcam2);
         m_operation1 = new OperationCV(this, m_args.url_ipcam1, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
         m_operation2 = new OperationCV(this, m_args.url_ipcam2, m_args.tpl_size, m_args.window_search_size, m_args.frames_to_refresh);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         m_initValuesTpl = false;
         m_isTrackingCam1 = false;
-        m_cap1->loadIntrinsicParameters();
-        m_cap2->loadIntrinsicParameters();
+        m_stereo_match = new StereoMatch(this);
+        m_stereo_match->loadParametersForStereo(m_args.intrinsicCam1, m_args.distortionCam1,
+                                                m_args.intrinsicCam2, m_args.distortionCam2, m_args.positionPixelsX1,
+                                                m_args.positionPixelsY1, m_args.positionPixelsX2, m_args.positionPixelsY2,
+                                                m_args.positionMetersX, m_args.positionMetersY, m_args.positionMetersZ);
+        m_cap1->start();
+        Delay::waitMsec(c_sleep_time);
+        m_cap2->start();
       }
 
       //! Release resources.
@@ -311,25 +347,34 @@ namespace Vision
             m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam1);
             m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam2);
 
-            m_getcoord.setSourceEntity(getEntityId());
-            m_getcoord.camid = 1;
-            m_getcoord.x = m_operation1->m_coordImage.x;
-            m_getcoord.y = m_operation1->m_coordImage.y;
-            dispatch(m_getcoord);
+            m_getImgCoord.setSourceEntity(getEntityId());
+            m_getImgCoord.camid = 1;
+            m_getImgCoord.x = m_operation1->m_coordImage.x;
+            m_getImgCoord.y = m_operation1->m_coordImage.y;
+            dispatch(m_getImgCoord);
 
-            m_getcoord.setSourceEntity(getEntityId());
-            m_getcoord.camid = 2;
-            m_getcoord.x = m_operation2->m_coordImage.x;
-            m_getcoord.y = m_operation2->m_coordImage.y;
-            dispatch(m_getcoord);
+            m_getImgCoord.setSourceEntity(getEntityId());
+            m_getImgCoord.camid = 2;
+            m_getImgCoord.x = m_operation2->m_coordImage.x;
+            m_getImgCoord.y = m_operation2->m_coordImage.y;
+            dispatch(m_getImgCoord);
 
             if (m_isTrackingCam1 && m_isTrackingCam2)
             {
               m_getworldcoord.setSourceEntity(getEntityId());
-              m_getworldcoord.tracking = true;
-              m_getworldcoord.x = 1.27;
-              m_getworldcoord.y = 2.46;
-              m_getworldcoord.z = 3.45;
+
+              if (m_stereo_match->getRealCoord(m_operation1->m_coordImage.x, m_operation1->m_coordImage.y, m_operation2->m_coordImage.x, m_operation2->m_coordImage.y))
+              {
+                m_getworldcoord.x = m_stereo_match->m_real_coord.x;
+                m_getworldcoord.y = m_stereo_match->m_real_coord.y - m_args.offSetY;
+                m_getworldcoord.z = m_stereo_match->m_real_coord.z;
+                m_getworldcoord.tracking = true;
+                inf("Real Coord: %f, %f, %f", m_getworldcoord.x, m_getworldcoord.y, m_getworldcoord.z);
+              }
+              else
+              {
+                m_getworldcoord.tracking = false;
+              }
               dispatch(m_getworldcoord);
             }
             else
@@ -338,14 +383,6 @@ namespace Vision
               m_getworldcoord.tracking = false;
               dispatch(m_getworldcoord);
             }
-
-            try
-            {
-              m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
-              dispatch(m_temp);
-            }
-            catch (...)
-            {}
           }
           else
           {
@@ -353,10 +390,17 @@ namespace Vision
             throw RestartNeeded(DTR("null frame"), 1, true);
           }
 
+          try
+          {
+            m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
+            dispatch(m_temp);
+          }
+          catch (...)
+          { }
+
           waitForMessages(0.01);
           m_frameCam1 = NULL;
           m_frameCam2 = NULL;
-
         }
       }
     };
