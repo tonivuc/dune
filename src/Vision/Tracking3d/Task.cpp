@@ -201,13 +201,6 @@ namespace Vision
         bind<IMC::SetImageCoords>(this);
       }
 
-      //! Update internal state with new parameter values.
-      void
-      onUpdateParameters(void)
-      {
-        //TODO
-      }
-
       //! Reserve entity identifiers.
       void
       onEntityReservation(void)
@@ -368,13 +361,15 @@ namespace Vision
                 m_getworldcoord.x = m_stereo_match->m_real_coord.x;
                 m_getworldcoord.y = m_stereo_match->m_real_coord.y - m_args.offSetY;
                 m_getworldcoord.z = m_stereo_match->m_real_coord.z;
-                m_getworldcoord.tracking = true;
-                inf("Real Coord: %f, %f, %f", m_getworldcoord.x, m_getworldcoord.y, m_getworldcoord.z);
               }
               else
               {
+                m_getworldcoord.x = 0;
+                m_getworldcoord.y = 0;
+                m_getworldcoord.z = 0;
                 m_getworldcoord.tracking = false;
               }
+              m_getworldcoord.tracking = true;
               dispatch(m_getworldcoord);
             }
             else

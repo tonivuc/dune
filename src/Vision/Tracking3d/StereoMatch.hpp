@@ -210,8 +210,8 @@ namespace Vision
         bool
         getRealCoord(int cam1_x, int cam1_y, int cam2_x, int cam2_y)
         {
-          coordImage m_coord_cam1 = getUndistortedPoint(cam1_x, cam1_y, mx1, my1, "cam1");
-          coordImage m_coord_cam2 = getUndistortedPoint(cam2_x, cam2_y, mx2, my2, "cam2");
+          coordImage m_coord_cam1 = getUndistortedPoint(cam1_x, cam1_y, mx1, my1);
+          coordImage m_coord_cam2 = getUndistortedPoint(cam2_x, cam2_y, mx2, my2);
 
           if (m_coord_cam1.x != -1 && m_coord_cam1.y != -1 && m_coord_cam2.x != -1 && m_coord_cam2.y != -1)
           {
@@ -238,25 +238,85 @@ namespace Vision
         }
 
         coordImage
-        getUndistortedPoint( int x, int y, CvMat* mapX, CvMat* mapY, std::string ipcam)
+        getUndistortedPoint( int x, int y, CvMat* mapX, CvMat* mapY)
         {
           coordImage m_undistorted;
           bool isFoundPoint = false;
 
           for (int ay = 0; ay < mapX->rows; ay++)
           {
-            for (int ax = 0; ax < mapX->cols; ax++)
+            for (int ax = 0; ax < mapY->cols; ax++)
             {
               if (x == (int)cvmGet(mapX, ay, ax))
               {
-                if (y == (int)cvmGet(mapY, ay, ax))
+                if (y == (int)cvmGet(mapY, ay, ax) || y == (int)cvmGet(mapY, ay, ax) + 1 || y == (int)cvmGet(mapY, ay, ax) - 1)
                 {
-                  m_task->war("COORD %s: %d - %d  >>>  %d - %d", ipcam.c_str(), x, y, ax, ay);
                   m_undistorted.x = ax;
                   m_undistorted.y = ay;
                   isFoundPoint = true;
                 }
               }
+              if (isFoundPoint)
+                break;
+            }
+            if (!isFoundPoint)
+            {
+              for (int ax = 0; ax < mapY->cols; ax++)
+              {
+                if (x == (int)cvmGet(mapX, ay, ax) + 1 || x == (int)cvmGet(mapX, ay, ax) - 1)
+                {
+                  if (y == (int)cvmGet(mapY, ay, ax) || y == (int)cvmGet(mapY, ay, ax) + 1 || y == (int)cvmGet(mapY, ay, ax) - 1)
+                  {
+                    m_undistorted.x = ax;
+                    m_undistorted.y = ay;
+                    isFoundPoint = true;
+                  }
+                }
+                if (isFoundPoint)
+                  break;
+              }
+            }
+            if (isFoundPoint)
+              break;
+          }
+
+          if (!isFoundPoint)
+          {
+            for (int ay = 0; ay < mapX->rows; ay++)
+            {
+              for (int ax = 0; ax < mapY->cols; ax++)
+              {
+                if (y == (int)cvmGet(mapY, ay, ax))
+                {
+                  if (x == (int)cvmGet(mapX, ay, ax) || x == (int)cvmGet(mapX, ay, ax) + 1 || x == (int)cvmGet(mapX, ay, ax) - 1)
+                  {
+                    m_undistorted.x = ax;
+                    m_undistorted.y = ay;
+                    isFoundPoint = true;
+                  }
+                }
+                if (isFoundPoint)
+                  break;
+              }
+              if (!isFoundPoint)
+              {
+                for (int ax = 0; ax < mapY->cols; ax++)
+                {
+                  if (y == (int)cvmGet(mapY, ay, ax) + 1 || y == (int)cvmGet(mapY, ay, ax) - 1)
+                  {
+                    if (x == (int)cvmGet(mapX, ay, ax) || x == (int)cvmGet(mapX, ay, ax) + 1 || x == (int)cvmGet(mapX, ay, ax) - 1)
+                    {
+                      m_undistorted.x = ax;
+                      m_undistorted.y = ay;
+                      isFoundPoint = true;
+                    }
+                  }
+                  if (isFoundPoint)
+                    break;
+                }
+              }
+              if (isFoundPoint)
+                break;
             }
           }
 
@@ -264,7 +324,6 @@ namespace Vision
           {
             m_undistorted.x = -1;
             m_undistorted.y = -1;
-            m_task->err("COORD %s: ERRO (%d - %d  >>>  %d - %d)", ipcam.c_str(), x, y, m_undistorted.x, m_undistorted.y);
           }
 
           return m_undistorted;
