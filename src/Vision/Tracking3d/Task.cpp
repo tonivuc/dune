@@ -92,17 +92,12 @@ namespace Vision
       int window_search_size;
       //! Frames to Refresh
       int frames_to_refresh;
-      //! Path to sysfs temperature.
-      std::string temp_path;
-      //! Entity label of temperature sensor.
-      std::string elabel_temp;
     };
 
     struct Task : public DUNE::Tasks::Task
     {
       //! Temperature messages.
       Arguments m_args;
-      IMC::Temperature m_temp;
       IMC::GetImageCoords m_getImgCoord;
       IMC::GetWorldCoordinates m_getworldcoord;
       IpCamCap* m_cap1;
@@ -190,22 +185,7 @@ namespace Vision
         .defaultValue("30")
         .description("Number of frames necessary to auto refresh TPL");
 
-        param("Path Temperature", m_args.temp_path)
-        .defaultValue("/opt/vc/bin/vcgencmd measure_temp")
-        .description("Path to the sysfs file Temperature.");
-
-        param("Entity Label - Temperature", m_args.elabel_temp)
-        .defaultValue("Mainboard (Core)")
-        .description("Entity label of temperature sensor");
-
         bind<IMC::SetImageCoords>(this);
-      }
-
-      //! Reserve entity identifiers.
-      void
-      onEntityReservation(void)
-      {
-        m_temp.setSourceEntity(reserveEntity(m_args.elabel_temp));
       }
 
       //! Initialize resources.
@@ -284,38 +264,6 @@ namespace Vision
         }
       }
 
-      float
-      getTemperatureCPU(const char* cmd)
-      {
-        float temp = 0;
-        char buffer[64];
-        std::string result = "";
-        FILE* pipe = popen(cmd, "r");
-        if (!pipe)
-        {
-          err("popen() failed!");
-        }
-        else
-        {
-          try
-          {
-            while (!feof(pipe))
-            {
-              if (fgets(buffer, 64, pipe) != NULL)
-                result += buffer;
-            }
-          }
-          catch (...)
-          {
-            pclose(pipe);
-            throw;
-          }
-          pclose(pipe);
-          std::sscanf(buffer, "temp=%f'C", &temp);
-        }
-        return temp;
-      }
-
       //! Main loop.
       void
       onMain(void)
@@ -384,14 +332,6 @@ namespace Vision
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
             throw RestartNeeded(DTR("null frame"), 1, true);
           }
-
-          try
-          {
-            m_temp.value = getTemperatureCPU(m_args.temp_path.c_str());
-            dispatch(m_temp);
-          }
-          catch (...)
-          { }
 
           waitForMessages(0.01);
           m_frameCam1 = NULL;
