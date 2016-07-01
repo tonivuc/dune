@@ -71,31 +71,6 @@ namespace Vision
           m_frame_refresh = frame_refresh;
         }
 
-        //!Draw a dashed line
-        void
-        dashedLine(IplImage* image, CvPoint p1, CvPoint p2, CvScalar color, int interval, bool axis)
-        {
-          int cnt = 0;
-          //Vertical
-          if (!axis)
-          {
-            while (cnt < p2.y)
-            {
-              cvLine(image, cvPoint(p1.x, p1.y + cnt), cvPoint(p2.x, cnt + interval), color, 1, 8, 0);
-              cnt = cnt + interval * 2;
-            }
-          }
-          //Horizontal
-          else
-          {
-            while (cnt < p2.x)
-            {
-              cvLine(image, cvPoint(p1.x + cnt, p1.y), cvPoint(cnt + interval, p2.y), color, 1, 8, 0);
-              cnt = cnt + interval * 2;
-            }
-          }
-        }
-
         /* track object in frame image */
         bool
         trackObject(IplImage *frame, std::string name)
@@ -109,7 +84,6 @@ namespace Vision
               win_y = object_y - ((window_search_height - tpl_height) / 2);
 
               // Window margins of tracking
-
               if ((win_x + (window_search_width / 2) - (window_search_width / 2)) <= 1)
                 flag_track = 1;
               else if ((win_x + window_search_width) >= frame_width)
@@ -228,20 +202,16 @@ namespace Vision
           threshold = 0.3;
           flag_track = 0;
           rep_tpl = m_frame_refresh;
-          //Size of Image capture
           frame_width = frame->width;
           frame_height = frame->height;
-
           object_x = frame_width / 2;
           object_y = frame_height / 2;
           x_mouse = frame_width / 2;
           y_mouse = frame_height / 2;
-
           // create template image
           tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth, frame->nChannels);
           // create image for template matching result
           tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
-
           is_tracking = false;
         }
 

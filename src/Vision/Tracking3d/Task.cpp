@@ -200,6 +200,7 @@ namespace Vision
         m_initValuesTpl = false;
         m_isTrackingCam1 = false;
         m_stereo_match = new StereoMatch(this);
+        inf("Running stereo calibration");
         m_stereo_match->loadParametersForStereo(m_args.intrinsicCam1, m_args.distortionCam1,
                                                 m_args.intrinsicCam2, m_args.distortionCam2, m_args.positionPixelsX1,
                                                 m_args.positionPixelsY1, m_args.positionPixelsX2, m_args.positionPixelsY2,
@@ -207,6 +208,7 @@ namespace Vision
         m_cap1->start();
         Delay::waitMsec(c_sleep_time);
         m_cap2->start();
+        preLoadFrame(60);
       }
 
       //! Release resources.
@@ -262,77 +264,79 @@ namespace Vision
           if (m_frameCam1 != NULL && m_frameCam2 != NULL)
             t++;
         }
-      }
-
-      //! Main loop.
-      void
-      onMain(void)
-      {
-        preLoadFrame(60);
         if (!stopping())
         {
           m_operation1->inicTplTest(m_frameCam1);
           m_operation2->inicTplTest(m_frameCam2);
           m_initValuesTpl = true;
         }
+      }
 
-        while (!stopping())
+      void
+      getPosition(void)
+      {
+        m_frameCam1 = m_cap1->capFrame();
+        m_frameCam2 = m_cap2->capFrame();
+
+        if (m_frameCam1 != NULL && m_frameCam2 != NULL)
         {
-          m_frameCam1 = m_cap1->capFrame();
-          m_frameCam2 = m_cap2->capFrame();
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+          m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam1);
+          m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam2);
 
-          if (m_frameCam1 != NULL && m_frameCam2 != NULL)
+          m_getImgCoord.setSourceEntity(getEntityId());
+          m_getImgCoord.camid = 1;
+          m_getImgCoord.x = m_operation1->m_coordImage.x;
+          m_getImgCoord.y = m_operation1->m_coordImage.y;
+          dispatch(m_getImgCoord);
+
+          m_getImgCoord.setSourceEntity(getEntityId());
+          m_getImgCoord.camid = 2;
+          m_getImgCoord.x = m_operation2->m_coordImage.x;
+          m_getImgCoord.y = m_operation2->m_coordImage.y;
+          dispatch(m_getImgCoord);
+
+          if (m_isTrackingCam1 && m_isTrackingCam2)
           {
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+            m_getworldcoord.setSourceEntity(getEntityId());
 
-            m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam1);
-            m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam2);
-
-            m_getImgCoord.setSourceEntity(getEntityId());
-            m_getImgCoord.camid = 1;
-            m_getImgCoord.x = m_operation1->m_coordImage.x;
-            m_getImgCoord.y = m_operation1->m_coordImage.y;
-            dispatch(m_getImgCoord);
-
-            m_getImgCoord.setSourceEntity(getEntityId());
-            m_getImgCoord.camid = 2;
-            m_getImgCoord.x = m_operation2->m_coordImage.x;
-            m_getImgCoord.y = m_operation2->m_coordImage.y;
-            dispatch(m_getImgCoord);
-
-            if (m_isTrackingCam1 && m_isTrackingCam2)
+            if (m_stereo_match->getRealCoord(m_operation1->m_coordImage.x, m_operation1->m_coordImage.y, m_operation2->m_coordImage.x, m_operation2->m_coordImage.y))
             {
-              m_getworldcoord.setSourceEntity(getEntityId());
-
-              if (m_stereo_match->getRealCoord(m_operation1->m_coordImage.x, m_operation1->m_coordImage.y, m_operation2->m_coordImage.x, m_operation2->m_coordImage.y))
-              {
-                m_getworldcoord.x = m_stereo_match->m_real_coord.x;
-                m_getworldcoord.y = m_stereo_match->m_real_coord.y - m_args.offSetY;
-                m_getworldcoord.z = m_stereo_match->m_real_coord.z;
-              }
-              else
-              {
-                m_getworldcoord.x = 0;
-                m_getworldcoord.y = 0;
-                m_getworldcoord.z = 0;
-                m_getworldcoord.tracking = false;
-              }
-              m_getworldcoord.tracking = true;
-              dispatch(m_getworldcoord);
+              m_getworldcoord.x = m_stereo_match->m_real_coord.x;
+              m_getworldcoord.y = m_stereo_match->m_real_coord.y - m_args.offSetY;
+              m_getworldcoord.z = m_stereo_match->m_real_coord.z;
             }
             else
             {
-              m_getworldcoord.setSourceEntity(getEntityId());
+              m_getworldcoord.x = 0;
+              m_getworldcoord.y = 0;
+              m_getworldcoord.z = 0;
               m_getworldcoord.tracking = false;
-              dispatch(m_getworldcoord);
             }
+              m_getworldcoord.tracking = true;
+              dispatch(m_getworldcoord);
           }
           else
           {
-            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
-            throw RestartNeeded(DTR("null frame"), 1, true);
+            m_getworldcoord.setSourceEntity(getEntityId());
+            m_getworldcoord.tracking = false;
+            dispatch(m_getworldcoord);
           }
+        }
+        else
+        {
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_IO_ERROR);
+          throw RestartNeeded(DTR("null frame"), 1, true);
+        }
+      }
 
+      //! Main loop.
+      void
+      onMain(void)
+      {
+        while (!stopping())
+        {
+          getPosition();
           waitForMessages(0.01);
           m_frameCam1 = NULL;
           m_frameCam2 = NULL;

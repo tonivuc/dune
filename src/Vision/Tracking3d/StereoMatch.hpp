@@ -127,7 +127,6 @@ namespace Vision
 
           CvMat _objectPoints = cvMat(1, N, CV_32FC3, &objectPoints[0]);
 
-          m_task->war("Running stereo calibration ...");
           cvStereoCalibrate( &_objectPoints, &_imagePoints1, &_imagePoints2, &_npoints, &_M1, &_D1, &_M2, &_D2, imageSize, &_R, &_T, &_E, &_F,
                                  cvTermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 100, 1e-5), CV_CALIB_USE_INTRINSIC_GUESS
                                 + CV_CALIB_FIX_ASPECT_RATIO
@@ -234,7 +233,6 @@ namespace Vision
           }
           else
             return false;
-
         }
 
         coordImage
