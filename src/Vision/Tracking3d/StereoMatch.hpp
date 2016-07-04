@@ -135,8 +135,8 @@ namespace Vision
                                 + CV_CALIB_SAME_FOCAL_LENGTH
                                 + CV_CALIB_FIX_K3 + CV_CALIB_FIX_K4 + CV_CALIB_FIX_K5);
 
-          baseline = sqrt(T[0] * T[0] + T[1] * T[1] + T[2] * T[2]);
-          m_task->inf("Baseline = %.4f m", baseline);
+          m_baseline = sqrt(T[0] * T[0] + T[1] * T[1] + T[2] * T[2]);
+          m_task->inf("Baseline = %.4f m", m_baseline);
 
           vector<CvPoint3D32f> lines[2];
           camaraPoints[0].resize(c_number_of_frames * c_number_of_chessboard);
@@ -155,12 +155,12 @@ namespace Vision
           CvMat* _R_L = cvCreateMat(3, 1, CV_64F);
           CvMat* _T_L = cvCreateMat(3, 1, CV_64F);
           CvMat* R_F = cvCreateMat(3, 3, CV_64F);
-          R_Fi = cvCreateMat(3, 3, CV_64F);
-          t_final = cvCreateMat(3, 1, CV_64F);
+          m_r_fi = cvCreateMat(3, 3, CV_64F);
+          m_t_final = cvCreateMat(3, 1, CV_64F);
           cvFindExtrinsicCameraParams2(&_objectPoints, &_imagePoints1, &_M1, &_D1, _R_L, _T_L, 0);
           cvRodrigues2(_R_L, R_F, 0);
-          cvInvert(R_F, R_Fi);
-          cvMatMul(R_Fi, _T_L, t_final);
+          cvInvert(R_F, m_r_fi);
+          cvMatMul(m_r_fi, _T_L, m_t_final);
 
           cvUndistortPoints(&_imagePoints1, &_imagePoints1, &_M1, &_D1, 0, &_M1);
           cvUndistortPoints(&_imagePoints2, &_imagePoints2, &_M2, &_D2, 0, &_M2);
@@ -177,10 +177,10 @@ namespace Vision
 
           m_task->inf("err = %g cm", avgErr / (c_number_of_frames * c_number_of_chessboard));
 
-          mx1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
-          my1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
-          mx2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
-          my2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          m_mx1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          m_my1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          m_mx2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          m_my2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
 
           double R1[3][3], R2[3][3], P1[3][4], P2[3][4];
           CvMat _R1 = cvMat(3, 3, CV_64F, R1);
@@ -189,45 +189,45 @@ namespace Vision
           CvMat _P2 = cvMat(3, 4, CV_64F, P2);
 
           cvStereoRectify( &_M1, &_M2, &_D1, &_D2, c_image_size, &_R, &_T, &_R1, &_R2, &_P1, &_P2, 0, 0 );
-          cvInitUndistortRectifyMap(&_M1, &_D1, &_R1, &_P1, mx1, my1);
-          cvInitUndistortRectifyMap(&_M2, &_D2, &_R2, &_P2, mx2, my2);
+          cvInitUndistortRectifyMap(&_M1, &_D1, &_R1, &_P1, m_mx1, m_my1);
+          cvInitUndistortRectifyMap(&_M2, &_D2, &_R2, &_P2, m_mx2, m_my2);
 
-          R1_T = cvCreateMat(3, 3, CV_64F);
-          cvTranspose(&_R1, R1_T);
-          diff = (cvmGet(&_P1, 0, 2) - cvmGet(&_P2, 0, 2));
-          focal = (cvmGet(&_P1, 0, 0) + cvmGet(&_P2, 0, 0)) / 2;
-          cx1 = cvmGet(&_P1, 0, 2);
-          cy1 = cvmGet(&_P1, 1, 2);
-          m_task->inf("diff = %f - focal = %f - cx1 = %f - cy1 = %f",diff,focal,cx1,cy1);
+          m_r1_t = cvCreateMat(3, 3, CV_64F);
+          cvTranspose(&_R1, m_r1_t);
+          m_diff = (cvmGet(&_P1, 0, 2) - cvmGet(&_P2, 0, 2));
+          m_focal = (cvmGet(&_P1, 0, 0) + cvmGet(&_P2, 0, 0)) / 2;
+          m_cx1 = cvmGet(&_P1, 0, 2);
+          m_cy1 = cvmGet(&_P1, 1, 2);
+          m_task->inf("diff = %f - focal = %f - cx1 = %f - cy1 = %f",m_diff,m_focal,m_cx1,m_cy1);
 
-          PC_RECT = cvMat(3, 1, CV_64F, pc_r);
-          PC = cvMat(3, 1, CV_64F, pc);
-          PC_WA = cvMat(3, 1, CV_64F, pc_wa);
+          m_pc_rect = cvMat(3, 1, CV_64F, m_pc_r);
+          m_pcc = cvMat(3, 1, CV_64F, m_pc);
+          m_pc_wac = cvMat(3, 1, CV_64F, m_pc_wa);
 
         }
 
         bool
         getRealCoord(int cam1_x, int cam1_y, int cam2_x, int cam2_y)
         {
-          coordImage m_coord_cam1 = getUndistortedPoint(cam1_x, cam1_y, mx1, my1);
-          coordImage m_coord_cam2 = getUndistortedPoint(cam2_x, cam2_y, mx2, my2);
+          coordImage m_coord_cam1 = getUndistortedPoint(cam1_x, cam1_y, m_mx1, m_my1);
+          coordImage m_coord_cam2 = getUndistortedPoint(cam2_x, cam2_y, m_mx2, m_my2);
 
           if (m_coord_cam1.x != -1 && m_coord_cam1.y != -1 && m_coord_cam2.x != -1 && m_coord_cam2.y != -1)
           {
-            float d = ((focal * baseline) / ((m_coord_cam1.x - m_coord_cam2.x) - diff));
-            float X = ((m_coord_cam1.x - cx1) * d) / focal;
-            float Y = ((m_coord_cam1.y - cy1) * d) / focal;
+            float d = ((m_focal * m_baseline) / ((m_coord_cam1.x - m_coord_cam2.x) - m_diff));
+            float X = ((m_coord_cam1.x - m_cx1) * d) / m_focal;
+            float Y = ((m_coord_cam1.y - m_cy1) * d) / m_focal;
 
-            pc_r[0] = X;
-            pc_r[1] = Y;
-            pc_r[2] = d;
+            m_pc_r[0] = X;
+            m_pc_r[1] = Y;
+            m_pc_r[2] = d;
 
-            cvMatMul(R1_T, &PC_RECT, &PC);
-            cvMatMul(R_Fi, &PC, &PC_WA);
-            cvSub(&PC_WA, t_final, &PC_WA);
-            m_real_coord.x = pc_wa[0];
-            m_real_coord.y = pc_wa[1];
-            m_real_coord.z = pc_wa[2];
+            cvMatMul(m_r1_t, &m_pc_rect, &m_pcc);
+            cvMatMul(m_r_fi, &m_pcc, &m_pc_wac);
+            cvSub(&m_pc_wac, m_t_final, &m_pc_wac);
+            m_real_coord.x = m_pc_wa[0];
+            m_real_coord.y = m_pc_wa[1];
+            m_real_coord.z = m_pc_wa[2];
 
             return true;
           }
@@ -334,30 +334,30 @@ namespace Vision
         //! Parent task.
         DUNE::Tasks::Task* m_task;
         //! Baseline - distance between the centers of the two cameras
-        float baseline;
+        float m_baseline;
         //! Focal point
-        float focal;
+        float m_focal;
         //! Focal center (X)
-        float cx1;
+        float m_cx1;
         //! Focal center (Y)
-        float cy1;
+        float m_cy1;
         //! Distance between the focal centers of the two cameras
-        float diff;
+        float m_diff;
         //! Matrix to compute stereo match
-        double pc_r[3];
-        CvMat PC_RECT;
-        double pc_wa[3];
-        double pc[3];
-        CvMat* R1_T;
-        CvMat PC;
-        CvMat* R_Fi;
-        CvMat PC_WA;
-        CvMat* t_final;
+        double m_pc_r[3];
+        CvMat m_pc_rect;
+        double m_pc_wa[3];
+        double m_pc[3];
+        CvMat* m_r1_t;
+        CvMat m_pcc;
+        CvMat* m_r_fi;
+        CvMat m_pc_wac;
+        CvMat* m_t_final;
         //! Matrix of remap images
-        CvMat* mx1;
-        CvMat* my1;
-        CvMat* mx2;
-        CvMat* my2;
+        CvMat* m_mx1;
+        CvMat* m_my1;
+        CvMat* m_mx2;
+        CvMat* m_my2;
 
     };
   }

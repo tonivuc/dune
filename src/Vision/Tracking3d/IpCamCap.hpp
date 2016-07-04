@@ -68,7 +68,7 @@ namespace Vision
         IplImage*
         capFrame(void)
         {
-          if (m_isCapture)
+          if (m_is_capture)
             return m_frame;
           else
             return NULL;
@@ -93,14 +93,14 @@ namespace Vision
         //! Capture struct OpenCV
         CvCapture* m_capture;
         //! state of capture;
-        bool m_isCapture;
+        bool m_is_capture;
         //! state of connection to ipcam
         bool m_stateComIpCam;
 
         void
         run(void)
         {
-          m_isCapture = false;
+          m_is_capture = false;
           m_stateComIpCam = false;
           m_capture = cvCaptureFromFile(m_urlCam.c_str());
 
@@ -114,9 +114,9 @@ namespace Vision
           {
             m_frame = cvQueryFrame(m_capture);
             if (m_frame == NULL)
-              m_isCapture = false;
+              m_is_capture = false;
             else
-              m_isCapture = true;
+              m_is_capture = true;
 
             Delay::waitUsec(c_sleep_value / 2);
           }
