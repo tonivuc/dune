@@ -51,6 +51,7 @@ namespace Vision
     using namespace cv;
 
     static const unsigned int c_sleep_time = 1500;
+    static const unsigned int c_number_of_pre_frames = 60;
 
     struct Arguments
     {
@@ -201,14 +202,14 @@ namespace Vision
         m_isTrackingCam1 = false;
         m_stereo_match = new StereoMatch(this);
         inf("Running stereo calibration");
-        m_stereo_match->loadParametersForStereo(m_args.intrinsicCam1, m_args.distortionCam1,
-                                                m_args.intrinsicCam2, m_args.distortionCam2, m_args.positionPixelsX1,
-                                                m_args.positionPixelsY1, m_args.positionPixelsX2, m_args.positionPixelsY2,
-                                                m_args.positionMetersX, m_args.positionMetersY, m_args.positionMetersZ);
+        m_stereo_match->loadParametersForStereo(m_args.intrinsicCam1, m_args.distortionCam1, m_args.intrinsicCam2,
+                                                m_args.distortionCam2, m_args.positionPixelsX1, m_args.positionPixelsY1,
+                                                m_args.positionPixelsX2, m_args.positionPixelsY2, m_args.positionMetersX,
+                                                m_args.positionMetersY, m_args.positionMetersZ);
         m_cap1->start();
         Delay::waitMsec(c_sleep_time);
         m_cap2->start();
-        preLoadFrame(60);
+        preLoadFrame(c_number_of_pre_frames);
       }
 
       //! Release resources.

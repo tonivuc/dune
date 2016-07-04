@@ -39,6 +39,8 @@ namespace Vision
 {
   namespace Tracking3d
   {
+    static const unsigned int c_sleep_value = 1000;
+
     //! %Vision Stream Capture Protocol (%IpCamCap).
     class IpCamCap : public Thread
     {
@@ -104,7 +106,7 @@ namespace Vision
 
           while (m_capture == 0 && !isStopping())
           {
-            Delay::waitMsec(1000);
+            Delay::waitMsec(c_sleep_value);
             m_capture = cvCaptureFromFile(m_urlCam.c_str());
           }
 
@@ -116,7 +118,7 @@ namespace Vision
             else
               m_isCapture = true;
 
-            Delay::waitUsec(500);
+            Delay::waitUsec(c_sleep_value / 2);
           }
         }
     };

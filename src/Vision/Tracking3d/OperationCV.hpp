@@ -85,18 +85,18 @@ namespace Vision
 
               // Window margins of tracking
               if ((win_x + (window_search_width / 2) - (window_search_width / 2)) <= 1)
-                flag_track = 1;
+                flag_track = false;
               else if ((win_x + window_search_width) >= frame_width)
-                flag_track = 2;
+                flag_track = false;
               else if ((win_y + (window_search_height / 2)) - (window_search_height / 2) <= 1)
-                flag_track = 3;
+                flag_track = false;
               else if ((win_y + window_search_height) >= frame_height)
-                flag_track = 4;
+                flag_track = false;
               else
-                flag_track = 0;
+                flag_track = true;
 
               // search object in search window
-              if (flag_track == 0)
+              if (flag_track)
               {
                 cvReleaseImage(&tm);
                 tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
@@ -108,7 +108,7 @@ namespace Vision
               }
 
               // if object found
-              if (flag_track == 0 && maxval >= threshold)
+              if (flag_track && maxval >= threshold)
               {
                 // save object's current location
                 object_x = win_x + m_maxloc.x;
@@ -147,7 +147,7 @@ namespace Vision
                   // setup position of search window
                   win_x = object_x - ((window_search_width - tpl_width) / 2);
                   win_y = object_y - ((window_search_height - tpl_height) / 2);
-                  flag_track = 0;
+                  flag_track = true;
                   return true;
                 }
               }
@@ -188,7 +188,7 @@ namespace Vision
             cvResetImageROI(allFrame);
             is_tracking = true;
             cnt_refresh = 0;
-            flag_track = 1;
+            flag_track = false;
           }
         }
 
@@ -200,7 +200,7 @@ namespace Vision
           window_search_width = m_window_search_size;
           window_search_height = m_window_search_size;
           threshold = 0.3;
-          flag_track = 0;
+          flag_track = false;
           rep_tpl = m_frame_refresh;
           frame_width = frame->width;
           frame_height = frame->height;
@@ -257,7 +257,7 @@ namespace Vision
         //coordinate of 1º Pixel Window - Y
         int win_y;
         //Flag track
-        int flag_track;
+        bool flag_track;
         //Flag tracking
         bool is_tracking;
         //minimum value - match
