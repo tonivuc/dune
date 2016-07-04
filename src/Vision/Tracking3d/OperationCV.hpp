@@ -124,7 +124,7 @@ namespace Vision
                   cvSetImageROI( frame, cvRect(object_x, object_y, tpl_width, tpl_height));
                   cvReleaseImage(&tpl);
                   cvReleaseImage(&tm);
-                  tm = cvCreateImage( cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
+                  tm = cvCreateImage(cvSize(window_search_width - tpl_width + 1, window_search_height - tpl_height + 1), IPL_DEPTH_32F, 1);
                   tpl = cvCreateImage(cvSize(tpl_width, tpl_height), frame->depth, frame->nChannels);
                   cvCopy(frame, tpl);
                   cvResetImageROI(frame);

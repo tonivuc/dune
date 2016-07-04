@@ -42,6 +42,10 @@ namespace Vision
 {
   namespace Tracking3d
   {
+    static const int c_number_of_chessboard = 9;
+    static const int c_number_of_frames = 1;
+    static const CvSize c_image_size = Size(320, 180);
+
     class StereoMatch
     {
         struct coordImage
@@ -74,7 +78,7 @@ namespace Vision
           CvMat *distortionCam2 = cvCreateMat(1, 5, CV_32FC1);
 
           unsigned int c = 0;
-          while (c < 9)
+          while (c < c_number_of_chessboard)
           {
             intrinsicCam1->data.fl[c] = m_intrinsicCam1[c];
             intrinsicCam2->data.fl[c] = m_intrinsicCam2[c];
@@ -88,29 +92,25 @@ namespace Vision
           vector<int> npoints;
           std::vector<CvPoint3D32f> objectPoints;
           std::vector<CvPoint2D32f> camaraPoints[2];
-          camaraPoints[0].resize(9);
-          camaraPoints[1].resize(9);
-          for (int r = 0; r < 9; r++)
+          camaraPoints[0].resize(c_number_of_chessboard);
+          camaraPoints[1].resize(c_number_of_chessboard);
+          for (int r = 0; r < c_number_of_chessboard; r++)
           {
             camaraPoints[0][r].x = positionPixelsX1[r];
             camaraPoints[0][r].y = positionPixelsY1[r];
             camaraPoints[1][r].x = positionPixelsX2[r];
             camaraPoints[1][r].y = positionPixelsY2[r];
           }
-          int nframes = 1;
-          int n = 9;
-          int N = nframes * n;
-          CvSize imageSize = Size(320, 180);
 
           CvMat _M1 = cvMat(3, 3, CV_64F, m_intrinsicCam1.data());
           CvMat _M2 = cvMat(3, 3, CV_64F, m_intrinsicCam2.data());
           CvMat _D1 = cvMat(1, 5, CV_64F, m_distortionCam1.data());
           CvMat _D2 = cvMat(1, 5, CV_64F, m_distortionCam2.data());
 
-          npoints.resize(nframes, n);
-          objectPoints.resize(nframes * n);
-          CvMat _imagePoints1 = cvMat(1, N, CV_32FC2, &camaraPoints[0][0]);
-          CvMat _imagePoints2 = cvMat(1, N, CV_32FC2, &camaraPoints[1][0]);
+          npoints.resize(c_number_of_frames, c_number_of_chessboard);
+          objectPoints.resize(c_number_of_frames * c_number_of_chessboard);
+          CvMat _imagePoints1 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC2, &camaraPoints[0][0]);
+          CvMat _imagePoints2 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC2, &camaraPoints[1][0]);
           CvMat _npoints = cvMat(1, npoints.size(), CV_32S, &npoints[0]);
           double R[3][3], T[3], E[3][3], F[3][3];
 
@@ -119,15 +119,15 @@ namespace Vision
           CvMat _E = cvMat(3, 3, CV_64F, E);
           CvMat _F = cvMat(3, 3, CV_64F, F);
 
-          for (int t = 0; t < 9; t++)
+          for (int t = 0; t < c_number_of_chessboard; t++)
             objectPoints[t] = cvPoint3D32f(positionMetersX[t], positionMetersY[t], positionMetersZ[t]);
 
-          for (int i = 1; i < nframes; i++)
-            copy(objectPoints.begin(), objectPoints.begin() + n, objectPoints.begin() + i * n);
+          for (int i = 1; i < c_number_of_frames; i++)
+            copy(objectPoints.begin(), objectPoints.begin() + c_number_of_chessboard, objectPoints.begin() + i * c_number_of_chessboard);
 
-          CvMat _objectPoints = cvMat(1, N, CV_32FC3, &objectPoints[0]);
+          CvMat _objectPoints = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC3, &objectPoints[0]);
 
-          cvStereoCalibrate( &_objectPoints, &_imagePoints1, &_imagePoints2, &_npoints, &_M1, &_D1, &_M2, &_D2, imageSize, &_R, &_T, &_E, &_F,
+          cvStereoCalibrate( &_objectPoints, &_imagePoints1, &_imagePoints2, &_npoints, &_M1, &_D1, &_M2, &_D2, c_image_size, &_R, &_T, &_E, &_F,
                                  cvTermCriteria(CV_TERMCRIT_ITER + CV_TERMCRIT_EPS, 100, 1e-5), CV_CALIB_USE_INTRINSIC_GUESS
                                 + CV_CALIB_FIX_ASPECT_RATIO
                                 + CV_CALIB_ZERO_TANGENT_DIST
@@ -139,14 +139,14 @@ namespace Vision
           m_task->inf("Baseline = %.4f m", baseline);
 
           vector<CvPoint3D32f> lines[2];
-          camaraPoints[0].resize(N);
-          camaraPoints[1].resize(N);
-          _imagePoints1 = cvMat(1, N, CV_32FC2, &camaraPoints[0][0]);
-          _imagePoints2 = cvMat(1, N, CV_32FC2, &camaraPoints[1][0]);
-          lines[0].resize(N);
-          lines[1].resize(N);
-          CvMat _L1 = cvMat(1, N, CV_32FC3, &lines[0][0]);
-          CvMat _L2 = cvMat(1, N, CV_32FC3, &lines[1][0]);
+          camaraPoints[0].resize(c_number_of_frames * c_number_of_chessboard);
+          camaraPoints[1].resize(c_number_of_frames * c_number_of_chessboard);
+          _imagePoints1 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC2, &camaraPoints[0][0]);
+          _imagePoints2 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC2, &camaraPoints[1][0]);
+          lines[0].resize(c_number_of_frames * c_number_of_chessboard);
+          lines[1].resize(c_number_of_frames * c_number_of_chessboard);
+          CvMat _L1 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC3, &lines[0][0]);
+          CvMat _L2 = cvMat(1, c_number_of_frames * c_number_of_chessboard, CV_32FC3, &lines[1][0]);
 
           vector<CvPoint3D32f> lines_epipolar[2];
           lines_epipolar[0].resize(100);
@@ -168,19 +168,19 @@ namespace Vision
           cvComputeCorrespondEpilines(&_imagePoints2, 2, &_F, &_L2);
 
           double avgErr = 0;
-          for (int i = 0; i < N; i++)
+          for (int i = 0; i < (c_number_of_frames * c_number_of_chessboard); i++)
           {
             double err = fabs(camaraPoints[0][i].x * lines[1][i].x + camaraPoints[0][i].y * lines[1][i].y + lines[1][i].z)
                 + fabs(camaraPoints[1][i].x * lines[0][i].x + camaraPoints[1][i].y * lines[0][i].y + lines[0][i].z);
             avgErr += err;
           }
 
-          m_task->inf("err = %g cm", avgErr / (nframes * n));
+          m_task->inf("err = %g cm", avgErr / (c_number_of_frames * c_number_of_chessboard));
 
-          mx1 = cvCreateMat( imageSize.height, imageSize.width, CV_32F );
-          my1 = cvCreateMat( imageSize.height, imageSize.width, CV_32F );
-          mx2 = cvCreateMat( imageSize.height, imageSize.width, CV_32F );
-          my2 = cvCreateMat( imageSize.height, imageSize.width, CV_32F );
+          mx1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          my1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          mx2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
+          my2 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
 
           double R1[3][3], R2[3][3], P1[3][4], P2[3][4];
           CvMat _R1 = cvMat(3, 3, CV_64F, R1);
@@ -188,9 +188,9 @@ namespace Vision
           CvMat _P1 = cvMat(3, 4, CV_64F, P1);
           CvMat _P2 = cvMat(3, 4, CV_64F, P2);
 
-          cvStereoRectify( &_M1, &_M2, &_D1, &_D2, imageSize, &_R, &_T, &_R1, &_R2, &_P1, &_P2, 0, 0 );
-          cvInitUndistortRectifyMap(&_M1,&_D1,&_R1,&_P1,mx1,my1);
-          cvInitUndistortRectifyMap(&_M2,&_D2,&_R2,&_P2,mx2,my2);
+          cvStereoRectify( &_M1, &_M2, &_D1, &_D2, c_image_size, &_R, &_T, &_R1, &_R2, &_P1, &_P2, 0, 0 );
+          cvInitUndistortRectifyMap(&_M1, &_D1, &_R1, &_P1, mx1, my1);
+          cvInitUndistortRectifyMap(&_M2, &_D2, &_R2, &_P2, mx2, my2);
 
           R1_T = cvCreateMat(3, 3, CV_64F);
           cvTranspose(&_R1, R1_T);
