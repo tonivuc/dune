@@ -34,15 +34,64 @@ namespace Maneuver
   {
     using DUNE_NAMESPACES;
 
+    enum MoveComand
+    {
+      M_LEFT,
+      M_RIGHT,
+      M_STOP
+    };
+
+    struct Arguments
+    {
+        //! System Slave Name
+        std::string slave_name;
+        //! ID cam
+        int id_cam;
+        //! Minimum of offset
+        int minimum_x;
+        //! Maximum of offset
+        int maximum_x;
+        //! Speed scale factor
+        float speed_scale_factor;
+    };
+
     struct Task: public DUNE::Maneuvers::Maneuver
     {
-      IMC::DesiredHeading m_heading_msg;
-      double m_heading_v_desired;
-      double m_heading_c_current;
+      IMC::SetThrusterActuation m_thruster_actuation;
+      //! Task Arguments
+      Arguments m_args;
+      bool m_set_estimated_state;
 
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Maneuvers::Maneuver(name, ctx)
       {
+        param("Slave System", m_args.slave_name)
+        .description("Slave System name.")
+        .defaultValue("caravela-aux");
+
+        param("Camera ID", m_args.id_cam)
+        .description("Camera ID to use.")
+        .values("1, 2")
+        .defaultValue("1");
+
+        param("Minimum of X", m_args.minimum_x)
+        .description("Minimum value of X before start correction of heading.")
+        .minimumValue("60")
+        .maximumValue("140")
+        .defaultValue("120");
+
+        param("Maximum of X", m_args.maximum_x)
+        .description("Maximum value of X before start correction of heading.")
+        .minimumValue("260")
+        .maximumValue("220")
+        .defaultValue("200");
+
+        param("Speed Scaling Factor", m_args.speed_scale_factor)
+        .description("Scaling factor for speed actuation.")
+        .minimumValue("1")
+        .maximumValue("2")
+        .defaultValue("1.5");
+
         bindToManeuver<Task, IMC::ImageTracking>();
         bind<IMC::GetImageCoords>(this);
       }
@@ -52,22 +101,67 @@ namespace Maneuver
       {
         (void)maneuver;
 
-        setControl(IMC::CL_YAW_RATE);
-        war("yaw_rate controller activated");
-
+        m_set_estimated_state = true;
         signalProgress();
       }
 
       void
       consume(const IMC::GetImageCoords* msg)
       {
-        war("DONE");
-        //TODO
+        if (std::string(resolveSystemId(msg->getSource())).compare(m_args.slave_name) != 0)
+          return;
 
-        ///
-        (void)msg;
+        if (msg->camid != m_args.id_cam)
+          return;
 
-        signalCompletion();
+        if (msg->x < m_args.minimum_x)
+          moveComand(M_LEFT, std::abs(msg->x - m_args.minimum_x));
+        else if (msg->x > m_args.maximum_x)
+          moveComand(M_RIGHT, std::abs(msg->x - m_args.maximum_x));
+        else
+          moveComand(M_STOP, 0);
+      }
+
+      void
+      moveComand(MoveComand m_move, float diff_value)
+      {
+        float value;
+        float speed_values[2];
+        switch (m_move)
+        {
+          case M_LEFT:
+            value = (diff_value / std::abs(60 - m_args.minimum_x)) * m_args.speed_scale_factor;
+            if (value > 1)
+              value = 1;
+            speed_values[0] = -value;
+            speed_values[1] = value;
+            break;
+
+          case M_RIGHT:
+            value = (diff_value / std::abs(260 - m_args.maximum_x)) * m_args.speed_scale_factor;
+            if (value > 1)
+              value = 1;
+            speed_values[0] = value;
+            speed_values[1] = -value;
+            break;
+
+          case M_STOP:
+            value = diff_value;
+            speed_values[0] = value;
+            speed_values[1] = value;
+            break;
+
+          default:
+            m_move = M_STOP;
+            break;
+        }
+
+        m_thruster_actuation.id = 0;
+        m_thruster_actuation.value = speed_values[0];
+        dispatch(m_thruster_actuation);
+        m_thruster_actuation.id = 1;
+        m_thruster_actuation.value = speed_values[1];
+        dispatch(m_thruster_actuation);
       }
     };
   }
