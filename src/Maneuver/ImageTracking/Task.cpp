@@ -166,7 +166,7 @@ namespace Maneuver
         if (msg->camid != m_args.id_cam)
           return;
 
-        if (msg->x < m_args.minimum_x)
+        if (msg->x < m_args.minimum_x && msg->x != 0)
         {
           moveComand(M_LEFT, std::abs(msg->x - m_args.minimum_x));
         }
