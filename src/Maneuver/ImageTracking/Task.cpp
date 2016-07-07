@@ -80,15 +80,18 @@ namespace Maneuver
       {
         param("Slave System", m_args.slave_name)
         .description("Slave System name.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .defaultValue("caravela-aux");
 
         param("Camera ID", m_args.id_cam)
         .description("Camera ID to use.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .values("1, 2")
         .defaultValue("1");
 
         param("Minimum of X", m_args.minimum_x)
         .description("Minimum value of X before start correction of heading.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Pixel)
         .minimumValue("60")
         .maximumValue("140")
@@ -96,6 +99,7 @@ namespace Maneuver
 
         param("Maximum of X", m_args.maximum_x)
         .description("Maximum value of X before start correction of heading.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Pixel)
         .minimumValue("260")
         .maximumValue("220")
@@ -103,12 +107,14 @@ namespace Maneuver
 
         param("Speed Scaling Factor", m_args.speed_scale_factor)
         .description("Scaling factor for speed actuation.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .minimumValue("0.5")
         .maximumValue("2")
         .defaultValue("1.5");
 
         param("Minimum Distance", m_args.minimum_distance)
         .description("Minimum distance before stopping moving forward.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Meter)
         .minimumValue("0.5")
         .maximumValue("12")
