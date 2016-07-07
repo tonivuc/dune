@@ -175,7 +175,7 @@ namespace Vision
             avgErr += err;
           }
 
-          m_task->inf("err = %g cm", avgErr / (c_number_of_frames * c_number_of_chessboard));
+          m_task->inf("err = %g", avgErr / (c_number_of_frames * c_number_of_chessboard));
 
           m_mx1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
           m_my1 = cvCreateMat( c_image_size.height, c_image_size.width, CV_32F );
