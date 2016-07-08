@@ -59,6 +59,8 @@ namespace Maneuver
         int maximum_x;
         //! Speed scale factor
         float speed_scale_factor;
+        //! Moving Forward
+        bool moving_forward;
         //! Minimum distance before stopping moving forward
         float minimum_distance;
     };
@@ -111,6 +113,12 @@ namespace Maneuver
         .minimumValue("0.5")
         .maximumValue("2")
         .defaultValue("1.5");
+
+        param("Moving Forward", m_args.moving_forward)
+        .description("Moving Forward flag.")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .values("true, false")
+        .defaultValue("true");
 
         param("Minimum Distance", m_args.minimum_distance)
         .description("Minimum distance before stopping moving forward.")
@@ -176,7 +184,7 @@ namespace Maneuver
         }
         else
         {
-          if (m_new_distance)
+          if (m_new_distance && m_args.moving_forward)
           {
             moveComand(M_FORWARD, m_distance_to_object);
             m_new_distance = false;
