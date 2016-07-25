@@ -51,7 +51,7 @@ namespace Vision
     using namespace cv;
 
     static const unsigned int c_sleep_time = 1500;
-    static const unsigned int c_number_of_pre_frames = 60;
+    static const unsigned int c_number_of_pre_frames = 40;
 
     struct Arguments
     {
@@ -179,7 +179,7 @@ namespace Vision
         .description("Size of TPL match");
 
         param("Window Search Size", m_args.window_search_size)
-        .defaultValue("90")
+        .defaultValue("160")
         .description("Size of Window Search Size");
 
         param("Frames to Refresh", m_args.frames_to_refresh)
