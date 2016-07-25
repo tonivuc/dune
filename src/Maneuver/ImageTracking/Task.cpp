@@ -36,7 +36,7 @@ namespace Maneuver
 
     static const unsigned int c_maximum_distance = 12;
     static const float c_time_check_new_distance = 2.0f;
-    static const int c_max_image_offset = 260;
+    static const int c_max_image_offset = 580;
     static const int c_mim_image_offset = 60;
 
     enum MoveComand
@@ -96,16 +96,16 @@ namespace Maneuver
         .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Pixel)
         .minimumValue("60")
-        .maximumValue("140")
-        .defaultValue("130");
+        .maximumValue("300")
+        .defaultValue("280");
 
         param("Maximum of X", m_args.maximum_x)
         .description("Maximum value of X before start correction of heading.")
         .visibility(Tasks::Parameter::VISIBILITY_USER)
         .units(Units::Pixel)
-        .minimumValue("260")
-        .maximumValue("220")
-        .defaultValue("190");
+        .minimumValue("340")
+        .maximumValue("580")
+        .defaultValue("360");
 
         param("Speed Scaling Factor", m_args.speed_scale_factor)
         .description("Scaling factor for speed actuation.")
@@ -173,6 +173,8 @@ namespace Maneuver
 
         if (msg->camid != m_args.id_cam)
           return;
+
+        printf("Valor: %d -> %d - %d\n\r\n\r", msg->x, m_args.minimum_x, m_args.maximum_x);
 
         if (msg->x < m_args.minimum_x && msg->x != 0)
         {
