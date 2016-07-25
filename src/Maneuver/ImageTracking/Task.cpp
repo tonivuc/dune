@@ -174,8 +174,6 @@ namespace Maneuver
         if (msg->camid != m_args.id_cam)
           return;
 
-        printf("Valor: %d -> %d - %d\n\r\n\r", msg->x, m_args.minimum_x, m_args.maximum_x);
-
         if (msg->x < m_args.minimum_x && msg->x != 0)
         {
           moveComand(M_LEFT, std::abs(msg->x - m_args.minimum_x));
