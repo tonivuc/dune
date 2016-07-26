@@ -52,6 +52,7 @@ namespace Vision
 
     static const unsigned int c_sleep_time = 1500;
     static const unsigned int c_number_of_pre_frames = 40;
+    static const unsigned int c_max_cam = 2;
 
     struct Arguments
     {
@@ -59,10 +60,8 @@ namespace Vision
       std::string url_ipcam1;
       //! IpCam2 URL
       std::string url_ipcam2;
-      //! IpCam1 Name
-      std::string name_ipcam1;
-      //! IpCam2 Name
-      std::string name_ipcam2;
+      //! IpCam Name
+      std::string name_ipcam[c_max_cam];
       //! Intrinsic values of IPCam 1.
       std::vector<double> intrinsicCam1;
       //! Intrinsic values of IPCam 2.
@@ -99,7 +98,7 @@ namespace Vision
     {
       //! Temperature messages.
       Arguments m_args;
-      IMC::GetImageCoords m_getImgCoord;
+      IMC::GetImageCoords m_getImgCoord[c_max_cam];
       IMC::GetWorldCoordinates m_getworldcoord;
       IpCamCap* m_cap1;
       IpCamCap* m_cap2;
@@ -116,13 +115,15 @@ namespace Vision
       bool m_isTrackingCam1;
       //! State of tracking Cam2
       bool m_isTrackingCam2;
-
+      //! Read timestamp.
+      double m_tstamp;
 
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx) :
-        DUNE::Tasks::Task(name, ctx), m_cap1(NULL), m_cap2(NULL)
+        DUNE::Tasks::Task(name, ctx), m_cap1(NULL), m_cap2(NULL),
+        m_tstamp(0)
       {
         param("IpCam1 - URL", m_args.url_ipcam1)
         .description("IpCam1 Addresses");
@@ -130,11 +131,11 @@ namespace Vision
         param("IpCam2 - URL", m_args.url_ipcam2)
         .description("IpCam2 Addresses");
 
-        param("IpCam1 - Name", m_args.name_ipcam1)
+        param("IpCam1 - Name", m_args.name_ipcam[0])
         .defaultValue("Cam1")
         .description("IpCam1 Name");
 
-        param("IpCam2 - Name", m_args.name_ipcam2)
+        param("IpCam2 - Name", m_args.name_ipcam[1])
         .defaultValue("Cma2")
         .description("IpCam2 Name");
 
@@ -189,6 +190,31 @@ namespace Vision
         bind<IMC::SetImageCoords>(this);
       }
 
+      //! Reserve entity identifiers.
+      void
+      onEntityReservation(void)
+      {
+        unsigned eid = 0;
+
+        for (unsigned i = 0; i < c_max_cam; ++i)
+          {
+            if (m_args.name_ipcam[i].empty())
+            continue;
+
+            try
+            {
+              eid = resolveEntity(m_args.name_ipcam[i]);
+            }
+            catch (Entities::EntityDataBase::NonexistentLabel& e)
+            {
+              (void)e;
+              eid = reserveEntity(m_args.name_ipcam[i]);
+            }
+
+            m_getImgCoord[i].setSourceEntity(eid);
+          }
+        }
+
       //! Initialize resources.
       void
       onResourceInitialization(void)
@@ -239,7 +265,7 @@ namespace Vision
           if (m_frameCam1 != NULL)
           {
             if (m_initValuesTpl)
-              m_operation1->setNewTPL(msg->x, msg->y, m_frameCam1, m_args.name_ipcam1);
+              m_operation1->setNewTPL(msg->x, msg->y, m_frameCam1, m_args.name_ipcam[0]);
           }
         }
         else
@@ -247,7 +273,7 @@ namespace Vision
           if (m_frameCam2 != NULL)
           {
             if (m_initValuesTpl)
-              m_operation2->setNewTPL(msg->x, msg->y, m_frameCam2, m_args.name_ipcam2);
+              m_operation2->setNewTPL(msg->x, msg->y, m_frameCam2, m_args.name_ipcam[1]);
           }
         }
       }
@@ -276,26 +302,33 @@ namespace Vision
       void
       getPosition(void)
       {
+        m_tstamp = Clock::getSinceEpoch();
         m_frameCam1 = m_cap1->capFrame();
         m_frameCam2 = m_cap2->capFrame();
 
         if (m_frameCam1 != NULL && m_frameCam2 != NULL)
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
-          m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam1);
-          m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam2);
+          m_isTrackingCam1 = m_operation1->trackObject(m_frameCam1, m_args.name_ipcam[0]);
+          m_isTrackingCam2 = m_operation2->trackObject(m_frameCam2, m_args.name_ipcam[1]);
 
-          m_getImgCoord.setSourceEntity(getEntityId());
-          m_getImgCoord.camid = 1;
-          m_getImgCoord.x = m_operation1->m_coordImage.x;
-          m_getImgCoord.y = m_operation1->m_coordImage.y;
-          dispatch(m_getImgCoord);
+          for (unsigned int i = 0; i < c_max_cam; i++)
+          {
+            m_getImgCoord[i].setTimeStamp(m_tstamp);
+            m_getImgCoord[i].camid = i + 1;
+            if (i == 0)
+            {
+              m_getImgCoord[i].x = m_operation1->m_coordImage.x;
+              m_getImgCoord[i].y = m_operation1->m_coordImage.y;
+            }
+            else if (i == 1)
+            {
+              m_getImgCoord[i].x = m_operation2->m_coordImage.x;
+              m_getImgCoord[i].y = m_operation2->m_coordImage.y;
+            }
 
-          m_getImgCoord.setSourceEntity(getEntityId());
-          m_getImgCoord.camid = 2;
-          m_getImgCoord.x = m_operation2->m_coordImage.x;
-          m_getImgCoord.y = m_operation2->m_coordImage.y;
-          dispatch(m_getImgCoord);
+            dispatch(m_getImgCoord[i], DF_KEEP_TIME);
+          }
 
           if (m_isTrackingCam1 && m_isTrackingCam2)
           {
