@@ -36,51 +36,69 @@ namespace Simulators
 
     struct Arguments
     {
-      // Local port.
-      uint16_t local_port;
       // IPv4 Address.
       Address addr;
-      // UDP Port.
+
+      // Port to listen
       uint16_t port;
+
+      // Sound speed in m/s
+      fp64_t sound_speed;
+
+      // Modem bandwidth bps
+      fp64_t bps;
+
     };
 
     struct Task: public DUNE::Tasks::Task
     {
       // Buffer capacity.
-      static const unsigned c_bfr_size = 255;
+      static const unsigned c_bfr_size = 65535;
       // Task arguments.
       Arguments m_args;
       // UDP Socket.
       UDPSocket* m_sock;
       //! Read buffer.
       std::vector<uint8_t> m_bfr;
+      //! Own state
+      IMC::EstimatedState m_state;
+      //! Other states
+      std::map<int, IMC::EstimatedState> m_states;
+      //! Incoming messages
+      std::list<IMC::UamRxFrame> m_incoming;
+      //! Time when current transmission finishes
+      double m_transmission_end;
+      //! Ongoing transmission
+      IMC::UamTxFrame m_ongoing;
 
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
-        m_sock(NULL)
+        m_sock(NULL),
+        m_transmission_end(0)
       {
-        param("Local Port", m_args.local_port)
-        .defaultValue("6021")
-        .minimumValue("0")
-        .maximumValue("65535")
-        .description("Local UDP port");
+        param("Multicast Address", m_args.addr)
+        .defaultValue("224.0.70.70")
+        .description("Address of multicast group where to exchange simulated messages");
 
-        param("Destination UDP Address", m_args.addr)
-        .defaultValue("172.0.0.1")
-        .description("IP address of remote system");
+        param("Multicast Port", m_args.port)
+        .defaultValue("12304")
+        .description("Port where to listen for simulated messages");
 
-        param("Destination UDP Port", m_args.port)
-        .defaultValue("6022")
-        .minimumValue("0")
-        .maximumValue("65535")
-        .description("UDP port of remote system");
+        param("Simulated Sound Speed", m_args.sound_speed)
+        .defaultValue("1500")
+        .description("Water sound speed in m/s");
+
+        param("Simulated Bandwidth", m_args.bps)
+        .defaultValue("600")
+        .description("Simulated bandwidth in bits per second");
 
         m_bfr.resize(c_bfr_size);
 
         bind<IMC::UamTxFrame>(this);
+        bind<IMC::EstimatedState>(this);
       }
 
       //! Update internal state with new parameter values.
@@ -90,10 +108,7 @@ namespace Simulators
         if (isActive())
         {
           if (paramChanged(m_args.addr))
-            throw RestartNeeded(DTR("restarting to change IPv4 address"), 1);
-
-          if (paramChanged(m_args.port))
-            throw RestartNeeded(DTR("restarting to change UDP port"), 1);
+            throw RestartNeeded(DTR("restarting to change group address"), 1);
         }
       }
 
@@ -102,7 +117,11 @@ namespace Simulators
       onResourceAcquisition(void)
       {
         m_sock = new UDPSocket;
-        m_sock->bind(m_args.local_port, Address::Any, false);
+        m_sock->setMulticastTTL(1);
+        m_sock->setMulticastLoop(true);
+        m_sock->joinMulticastGroup(m_args.addr);
+        m_sock->bind(m_args.port, Address::Any, true);
+
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
@@ -114,23 +133,47 @@ namespace Simulators
       }
 
       void
+      consume(const IMC::EstimatedState* msg)
+      {
+        if (m_ctx.resolver.isLocal(msg->getSource()))
+          m_state = *msg;
+      }
+
+      void
       consume(const IMC::UamTxFrame* msg)
       {
-        // Only use local UamTxFrame.
-        if (msg->getSource() != getSystemId())
+        debug("Send frame to %s", msg->sys_dst.c_str());
+
+        if (msg->getSource() == getSystemId())
+        {
+          IMC::UamTxStatus status;
+          status.seq = msg->seq;
+          status.value = UamTxStatus::UTS_INV_ADDR;
+          dispatch(status);
           return;
+        }
 
-        // Serialize AcousticMessage.
-        IMC::AcousticMessage amsg;
-        amsg.setSource(getSystemId());
-        amsg.setSourceEntity(getEntityId());
-        amsg.setTimeStamp();
-        amsg.message.set(*msg);
+        if (m_transmission_end > Time::Clock::getSinceEpoch())
+        {
+          IMC::UamTxStatus status;
+          status.seq = msg->seq;
+          status.value = UamTxStatus::UTS_BUSY;
+          dispatch(status);
+          return;
+        }
 
-        size_t rv = IMC::Packet::serialize(&amsg, (uint8_t*)&m_bfr[0], (uint16_t)m_bfr.size());
+        m_ongoing = *msg;
+        m_transmission_end = Time::Clock::getSinceEpoch() + (msg->data.size() * 8.0) / m_args.bps;
 
-        debug("acoustic message to %s", msg->sys_dst.c_str());
+        // send position
+        sendMessage(&m_state);
+        // send frame
+        sendMessage(msg);
+      }
 
+      void sendMessage(const IMC::Message *msg)
+      {
+        size_t rv = IMC::Packet::serialize(msg, (uint8_t*)&m_bfr[0], (uint16_t)m_bfr.size());
         try
         {
           m_sock->write((const uint8_t*)&m_bfr[0], rv, m_args.addr, m_args.port);
@@ -143,33 +186,71 @@ namespace Simulators
       void
       readData(void)
       {
-        if (!Poll::poll(*m_sock, 1.0))
+        if (!Poll::poll(*m_sock, 0.1))
           return;
 
         size_t rv = m_sock->read(&m_bfr[0], m_bfr.size());
         IMC::Message* msg = IMC::Packet::deserialize((uint8_t*)&m_bfr[0], rv);
 
-        if (msg->getId() == DUNE_IMC_ACOUSTICMESSAGE)
+        if (msg->getId() == DUNE_IMC_ESTIMATEDSTATE)
         {
-          const IMC::AcousticMessage* am = static_cast<const IMC::AcousticMessage*>(msg);
-          const IMC::Message* m = am->message.get();
+          IMC::EstimatedState state = *(static_cast<const IMC::EstimatedState*>(msg));
+          m_states[state.getSource()] = state;
+        }
+        else if (msg->getId() == DUNE_IMC_UAMTXFRAME)
+        {
+          const IMC::UamTxFrame* m = static_cast<const IMC::UamTxFrame*>(msg);
+          debug("will receive acoustic frame from %s", m_ctx.resolver.resolve(msg->getSource()));
+          // Check if we are supposed to receive the message
+          if (m->getSource() == getSystemId() || (m->sys_dst != getSystemName() && m->sys_dst != "broadcast"))
+            return;
 
-          if (m->getId() == DUNE_IMC_UAMTXFRAME)
+          double distance = distanceTo(m->getSource());
+
+          // Process data.
+          IMC::UamRxFrame rx;
+          rx.sys_src = resolveSystemId(msg->getSource());
+          rx.sys_dst = getSystemName();
+          rx.data = m->data;
+
+          double transmission_time = (m->data.size() * 8.0) / (double)m_args.bps + (distance / m_args.sound_speed);
+          rx.setTimeStamp(Time::Clock::getSinceEpoch() + transmission_time);
+          m_incoming.push_back(rx);
+        }
+      }
+
+      double distanceTo(int sys)
+      {
+        if (m_states.find(sys) == m_states.end())
+          return 0;
+
+        double lat1, lat2, lon1, lon2;
+
+        lat1 = m_state.lat;
+        lon1 = m_state.lon;
+        WGS84::displace(m_state.x, m_state.y, &lat1, &lon1);
+
+        lat2 = m_states[sys].lat;
+        lon2 = m_states[sys].lon;
+        WGS84::displace(m_states[sys].x, m_states[sys].y, &lat2, &lon2);
+
+        return WGS84::distance(lat1, lon1, -m_state.depth, lat2, lon2, -m_states[sys].depth);
+      }
+
+      void
+      dispatchMessages()
+      {
+        std::list<IMC::UamRxFrame>::iterator it;
+        for (it = m_incoming.begin(); it != m_incoming.end();)
+        {
+          if (it->getTimeStamp() <= Time::Clock::getSinceEpoch())
           {
-            const IMC::UamTxFrame* frame = static_cast<const IMC::UamTxFrame*>(m);
-
-            // Check if we are the right destination
-            if (resolveSystemName(frame->sys_dst) != getSystemId())
-              return;
-
-            // Process data.
-            IMC::UamRxFrame rx;
-            rx.sys_src = resolveSystemId(msg->getSource());
-            rx.sys_dst = getSystemName();
-            rx.data = frame->data;
-            debug("received acoustic message from %s", rx.sys_src.c_str());
-            dispatch(rx);
+            debug("received acoustic frame from %s", m_ctx.resolver.resolve(it->getSource()));
+            dispatch(*it);
+            it = m_incoming.erase(it);
           }
+          else
+            it++;
         }
       }
 
@@ -180,7 +261,7 @@ namespace Simulators
         while (!stopping())
         {
           consumeMessages();
-
+          dispatchMessages();
           if (m_sock != NULL)
             readData();
         }
