@@ -67,16 +67,16 @@ namespace Actuators
         }
 
         void
-        SetPwmValue( double _value)
+        SetPwmValue(double value)
         {
-          m_value = _value;
+          m_value = value;
           m_update_angle = true;
         }
 
         bool
         CheckGPIOSate(void)
         {
-          if(m_gpio_state)
+          if (m_gpio_state)
             return true;
 
           return false;
@@ -89,7 +89,7 @@ namespace Actuators
           c_time_delayms = 19500;
           wdog_tout = 0.02;
           m_wdog.setTop(wdog_tout);
-          while(!inicServo( m_gpio ) && !isStopping())
+          while (!inicServo( m_gpio ) && !isStopping())
           {
             Delay::wait(1);
           }
@@ -100,7 +100,7 @@ namespace Actuators
           {
             if (m_refresh)
               refreshPWM(m_value);
-            else if(!m_refresh && m_update_angle)
+            else if (!m_refresh && m_update_angle)
               setAngleServomotor(m_value);
             else
               Delay::waitUsec(500);
@@ -109,7 +109,7 @@ namespace Actuators
 
         //!Set angle to servomotor
         void
-        setAngleServomotor( double angle )
+        setAngleServomotor(double angle)
         {
           m_gpio_state = true;
           int cntRefreshservo = 0;
@@ -125,17 +125,16 @@ namespace Actuators
           {
             if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
             {
-              m_task->err("ERROR PinOut %d", m_gpio);
+              m_task->err("PinOut %d", m_gpio);
               m_gpio_state = false;
             }
             strcpy(setValue, "1"); // Set value high
             fwrite(&setValue, sizeof(char), 1, myOutputHandle);
             fclose(myOutputHandle);
             Delay::waitUsec(valueUP);
-            // Set output to low
             if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
             {
-              m_task->err("ERROR PinOut %d", m_gpio);
+              m_task->err("PinOut %d", m_gpio);
               m_gpio_state = false;
             }
             strcpy(setValue, "0"); // Set value low
@@ -197,15 +196,15 @@ namespace Actuators
         }
 
         void
-        refreshPWM( double angle )
+        refreshPWM(double angle)
         {
           m_gpio_state = true;
           m_wdog.reset();
           degAngle = DUNE::Math::Angles::degrees(std::abs(angle));
 
-          if(degAngle < 0)
+          if (degAngle < 0)
             degAngle = 0;
-          if(degAngle > 180)
+          if (degAngle > 180)
             degAngle = 180;
 
           valueUP = (10 * degAngle) + 600;
@@ -219,7 +218,6 @@ namespace Actuators
           fwrite(&setValue, sizeof(char), 1, myOutputHandle);
           fclose(myOutputHandle);
           Delay::waitUsec(valueUP);
-          // Set output to low
           if ((myOutputHandle = fopen(GPIOValue, "rb+")) == NULL)
           {
             m_task->err("Unable to open value handle (%d)", m_gpio);
@@ -229,7 +227,7 @@ namespace Actuators
           fwrite(&setValue, sizeof(char), 1, myOutputHandle);
           fclose(myOutputHandle);
 
-          while(!m_wdog.overflow())
+          while (!m_wdog.overflow())
           {
             Delay::waitUsec(20);
           }
@@ -238,7 +236,7 @@ namespace Actuators
         //! Parent task.
         DUNE::Tasks::Task* m_task;
         //Handle of servo pinout
-        FILE *myOutputHandle;
+        FILE* myOutputHandle;
         //Mode in/out of pinout
         char setValue[4];
         char GPIODirection[64];

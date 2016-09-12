@@ -82,7 +82,7 @@ namespace Actuators
       m_servo_1(NULL),
       m_servo_2(NULL)
       {
-        for(unsigned int i = 0; i < c_max_pwm; ++i)
+        for (unsigned int i = 0; i < c_max_pwm; ++i)
         {
           std::string option = String::str("PinOut %u", i);
           param(option, m_args.port_io[i])
@@ -102,7 +102,7 @@ namespace Actuators
       onResourceInitialization(void)
       {
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-        if ( m_args.operation_mode == c_mode_operation[0])
+        if (m_args.operation_mode == c_mode_operation[0])
         {
           m_servo_0 = new ServoPwm(this, m_args.port_io[0], 1.308997, true);
           m_servo_0->start();
@@ -116,7 +116,7 @@ namespace Actuators
           m_servo_2->start();
           m_wrong_mode = false;
         }
-        else if (m_args.operation_mode == c_mode_operation[2])
+        else if(m_args.operation_mode == c_mode_operation[2])
         {
           m_servo_0 = new ServoPwm(this, m_args.port_io[0], 3.141593, false);
           m_servo_0->start();
@@ -127,7 +127,9 @@ namespace Actuators
           m_wrong_mode = false;
         }
         else
+        {
           m_wrong_mode = true;
+        }
       }
 
       //! Release resources.
@@ -162,29 +164,31 @@ namespace Actuators
         idServo = msg->id;
         if (!m_wrong_mode)
         {
-          if(idServo == 0)
+          if (idServo == 0)
           {
-            //war("SERVO 0: %f", valuePos);
             m_servo_0->SetPwmValue(valuePos);
-            if(!m_servo_0->CheckGPIOSate())
+            if (!m_servo_0->CheckGPIOSate())
+            {
               m_pwm_state = false;
+            }
           }
-          else if(idServo == 1)
+          else if (idServo == 1)
           {
-            //war("SERVO 1: %f", valuePos);
-              m_servo_1->SetPwmValue(valuePos);
+            m_servo_1->SetPwmValue(valuePos);
             if(!m_servo_1->CheckGPIOSate())
+            {
               m_pwm_state = false;
+            }
           }
-          else if(idServo == 2)
+          else if (idServo == 2)
           {
-            //war("SERVO 2: %f", valuePos);
             m_servo_2->SetPwmValue(valuePos);
             if(!m_servo_2->CheckGPIOSate())
+            {
               m_pwm_state = false;
+            }
           }
         }
-        else
 
         if (!m_pwm_state)
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
@@ -210,7 +214,7 @@ namespace Actuators
 
         while (!stopping())
         {
-          if(updateMsg)
+          if (updateMsg)
           {
             msgServoPos.value = valuePos;
             msgServoPos.id = idServo;
