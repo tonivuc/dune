@@ -36,6 +36,8 @@ namespace Maneuver
 
     //! Distance hysteresis to exit target range.
     static const float c_hyst = 3.0f;
+    //! Heading difference to add some little extra speed.
+    static const float c_yaw_diff = 10.0f;
 
     enum StateMachine
     {
@@ -266,10 +268,7 @@ namespace Maneuver
 
         setControl(IMC::CL_SPEED | IMC::CL_YAW | IMC::CL_DEPTH);
 
-        IMC::DesiredSpeed desired_speed;
-        desired_speed.value = m_speed;
-        desired_speed.speed_units = IMC::SUNITS_METERS_PS;
-        dispatch(desired_speed);
+        setSpeed();
 
         IMC::DesiredHeading desired_yaw;
         desired_yaw.value = m_status->heading;
@@ -280,6 +279,30 @@ namespace Maneuver
         desired_z.z_units = m_target->z_units;
         dispatch(desired_z);
       }
+
+      //! Set system speed.
+      void
+      setSpeed(void)
+      {
+        float extra = 0.0;
+
+        double lat, lon, bearing, range;
+        Coordinates::toWGS84(*m_estate, lat, lon);
+        WGS84::getNEBearingAndRange(lat, lon, m_status->lat, m_status->lon, &bearing, &range);
+
+        // compute bearing offset between desired heading and bearing to target.
+        double boffs = Angles::minSignedAngle(m_status->heading, bearing);
+
+        // only add extra speed if properly pointed towards target (in pursuit).
+        if (std::fabs(boffs) < Angles::radians(c_yaw_diff))
+          extra = range / m_args.radius / 2.0;
+
+        IMC::DesiredSpeed desired_speed;
+        desired_speed.value = m_speed + extra;
+        desired_speed.speed_units = IMC::SUNITS_METERS_PS;
+        dispatch(desired_speed);
+      }
+
     };
   }
 }
