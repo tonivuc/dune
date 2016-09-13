@@ -298,7 +298,7 @@ namespace Maneuver
           extra = range / m_args.radius / 2.0;
 
         IMC::DesiredSpeed desired_speed;
-        desired_speed.value = m_speed + extra;
+        desired_speed.value = std::min(m_speed + extra, m_target->max_speed);
         desired_speed.speed_units = IMC::SUNITS_METERS_PS;
         dispatch(desired_speed);
       }
