@@ -26,7 +26,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: ac6fc6f4b1f5c445991672dbda04723d                            *
+// IMC XML MD5: bac7f7a5d9c62afd31615a42391b48a0                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -428,6 +428,10 @@
 #define DUNE_IMC_TAKEOFF 491
 //! Land identification number.
 #define DUNE_IMC_LAND 492
+//! AutonomousSection identification number.
+#define DUNE_IMC_AUTONOMOUSSECTION 493
+//! FollowPoint identification number.
+#define DUNE_IMC_FOLLOWPOINT 494
 //! VehicleState identification number.
 #define DUNE_IMC_VEHICLESTATE 500
 //! VehicleCommand identification number.
@@ -602,5 +606,7 @@
 #define DUNE_IMC_OPTICALBACKSCATTER 904
 //! Tachograph identification number.
 #define DUNE_IMC_TACHOGRAPH 905
+//! ApmStatus identification number.
+#define DUNE_IMC_APMSTATUS 906
 
 #endif
