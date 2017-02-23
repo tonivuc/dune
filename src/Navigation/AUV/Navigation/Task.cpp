@@ -156,6 +156,8 @@ namespace Navigation
         float rpm_max;
         //! Heading bias uncertainty alignment threshold.
         double alignment_index;
+        //! Heading alignment sensor diff threshold
+        double alignment_diff;
         //! Abort if navigation exceeds maximum uncertainty.
         bool abort;
       };
@@ -238,6 +240,12 @@ namespace Navigation
           .minimumValue("1e-6")
           .maximumValue("1e-4")
           .description("Heading bias uncertainty alignment threshold");
+
+          param("Heading alignment sensor diff", m_args.alignment_diff)
+          .defaultValue("15")
+          .minimumValue("1")
+          .maximumValue("180")
+          .description("Heading alignment sensor diff threshold");
 
           param("Entity Label - IMU", m_args.elabel_imu)
           .description("Entity label of the IMU");
@@ -619,9 +627,10 @@ namespace Navigation
           m_kal.setState(STATE_K, k_lim);
 
           // Check alignment threshold index.
+          double diff_psi = std::abs( Angles::normalizeRadian(m_kal.getState(STATE_PSI)) - Angles::normalizeRadian(getEuler(AXIS_Z)) );
           if (m_dead_reckoning)
           {
-            if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index)
+            if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index &&  diff_psi < m_args.alignment_diff)
               m_aligned = true;
             else
               m_aligned = false;
