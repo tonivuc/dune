@@ -631,9 +631,18 @@ namespace Navigation
           if (m_dead_reckoning)
           {
             if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index &&  diff_psi < m_args.alignment_diff)
+            {
               m_aligned = true;
+            }
             else
-              m_aligned = false;
+            {
+              bool m_aligned_last = m_aligned;
+              m_aligned = false; 
+              if (m_aligned_last)
+              {
+                sendDeActiveIMU();
+              }
+            }
           }
 
           checkUncertainty(m_args.abort);
@@ -649,6 +658,19 @@ namespace Navigation
           m_valid_wv = false;
           resetKalman();
         }
+
+        void
+        sendDeActiveIMU(void)
+        {
+          IMC::EntityParameter p;
+          p.name = "Active";
+          p.value = "false";
+          IMC::SetEntityParameters msg;
+          msg.name = m_args.elabel_imu ;
+          msg.params.push_back(p);
+          dispatch(msg);
+        }
+
 
         // Reinitialize Extended Kalman Filter transition matrix function.
         void
