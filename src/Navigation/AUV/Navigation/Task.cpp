@@ -627,7 +627,8 @@ namespace Navigation
           m_kal.setState(STATE_K, k_lim);
 
           // Check alignment threshold index.
-          double diff_psi = std::abs(Angles::degrees( Angles::normalizeRadian(m_kal.getState(STATE_PSI)) - Angles::normalizeRadian(getEuler(AXIS_Z)) ));
+          double diff_psi = std::abs(Angles::degrees(Angles::normalizeRadian(Angles::normalizeRadian(m_kal.getState(STATE_PSI))
+                                                                             - Angles::normalizeRadian(getEuler(AXIS_Z)) )));
           if (m_dead_reckoning)
           {
             if (m_kal.getCovariance(STATE_PSI_BIAS) < m_args.alignment_index &&  diff_psi < m_args.alignment_diff)
