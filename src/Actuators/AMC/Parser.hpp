@@ -142,7 +142,7 @@ namespace Actuators
         {
           std::sscanf(m_bfr, "SI%d", &id);
           int state_motor;
-          std::sscanf(m_bfr, "SI%*d,S%d", &state_motor);
+          std::sscanf(m_bfr, "SI%*d,%d", &state_motor);
           m_motor.state[id] = (bool)state_motor;
           return true;
         }

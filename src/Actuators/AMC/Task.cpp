@@ -200,7 +200,14 @@ namespace Actuators
       onResourceAcquisition(void)
       {
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-        m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
+        try
+        {
+          m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
+        }
+        catch (std::runtime_error& e)
+        {
+          throw RestartNeeded(e.what(), 5);
+        }
       }
 
       //! Initialize resources.
@@ -235,6 +242,9 @@ namespace Actuators
       void
       consume(const IMC::SetThrusterActuation* msg)
       {
+        if (msg->getDestination() != getSystemId())
+          return;
+
         m_act[msg->id] = msg->value * c_max_value_motor;
       }
 
@@ -304,8 +314,7 @@ namespace Actuators
             readParameterAMC(i, STATE);
             cnt_rx = 0;
             m_fail_uart = 0;
-
-            while(cnt_rx < 10 && !stopping() && m_fail_uart < 4)
+            while(cnt_rx < 10 && !stopping() && m_fail_uart < 6)
             {
               if (m_poll.poll(0.2))
               {
@@ -337,7 +346,7 @@ namespace Actuators
           }
         }
 
-        if (m_fail_uart > 3)
+        if (m_fail_uart > 5)
         {
           err("%s", DTR(Status::getString(CODE_COM_ERROR)));
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
@@ -356,6 +365,11 @@ namespace Actuators
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }
+
+          if (cnt_war == 4)
+            err(DTR("ALL MOTORS ARE OFFLINE"));
+          else if (cnt_war == 0)
+            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
           return cnt_war;
         }
