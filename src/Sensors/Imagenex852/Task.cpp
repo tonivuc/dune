@@ -110,6 +110,8 @@ namespace Sensors
       bool surface;
       //! True to enable automatic activation/deactivation based on medium.
       bool auto_activation;
+      //! True to disable medium check
+      bool disable_medium_check;
     };
 
     //! Device uses this constant sound speed.
@@ -264,6 +266,12 @@ namespace Sensors
         .scope(Tasks::Parameter::SCOPE_IDLE)
         .description("Operator is able to control device");
 
+        param("Disable Medium Check", m_args.disable_medium_check)
+        .defaultValue("false")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_IDLE)
+        .description("Operator is able to control medium check");
+
         m_dist.validity = IMC::Distance::DV_VALID;
 
         // Filling constant Sonar Data.
@@ -380,9 +388,16 @@ namespace Sensors
       onDeactivation(void)
       {
         if (m_hand.isKnown())
+        {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        }
         else
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_NO_MEDIUM_IDLE);
+        {
+          if (m_args.disable_medium_check)
+            setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str("active (Medium Check Disable)"));
+          else
+            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_NO_MEDIUM_IDLE);
+        }
 
         m_trigger.setActive(false);
       }
@@ -405,7 +420,7 @@ namespace Sensors
       void
       consume(const IMC::VehicleMedium* msg)
       {
-        if (!m_args.auto_activation)
+        if (!m_args.auto_activation || m_args.disable_medium_check)
           return;
 
         m_hand.update(msg);
@@ -504,9 +519,16 @@ namespace Sensors
             }
 
             if (m_hand.isKnown())
+            {
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+            }
             else
-              setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_NO_MEDIUM_ACTIVE);
+            {
+              if (m_args.disable_medium_check)
+                setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str("active (Medium Check Disable)"));
+              else
+                setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_NO_MEDIUM_IDLE);
+            }
 
             m_wdog.reset();
           }
