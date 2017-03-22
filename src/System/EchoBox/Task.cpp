@@ -42,6 +42,10 @@ namespace System
   {
     using DUNE_NAMESPACES;
 
+    static const int c_default_request = 30;
+    static const int c_buffer_size = 32;
+    static const float c_delay_response = 4.0f;
+
     //! Task arguments.
     struct Arguments
     {
@@ -51,6 +55,10 @@ namespace System
       std::string path_config_time;
       //! Number to skip in read of config file time.
       int skip_lines;
+      //! Name of log time file
+      std::string log_file_name;
+      //!Time of cycle request
+      int cycle_request;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -67,6 +75,16 @@ namespace System
       std::ifstream m_file_time;
       //! File to save info of working time
       std::ofstream m_file_log_time;
+      //! state time to send message (for test)
+      Time::Counter<float> m_send_msg;
+      //! Acoustic operation message.
+      IMC::AcousticOperation m_amsg;
+      //! Text message to send.
+      IMC::TextMessage m_tmsg;
+      //! Value of last range of echosounder
+      float m_range_echosounder;
+      //! Buffer of text to send over acoustic
+      char m_text_send[c_buffer_size];
 
       //! Constructor.
       //! @param[in] name task name.
@@ -87,43 +105,51 @@ namespace System
         .minimumValue("0")
         .maximumValue("100")
         .description("Number Lines to Skip in config time file.");
-      }
 
-      //! Acquire resources.
-      void
-      onResourceAcquisition(void)
-      {
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        param("Name of Log Time", m_args.log_file_name)
+        .defaultValue("echobox_time_log.txt")
+        .description("Log File Name of working time.");
+
+        param("Time Cycle Request", m_args.cycle_request)
+        .defaultValue("30")
+        .minimumValue("30")
+        .description("Time Cycle Request in seconds.");
+
+        bind<IMC::TextMessage>(this);
+        bind<IMC::Distance>(this);
       }
 
       //! Initialize resources.
       void
       onResourceInitialization(void)
       {
-        Time::Delay::wait(1.0);
-        m_path_log = m_path_ctx.dir_log / getSystemName() / "echobox_time_log.txt";
-        m_path_cfg = m_path_ctx.dir_cfg / m_args.path_config_time;
-
-        if(file_exist(m_path_cfg.c_str()))
+        if(m_args.server_mode)
         {
-          if(file_exist(m_path_log.c_str()))
+          m_range_echosounder = 0;
+          m_path_log = m_path_ctx.dir_log / getSystemName() / m_args.log_file_name;
+          m_path_cfg = m_path_ctx.dir_cfg / m_args.path_config_time;
+
+          if(file_exist(m_path_cfg.c_str()))
           {
-            open_file(m_path_log.c_str(), false);
+            if(file_exist(m_path_log.c_str()))
+            {
+              open_file(m_path_log.c_str(), false);
+            }
+            else
+            {
+              war("File log not exists, creating new, zero config");
+              open_file(m_path_log.c_str(), false);
+            }
+
+            war("new time: %s", get_new_data_time().c_str());
+            m_file_log_time.close();
           }
           else
           {
-            war("File log not exists, creating new, zero config");
-            open_file(m_path_log.c_str(), false);
+            err("Config File not exists");
+            setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str("ERRO reading cfg time file"));
+            throw RestartNeeded("Config File not exists", 10);
           }
-
-          war("new time: %s", get_new_data_time().c_str());
-          m_file_log_time.close();
-        }
-        else
-        {
-          err("Config File not exists");
-          setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str("ERRO reading cfg time file"));
-          throw RestartNeeded("Config File not exists", 10);
         }
 
         debug("CFG  %s", m_path_cfg.c_str());
@@ -131,6 +157,17 @@ namespace System
         debug("ALL  %s", Time::Format::getTimeDate().c_str());
         debug("DATE %s", Time::Format::getDateSafe().c_str());
         debug("TIME %s", Time::Format::getTimeSafe().c_str());
+
+        if(m_args.cycle_request < c_default_request)
+        {
+          war("Minimum Value of Time Cycle is 30, Setting Minimum value.");
+          m_args.cycle_request = c_default_request;
+        }
+
+        m_send_msg.setTop(m_args.cycle_request);
+        m_send_msg.reset();
+
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
       }
 
       //! Release resources.
@@ -146,13 +183,45 @@ namespace System
         {}
       }
 
+      void
+      consume(const IMC::Distance* msg)
+      {
+        debug("EchoSounder range: %f", msg->value);
+        m_range_echosounder = msg->value;
+      }
+
+      void
+      consume(const IMC::TextMessage* msg)
+      {
+        debug("text message -> %d ( %s )", msg->getDestination(), msg->text.c_str());
+        if(m_args.server_mode)
+        {
+          Time::Delay::wait(c_delay_response);
+          inf("sending msg - server");
+          std::ostringstream text_msg;
+          text_msg << "$R#" << m_range_echosounder;
+          send_acoustic_msg("manta-12", text_msg.str());
+        }
+        else
+        {
+          memset(&m_text_send, '\0', sizeof(m_text_send));
+          strcpy(m_text_send, msg->text.c_str());
+          float range;
+          std::sscanf(m_text_send, "$R#%f", &range);
+
+          IMC::Distance msg_range;
+          msg_range.value = range;
+          dispatch(msg_range);
+        }
+      }
+
       std::string
       get_new_data_time(void)
       {
         std::string new_data;
         std::string line;
         int number_lines_log = get_number_lines(m_path_log.c_str());
-        int number_lines_cfg = get_number_lines(m_path_cfg.c_str()) - 30;
+        int number_lines_cfg = get_number_lines(m_path_cfg.c_str()) - m_args.skip_lines;
 
         open_file(m_path_cfg.c_str(), true);
 
@@ -162,7 +231,7 @@ namespace System
         if(number_lines_log == 0)
         {
           getline (m_file_time,line);
-          m_file_log_time << line.c_str() << std::endl;
+          m_file_log_time << line.c_str() << " at: " << Time::Format::getTimeDate().c_str() <<std::endl;
         }
         else if(number_lines_log < number_lines_cfg)
         {
@@ -170,13 +239,13 @@ namespace System
           {
             getline (m_file_time,line);
             if(i == number_lines_log)
-              m_file_log_time << line.c_str() << std::endl;
+              m_file_log_time << line.c_str() << " at: " << Time::Format::getTimeDate().c_str() <<std::endl;
           }
         }
         else
         {
-          war("now new data in cfg file, adding clock info");
-          m_file_log_time << Time::Format::getTimeDate().c_str() << std::endl;
+          war("no new data in cfg file, adding clock info");
+          m_file_log_time << Time::Format::getTimeDate().c_str() << " at: " << Time::Format::getTimeDate().c_str() <<std::endl;
           return Time::Format::getTimeDate().c_str();
         }
 
@@ -231,6 +300,18 @@ namespace System
         return false;
       }
 
+      void
+      send_acoustic_msg(std::string system_name, std::string msg)
+      {
+        m_amsg.op = IMC::AcousticOperation::AOP_MSG;
+        m_amsg.system = system_name;
+        m_tmsg.text = msg;
+        m_amsg.msg.set(m_tmsg);
+        m_amsg.setDestination(getSystemId());
+        dispatch(m_amsg);
+        dispatch(m_tmsg);
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -238,8 +319,18 @@ namespace System
         while (!stopping())
         {
           waitForMessages(1.0);
-          /*Time::Delay::wait(5.0);
-          throw RestartNeeded("for test", 2);*/
+
+          if(m_send_msg.overflow())
+          {
+            m_send_msg.reset();
+
+            if(!m_args.server_mode)
+            {
+              inf("sending msg - client");
+              std::string test_msg = "$R@";
+              send_acoustic_msg("echobox", test_msg);
+            }
+          }
         }
       }
     };
