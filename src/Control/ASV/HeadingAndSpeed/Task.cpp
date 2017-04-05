@@ -317,6 +317,7 @@ namespace Control
             m_act[i].value = 0.0;
             m_last_act[i].id = i;
             m_last_act[i].value = 0.0;
+            m_act[i].setDestination(getSystemId());
             dispatch(m_act[i]);
           }
         }
