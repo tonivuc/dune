@@ -74,7 +74,9 @@ namespace Control
 
           // Initialize SetThrusterActuation messages.
           m_thrust[0].id = 0;
+          m_thrust[0].setDestination(getSystemId());
           m_thrust[1].id = 1;
+          m_thrust[1].setDestination(getSystemId());
           m_speed = m_heading = 0;
         }
 
