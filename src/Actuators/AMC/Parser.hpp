@@ -112,7 +112,7 @@ namespace Actuators
           case PS_CS:
             m_amc_state = PS_PREAMBLE;
 
-            if (m_csum == byte)
+            if ((m_csum | 0x80) == byte)
               return true;
             break;
 
@@ -129,21 +129,24 @@ namespace Actuators
       translate(void)
       {
         int id;
-
         if (m_bfr[0] == c_all_data)
         {
-          std::sscanf(m_bfr, "AI%d", &id);
-          std::sscanf(m_bfr, "AI%*d,R%d,T%f,V%f,C%f",
+          std::sscanf(m_bfr, "A,I%d", &id);
+          std::sscanf(m_bfr, "A,I%*d,R%d,T%f,V%f,C%f,*",
                       &m_motor.rpm[id],&m_motor.tmp[id],
                       &m_motor.volt[id], &m_motor.current[id]);
+
+          std::memset(&m_bfr, '\0', sizeof(m_bfr));
+
           return true;
         }
         else if (m_bfr[0] == c_state_motor)
         {
-          std::sscanf(m_bfr, "SI%d", &id);
+          std::sscanf(m_bfr, "S,I%d", &id);
           int state_motor;
-          std::sscanf(m_bfr, "SI%*d,%d", &state_motor);
+          std::sscanf(m_bfr, "S,I%*d,%d,*", &state_motor);
           m_motor.state[id] = (bool)state_motor;
+
           return true;
         }
 
