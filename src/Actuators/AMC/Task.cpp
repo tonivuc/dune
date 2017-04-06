@@ -47,10 +47,10 @@ namespace Actuators
     static const unsigned int c_max_motors = 4;
     static const unsigned int c_max_buffer = 32;
     static const unsigned int c_numb_motor_id = 2;
-    static const float c_time_check_motor = 0.5f;
+    static const float c_time_check_motor_data = 0.5f;
     static const float c_time_check_motor_connection = 2.0f;
     static const unsigned int c_sleep_time = 25000;
-    static const unsigned int c_number_attempts_uart = 2;
+    static const unsigned int c_number_attempts_uart = 3;
 
     enum AmcMessages
     {
@@ -242,7 +242,7 @@ namespace Actuators
         for(uint8_t i = 0; i < c_max_motors; i++)
           m_fail_uart[i] = 0;
 
-        m_cnt_motor_check.setTop(c_time_check_motor);
+        m_cnt_motor_check.setTop(c_time_check_motor_data);
         m_cnt_motor_check_connection.setTop(c_time_check_motor_connection);
       }
 
@@ -324,7 +324,7 @@ namespace Actuators
             m_fail_uart[i] = 0;
             while(cnt_rx < 10 && !stopping() && m_fail_uart[i] <= c_number_attempts_uart)
             {
-              if (m_poll.poll(0.4))
+              if (m_poll.poll(0.2))
               {
                 if (checkSerialPort())
                 {
@@ -338,6 +338,8 @@ namespace Actuators
                 m_fail_uart[i]++;
               }
             }
+
+            m_uart->flush();
           }
         }
 
@@ -394,7 +396,7 @@ namespace Actuators
 
         while (!checkEnd && !stopping() && jump_read_uart <= c_number_attempts_uart)
         {
-          if (m_poll.poll(0.4))
+          if (m_poll.poll(0.2))
           {
             if (checkSerialPort())
               checkEnd = m_parse->translate();
@@ -408,8 +410,9 @@ namespace Actuators
         if (jump_read_uart <= c_number_attempts_uart)
         {
           dispatchAllData(id_motor);
-          m_uart->flush();
         }
+
+        m_uart->flush();
       }
 
       //! Stop all motors
@@ -512,10 +515,11 @@ namespace Actuators
           }
           m_cnt_motor_check.reset();
         }
-
-        if (m_cnt_motor_check_connection.overflow())
+        else if (m_cnt_motor_check_connection.overflow())
         {
-          checkStateMotor(true);
+          if(checkStateMotor(false) != 0)
+            checkStateMotor(true);
+
           m_cnt_motor_check_connection.reset();
         }
       }
