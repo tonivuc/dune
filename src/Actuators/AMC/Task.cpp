@@ -196,6 +196,20 @@ namespace Actuators
         }
       }
 
+      //! Release resources.
+      void
+      onResourceRelease(void)
+      {
+        if (m_uart != NULL)
+        {
+          m_poll.remove(*m_uart);
+          delete m_uart;
+          m_uart = NULL;
+
+          Memory::clear(m_parse);
+        }
+      }
+
       //! Acquire resources.
       void
       onResourceAcquisition(void)
@@ -218,6 +232,7 @@ namespace Actuators
         m_parse = new Parser();
         m_poll.add(*m_uart);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+        Delay::waitMsec(2000);
         checkStateMotor(true);
         stopAllMotor();
         m_cnt_motor = 0;
@@ -226,20 +241,6 @@ namespace Actuators
 
         m_cnt_motor_check.setTop(c_time_check_motor);
         m_cnt_motor_check_connection.setTop(c_time_check_motor_connection);
-      }
-
-      //! Release resources.
-      void
-      onResourceRelease(void)
-      {
-        if (m_uart != NULL)
-        {
-          m_poll.remove(*m_uart);
-          delete m_uart;
-          m_uart = NULL;
-        }
-
-        Memory::clear(m_parse);
       }
 
       //! Consume message IMC::SetThrusterActuation
@@ -366,7 +367,7 @@ namespace Actuators
           else
           {
             if (spew_ok)
-              war(DTR("ALL MOTORS OK"));
+              inf(DTR("ALL MOTORS OK"));
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           }
@@ -500,7 +501,7 @@ namespace Actuators
 
         if (m_cnt_motor_check.overflow())
         {
-          for (uint8_t i = 0; i <= c_max_motors; i++)
+          for (uint8_t i = 0; i < c_max_motors; i++)
           {
             // Read values of active motor.
             if (m_parse->m_motor.state[i] && m_args.motor_state[i])
