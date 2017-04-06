@@ -48,7 +48,7 @@ namespace Actuators
     static const unsigned int c_max_buffer = 32;
     static const unsigned int c_numb_motor_id = 2;
     static const float c_time_check_motor = 0.5f;
-    static const float c_time_check_motor_connection = 10.0f;
+    static const float c_time_check_motor_connection = 2.0f;
     static const unsigned int c_sleep_time = 25000;
     static const unsigned int c_number_attempts_uart = 2;
 
@@ -112,6 +112,8 @@ namespace Actuators
       Time::Counter<float> m_cnt_motor_check_connection;
       //! Read timestamp.
       double m_tstamp;
+      //! Flag of all motors ok
+      bool m_all_motors_ok;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -229,6 +231,7 @@ namespace Actuators
       void
       onResourceInitialization(void)
       {
+        m_all_motors_ok = false;
         m_parse = new Parser();
         m_poll.add(*m_uart);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
@@ -321,7 +324,7 @@ namespace Actuators
             m_fail_uart[i] = 0;
             while(cnt_rx < 10 && !stopping() && m_fail_uart[i] <= c_number_attempts_uart)
             {
-              if (m_poll.poll(0.1))
+              if (m_poll.poll(0.4))
               {
                 if (checkSerialPort())
                 {
@@ -354,8 +357,9 @@ namespace Actuators
         if (m_fail_uart[0] >= c_number_attempts_uart && m_fail_uart[1] >= c_number_attempts_uart && m_fail_uart[2] >= c_number_attempts_uart && m_fail_uart[3] >= c_number_attempts_uart)
         {
           err("%s", DTR(Status::getString(CODE_COM_ERROR)));
-          err(DTR("ALL MOTORS ARE OFFLINE"));
+          err(DTR("All Motors are Offline"));
           setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("All Motors are Offline")));
+          m_all_motors_ok = false;
           return -1;
         }
         else
@@ -363,17 +367,16 @@ namespace Actuators
           if (cnt_war > 0)
           {
             setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR("AMC Motor ERROR")));
+            m_all_motors_ok = false;
           }
           else
           {
-            if (spew_ok)
-              inf(DTR("ALL MOTORS OK"));
+            if (spew_ok && !m_all_motors_ok)
+              inf(DTR("All Motors ok"));
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+            m_all_motors_ok = true;
           }
-
-          if (cnt_war == 0)
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
 
           return cnt_war;
         }
@@ -391,7 +394,7 @@ namespace Actuators
 
         while (!checkEnd && !stopping() && jump_read_uart <= c_number_attempts_uart)
         {
-          if (m_poll.poll(0.1))
+          if (m_poll.poll(0.4))
           {
             if (checkSerialPort())
               checkEnd = m_parse->translate();
