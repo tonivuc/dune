@@ -353,6 +353,7 @@ namespace Actuators
               war(DTR("AMC Motor %d - ERROR"), i);
 
             cnt_war++;
+            m_all_motors_ok = false;
           }
         }
 
@@ -373,7 +374,7 @@ namespace Actuators
           }
           else
           {
-            if (spew_ok && !m_all_motors_ok)
+            if (!m_all_motors_ok)
               inf(DTR("All Motors ok"));
 
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
