@@ -44,7 +44,7 @@ namespace Vision
   {
     static const int c_number_of_chessboard = 9;
     static const int c_number_of_frames = 1;
-    static const CvSize c_image_size = Size(640, 360);
+    static const CvSize c_image_size = Size(320, 180);
 
     class StereoMatch
     {
@@ -232,7 +232,9 @@ namespace Vision
             return true;
           }
           else
+          {
             return false;
+          }
         }
 
         coordImage
