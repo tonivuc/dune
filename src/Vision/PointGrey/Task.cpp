@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2016 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2017 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -28,59 +28,133 @@
 // ISO C++ 98 headers.
 #include <queue>
 #include <cstring>
+#include <string>
+#include <iostream>
+#include <cassert>
+#include <stdexcept>
+#include <stdio.h>
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
-//OpenCV headers
-#include <opencv2/opencv.hpp>
-
 //FlyCapture headers
-#include <FlyCapture2.h>
+#include <flycapture/FlyCapture2.h>
+
+#include <exiv2/exiv2.hpp>
+
+#include <Vision/PointGrey/SaveImage.hpp>
 
 namespace Vision
 {
   namespace PointGrey
   {
-    #define SOFTWARE_TRIGGER_CAMERA
-    const int col_size   = 640;
-    const int row_size   = 480;
-    const int data_size  = row_size * col_size;
-
     using DUNE_NAMESPACES;
-    using namespace cv;
+
+    static const int c_number_task_thread = 8;
+    static const int c_time_to_release_cached_ram = 60;
+    static const float c_time_to_release_camera = 5.0;
+    static const float c_time_to_update_cnt_info = 3.0;
 
     //! %Task arguments.
     struct Arguments
     {
       //! LED scheme.
       std::string led_type;
+      //! Copyright Image
+      std::string copyright;
+      //! Lens Model
+      std::string lens_model;
+      //! Lens Maker
+      std::string lens_maker;
+      //! Saved Image Dir
+      std::string save_image_dir;
+      //! Number of frames/s
+      int number_fs;
     };
 
     //! Device driver task.
     struct Task: public DUNE::Tasks::Task
     {
-      //! HTTP camera port
-      static const unsigned c_port = 80;
       //! Configuration parameters
       Arguments m_args;
-      FlyCapture2::Camera cam;
-      FlyCapture2::CameraInfo camInfo;
-      FlyCapture2::Error error;
-      FlyCapture2::BusManager busMgr;
-      FlyCapture2::PGRGuid guid;
-      FlyCapture2::Format7PacketInfo fmt7PacketInfo;
-      FlyCapture2::Format7ImageSettings fmt7ImageSettings;
-      CvMemStorage* storage = NULL;
-      IplImage* img = NULL;
-      IplImage* img_bw = NULL;
-      FlyCapture2::TriggerMode triggerMode;
+      //!
+      FlyCapture2::Camera m_camera;
+      //!
+      FlyCapture2::CameraInfo m_camInfo;
+      //!
+      FlyCapture2::Error m_error;
+      //!
+      FlyCapture2::Image m_rawImage;
+      //!
+      FlyCapture2::Image m_rgbImage;
+      //!
+      int m_lat_deg;
+      //!
+      int m_lat_min;
+      //!
+      double m_lat_sec;
+      //!
+      int m_lon_deg;
+      //!
+      int m_lon_min;
+      //!
+      double m_lon_sec;
+      //!
+      char m_text_exif_timestamp[16];
+      //!
+      std::string m_back_epoch;
+      //!
+      std::string m_back_time;
+      //!
+      std::string m_path_image;
+      //!
+      std::string m_back_path_image;
+      //!
+      Path m_log_dir;
+      //!
+      Time::Counter<float> m_cnt_test;
+      //!
+      Time::Counter<float> m_clean_cached_ram;
+      //!
+      Time::Counter<float> m_update_cnt_frames;
+      //!
+      int m_thread_cnt;
+      //!
+      long unsigned int m_frame_cnt;
+      //!
+      SaveImage *m_save[c_number_task_thread];
+      //!
+      std::string m_note_comment;
 
       Task(const std::string& name, Tasks::Context& ctx):
-        Tasks::Task(name, ctx)
+        Tasks::Task(name, ctx),
+        m_log_dir(ctx.dir_log)
       {
-    	param("Led Mode", m_args.led_type)
+        param("Led Mode", m_args.led_type)
     	  .description("Led type mode.");
+
+        param("Copyright", m_args.copyright)
+        .description("Copyright of Image.");
+
+        param("Lens Model", m_args.lens_model)
+        .description("Lens Model of camera.");
+
+        param("Lens Make", m_args.lens_maker)
+        .description("Lens builder/maker.");
+
+        param("Saved Images Dir", m_args.save_image_dir)
+        .defaultValue("Photos")
+        .description("Saved Images Dir.");
+
+        param("Number Frames/s", m_args.number_fs)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("4")
+        .minimumValue("1")
+        .maximumValue("6")
+        .description("Number Frames/s.");
+
+        bind<IMC::EstimatedState>(this);
+        bind<IMC::LoggingControl>(this);
       }
 
       void
@@ -89,33 +163,125 @@ namespace Vision
       }
 
       void
-      onResourceAcquisition(void)
+      onResourceInitialization(void)
       {
+        set_cpu_governor();
+
+        if(m_args.number_fs > 0 && m_args.number_fs <= 6)
+          m_cnt_test.setTop((1.0/m_args.number_fs));
+        else
+          m_cnt_test.setTop(0.5);
+
+        m_thread_cnt = 0;
+        m_frame_cnt = 0;
+
+        char text[8];
+        for(int i = 0; i < c_number_task_thread; i++)
+        {
+          sprintf(text, "thr%d", i);
+          m_save[i] = new SaveImage(this, text);
+          m_save[i]->start();
+        }
+
+        m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
+        m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
       }
 
       void
       onResourceRelease(void)
       {
+        Delay::wait(c_time_to_release_camera);
+
+        for(int i = 0; i < c_number_task_thread; i++)
+        {
+          if (m_save[i] != NULL)
+          {
+            m_save[i]->stopAndJoin();
+            delete m_save[i];
+            m_save[i] = NULL;
+          }
+        }
+
+        if(m_camera.IsConnected())
+        {
+          m_error = m_camera.StopCapture();
+          if ( m_error != FlyCapture2::PGRERROR_OK )
+            err("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
+          m_error = m_camera.Disconnect();
+          if ( m_error != FlyCapture2::PGRERROR_OK )
+            err("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+        }
       }
 
       void
-      onRequestActivation(void)
+      consume(const IMC::LoggingControl* msg)
       {
+        if(msg->getSource() != getSystemId())
+          return;
+
+        if (msg->op == IMC::LoggingControl::COP_STARTED)
+        {
+          m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+          m_back_path_image = m_log_dir.c_str();
+          m_log_dir.create();
+        }
       }
 
+      //! Consume message IMC::GpsFix
       void
-      onRequestDeactivation(void)
+      consume(const IMC::EstimatedState* msg)
       {
+        if(msg->getSource() != getSystemId())
+          return;
+
+        Angles::convertDecimalToDMS(Angles::degrees(msg->lat), m_lat_deg, m_lat_min, m_lat_sec);
+        Angles::convertDecimalToDMS(Angles::degrees(msg->lon), m_lon_deg, m_lon_min, m_lon_sec);
+        m_note_comment = "Depth: "+to_string(msg->depth)+" m # Altitude: "+to_string(msg->alt)+" m";
       }
 
-      void
-      onActivation(void)
+      int
+      set_cpu_governor(void)
       {
-      }
+        char buffer[16];
+        char governor[16];
+        std::string result = "";
+        FILE* pipe = popen("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r");
+        if (!pipe)
+        {
+          err("popen() failed!");
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
+        }
+        else
+        {
+          std::memset(&buffer, '\0', sizeof(buffer));
+          try
+          {
+            while (!feof(pipe))
+            {
+              if (fgets(buffer, sizeof(buffer), pipe) != NULL)
+                result += buffer;
+            }
+          }
+          catch (...)
+          {
+            pclose(pipe);
+            throw;
+          }
+          pclose(pipe);
+          std::sscanf(buffer, "%s", governor);
+          if( std::strcmp(governor, "ondemand") == 0)
+          {
+            inf("CPU governor is already ondemand");
+          }
+          else
+          {
+            war("CPU governor is not in ondemand, setting to ondemand");
+            return std::system("echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+          }
+        }
 
-      void
-      onDeactivation(void)
-      {
+        return -1;
       }
 
       void
@@ -137,338 +303,245 @@ namespace Vision
         }
       }
 
+      // Check for the presence of feature
       bool
-      capture(void)
+      checkValueOfCamera( FlyCapture2::Camera* pCam , unsigned int feature, bool isFeature)
       {
-        // Create OpenCV structs for grayscale image
-        img = cvCreateImage(cvSize(col_size, row_size), IPL_DEPTH_8U, 1);
-        img_bw = cvCloneImage(img);
-
-        storage = cvCreateMemStorage(0);
-
-        // Get Flea2 camera
-        error = busMgr.GetCameraFromIndex(0, &guid);
-
-        if (error != FlyCapture2::PGRERROR_OK)
+        FlyCapture2::Error error2;
+        unsigned int regVal = 0;
+        error2 = pCam->ReadRegister( feature, &regVal );
+        if ( error2 != FlyCapture2::PGRERROR_OK )
         {
-          PrintError(error);
+          err("erro reading feature: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
 
-        // Connect to the camera
-        error = cam.Connect(&guid);
-        if (error != FlyCapture2::PGRERROR_OK)
+        if(isFeature)
         {
-          PrintError(error);
-          return false;
-        }
-
-        // Get camera information
-        error = cam.GetCameraInfo(&camInfo);
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Get current trigger settings
-        error = cam.GetTriggerMode(&triggerMode);
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Set camera to trigger mode 0
-        triggerMode.onOff = true;
-        triggerMode.mode = 0;
-        triggerMode.parameter = 0;
-        // A source of 7 means software trigger
-        triggerMode.source = 7;
-
-        // Set camera triggering mode
-        error = cam.SetTriggerMode(&triggerMode);
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Power on the camera
-        const unsigned int k_cameraPower = 0x610;
-        const unsigned int k_powerVal = 0x80000000;
-        error = cam.WriteRegister(k_cameraPower, k_powerVal);
-
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Poll to ensure camera is ready
-        bool retVal = PollForTriggerReady(&cam);
-        if (!retVal)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Set camera configuration: region of 24 x 480 pixels
-        // greyscale image mode
-        fmt7ImageSettings.width = col_size;
-        fmt7ImageSettings.height = row_size;
-        fmt7ImageSettings.mode = FlyCapture2::MODE_0;
-        fmt7ImageSettings.offsetX = 312;
-        fmt7ImageSettings.offsetY = 0;
-        fmt7ImageSettings.pixelFormat = FlyCapture2::PIXEL_FORMAT_MONO8;
-
-        // Validate Format 7 settings
-        bool valid;
-        error = cam.ValidateFormat7Settings(&fmt7ImageSettings, &valid, &fmt7PacketInfo);
-        unsigned int num_bytes = fmt7PacketInfo.recommendedBytesPerPacket;
-
-        // Set Format 7 (partial image mode) settings
-        error = cam.SetFormat7Configuration(&fmt7ImageSettings, num_bytes);
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Start capturing images
-        error = cam.StartCapture();
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        if (!CheckSoftwareTriggerPresence(&cam))
-        {
-          err("SOFT_ASYNC_TRIGGER not implemented on this camera! Stopping application\n");
-          return false;
-        }
-
-        error = cam.StartCapture();
-
-        // Warm up - necessary to get decent images.
-        // See Flea2 Technical Ref.: camera will typically not
-        // send first 2 images acquired after power-up
-        // It may therefore take several (n) images to get
-        // satisfactory image, where n is undefined
-        for (int i = 0; i < 30; i++)
-        {
-          // Check that the trigger is ready
-          PollForTriggerReady(&cam);
-
-          // Fire software trigger
-          FireSoftwareTrigger(&cam);
-
-          FlyCapture2::Image im;
-
-          // Retrieve image before starting main loop
-          FlyCapture2::Error error2 = cam.RetrieveBuffer(&im);
-          if (error2 != FlyCapture2::PGRERROR_OK)
+          if( ( regVal & 0x10000 ) != 0x10000 )
           {
-            PrintError(error2);
+            war("Feature not present.");
+            inf("Value: %u", regVal);
             return false;
           }
+          else
+          {
+            war("Feature present.");
+            inf("Value: %u", regVal);
+          }
         }
-
-        if (!CheckSoftwareTriggerPresence(&cam))
+        else
         {
-          err("SOFT_ASYNC_TRIGGER not implemented on this camera! Stopping application\n");
-          return false;
+          inf("Value: %u", regVal);
         }
 
-        // Grab images acc. to number of hw/sw trigger events
-        for (int i = 0; i < 25; i++)
-        {
-          GrabImages(&cam, img, img_bw, i);
-        }
-
-        // Turn trigger mode off.
-        triggerMode.onOff = false;
-        error = cam.SetTriggerMode(&triggerMode);
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        war("\nFinished grabbing images\n");
-
-        // Stop capturing images error = cam.StopCapture();
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        // Disconnect the camera
-        error = cam.Disconnect();
-        if (error != FlyCapture2::PGRERROR_OK)
-        {
-          PrintError(error);
-          return false;
-        }
-
-        ReleaseImage(img, img_bw, storage);
         return true;
       }
 
-      // Print error trace
-      void PrintError( FlyCapture2::Error error2 )
+      void
+      getInfoCamera(void)
       {
-          error2.PrintErrorTrace();
+        debug("Vendor Name: %s", m_camInfo.vendorName);
+        debug("Model Name: %s", m_camInfo.modelName);
+        debug("Serial Number: %d", m_camInfo.serialNumber);
+        debug("Sensor Info: %s", m_camInfo.sensorInfo);
+        debug("Sensor Resolution: %s", m_camInfo.sensorResolution);
+        debug("Firmware Version: %s", m_camInfo.firmwareVersion);
+        debug("copyright: %s", m_args.copyright.c_str());
+        debug("Lens Model: %s", m_args.lens_model.c_str());
+        debug("Lens Maker: %s", m_args.lens_maker.c_str());
       }
 
-      // Check for the presence of software trigger
-      bool CheckSoftwareTriggerPresence( FlyCapture2::Camera* pCam )
+      bool
+      setUpCamera(void)
       {
-          const unsigned int k_triggerInq = 0x530;
-          FlyCapture2::Error error2;
-          unsigned int regVal = 0;
-          error2 = pCam->ReadRegister( k_triggerInq, &regVal );
-          if ( error2 != FlyCapture2::PGRERROR_OK )
-          {
-              // TODO
-          }
+        inf("Initialization of Camera");
+        // Connect the camera
+        m_error = m_camera.Connect( 0 );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to connect to camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
 
-          if( ( regVal & 0x10000 ) != 0x10000 )
-          {
-              return false;
-          }
+        // Get the camera info and print it out
+        m_error = m_camera.GetCameraInfo( &m_camInfo );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to get camera info from camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
 
-          return true;
+        m_error = m_camera.StartCapture();
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to start image capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
+
+        //const unsigned int k_triggerInq = 0x530;
+        //checkValueOfCamera(&camera, 0x530, true);
+
+        //set IO1 (4) Output
+        /*error = camera.WriteRegister( 0x1110, 0x80080001 );
+                if ( error != FlyCapture2::PGRERROR_OK )
+                  err("erro writing");*/
+        m_error = m_camera.WriteRegister( 0x1120, 0x80080001 );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+          err("erro writing");
+
+        //current gpio config
+        /*checkValueOfCamera(&camera, 0x1110, false);
+                checkValueOfCamera(&camera, 0x1120, false);
+                checkValueOfCamera(&camera, 0x11F8, false);*/
+
+        getInfoCamera();
+        inf("Camera ready.");
+        return true;
       }
 
-      // Start polling for trigger ready
-      bool PollForTriggerReady( FlyCapture2::Camera* pCam )
+      bool
+      getImage(void)
       {
-          unsigned int k_softwareTrigger = 0x62C;
-          FlyCapture2::Error error2;
-          unsigned int regVal = 0;
+        bool result = false;
+        saveInfoExif();
+        m_error = m_camera.RetrieveBuffer( &m_rawImage );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("capture error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
+        // convert to rgb
+        m_error = m_rawImage.Convert( FlyCapture2::PIXEL_FORMAT_BGR, &m_rgbImage );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("convert error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
 
-          do
-          {
-              error2 = pCam->ReadRegister( k_softwareTrigger, &regVal );
+        debug("Size Image Capture: %u x %u", m_rgbImage.GetCols(), m_rgbImage.GetRows());
 
-              if ( error2!= FlyCapture2::PGRERROR_OK )
-              {
-                  // TODO
-              }
-          } while ( (regVal >> 31) != 0 );
+        m_path_image = m_back_path_image.c_str();
+        m_path_image.append("/");
+        m_path_image.append(m_back_epoch);
+        m_path_image.append(".jpg");
 
-          return true;
+        result = m_save[m_thread_cnt]->saveNewImage(m_rgbImage, m_path_image);
+
+        m_thread_cnt++;
+        if(m_thread_cnt >= c_number_task_thread)
+          m_thread_cnt = 0;
+
+        m_rgbImage.ReleaseBuffer();
+        m_rawImage.ReleaseBuffer();
+
+        return result;
       }
 
-      // Launch the software trigger event
-      bool FireSoftwareTrigger( FlyCapture2::Camera* pCam )
+      int
+      releaseRamCached(void)
       {
-          const unsigned int k_softwareTrigger = 0x62C;
-          const unsigned int k_fireVal = 0x80000000;
-          FlyCapture2::Error error2;
-
-          error2 = pCam->WriteRegister( k_softwareTrigger, k_fireVal );
-
-          if ( error2 != FlyCapture2::PGRERROR_OK )
-          {
-              // TODO
-          }
-
-          return true;
+        debug("Releasing ram cached.");
+        return std::system("echo 3 > /proc/sys/vm/drop_caches");
       }
 
-      // Tidy up memory allocated for images etc
-      void ReleaseImage( IplImage* pimg, IplImage* pimg_bw, CvMemStorage* pstorage )
+      void
+      saveInfoExif(void)
       {
-          cvReleaseImage( &pimg );
-          cvReleaseImage( &pimg_bw );
-          cvClearMemStorage( pstorage );
+        std::memset(&m_text_exif_timestamp, '\0', sizeof(m_text_exif_timestamp));
+        std::sprintf(m_text_exif_timestamp, "%0.4f", Clock::getSinceEpoch());
+        m_back_epoch = m_text_exif_timestamp;
+
+        m_save[m_thread_cnt]->m_exif_data.lat_deg = m_lat_deg;
+        m_save[m_thread_cnt]->m_exif_data.lat_min = m_lat_min;
+        m_save[m_thread_cnt]->m_exif_data.lat_sec = m_lat_sec;
+        m_save[m_thread_cnt]->m_exif_data.lon_deg = m_lon_deg;
+        m_save[m_thread_cnt]->m_exif_data.lon_min = m_lon_min;
+        m_save[m_thread_cnt]->m_exif_data.lon_sec = m_lon_sec;
+        m_save[m_thread_cnt]->m_exif_data.date_time_original = Time::Format::getTimeDate().c_str();
+        m_save[m_thread_cnt]->m_exif_data.date_time_digitized = m_back_epoch.c_str();
+        m_save[m_thread_cnt]->m_exif_data.make = m_camInfo.vendorName;
+        m_save[m_thread_cnt]->m_exif_data.model = m_camInfo.modelName;
+        m_save[m_thread_cnt]->m_exif_data.lens_make = m_args.lens_maker.c_str();
+        m_save[m_thread_cnt]->m_exif_data.lens_model = m_args.lens_model.c_str();
+        m_save[m_thread_cnt]->m_exif_data.copyright = m_args.copyright.c_str();
+        m_save[m_thread_cnt]->m_exif_data.artist = getSystemName();
+        m_save[m_thread_cnt]->m_exif_data.notes = m_note_comment.c_str();
       }
 
-      // Grab camera grayscale image and convert into
-      // an OpenCV image
-      void GrabImages( FlyCapture2::Camera* pcam, IplImage* pimg, IplImage* pimg_bw, int cnt )
+      template <class T>
+      inline std::string to_string (const T& t)
       {
-        FlyCapture2::Image image;
-
-          #ifdef SOFTWARE_TRIGGER_CAMERA
-
-          // Check that the trigger is ready
-          PollForTriggerReady( pcam );
-
-          printf( "Press Enter to initiate software trigger.\n" );
-
-          getchar();
-
-          // Fire software trigger
-          bool retVal = FireSoftwareTrigger( pcam );
-
-          if ( !retVal )
-          {
-              // TODO.
-          }
-
-          #endif
-
-          // Retrieve image before starting main loop
-          FlyCapture2::Error error2 = pcam->RetrieveBuffer( &image );
-
-          if ( error2 != FlyCapture2::PGRERROR_OK )
-          {
-              // TODO.
-          }
-
-          // Copy FlyCapture2 image into OpenCV struct
-          memcpy( pimg->imageData,
-          image.GetData(),
-          data_size );
-
-          char buffer[ 20 ];
-          sprintf( buffer, "%d", cnt );
-
-
-          std::string mess_ori = "original_";
-          mess_ori.append( buffer );
-          mess_ori.append( ".bmp" );
-          // Save the bitmap to file
-          cvSaveImage( mess_ori.c_str() , pimg );
-
-
-          // Threshold to convert image into binary (B&W)
-          cvThreshold( pimg,    // source image
-                       pimg_bw, // destination image
-                       145,     // threhold val.
-                       255,     // max. val
-                       CV_THRESH_BINARY ); // binary type );
-
-          // Save the bitmap to file
-          std::string mess = "B_W_";
-          mess.append( buffer );
-          mess.append( ".bmp" );
-          cvSaveImage( mess.c_str(), pimg_bw );
+          std::stringstream ss;
+          ss << t;
+          return ss.str();
       }
 
       void
       onMain(void)
       {
-        Delay::wait(4);
-        setEntityState(IMC::EntityState::ESTA_NORMAL, "LED MODE: "+m_args.led_type);
+        releaseRamCached();
         updateStrobe();
         try
         {
-          if(!capture())
-            err("erro software");
+          if(!setUpCamera())
+            throw RestartNeeded("Cannot detect camera", 5);
+
+          setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs));
+          m_thread_cnt = 0;
+          m_cnt_test.reset();
         }
         catch(...)
         {
-          err("ERRO dump");
+          throw RestartNeeded("Erro Flycapture API", 5);
         }
+
         while (!stopping())
         {
-          waitForMessages(1.0);
+          consumeMessages();
+          if(m_cnt_test.overflow())
+          {
+            m_cnt_test.reset();
+            try
+            {
+              if(!getImage())
+              {
+                war("Restarting camera...");
+                if(m_camera.IsConnected())
+                {
+                  m_error = m_camera.StopCapture();
+                  if ( m_error != FlyCapture2::PGRERROR_OK )
+                    err("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
+                  m_error = m_camera.Disconnect();
+                  if ( m_error != FlyCapture2::PGRERROR_OK )
+                    err("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+                }
+                setUpCamera();
+              }
+              else
+              {
+                m_frame_cnt++;
+              }
+            }
+            catch(...)
+            {
+              err("Erro saving image %s", m_path_image.c_str());
+            }
+            trace("Capture: thr %d", m_thread_cnt);
+          }
+
+          if(m_clean_cached_ram.overflow())
+          {
+            m_clean_cached_ram.reset();
+            releaseRamCached();
+          }
+
+          if(m_update_cnt_frames.overflow())
+          {
+            m_update_cnt_frames.reset();
+            setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt));
+          }
         }
       }
     };
