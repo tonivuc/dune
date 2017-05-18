@@ -77,6 +77,8 @@ namespace Simulators
       IMC::SimulatedState m_sstate;
       //! Start time.
       double m_start_time;
+      //! Position when parameters were last reset
+      float m_lx, m_ly;
       //! Task arguments.
       Arguments m_args;
 
@@ -84,7 +86,9 @@ namespace Simulators
         Periodic(name, ctx),
         m_vehicle(NULL),
         m_world(NULL),
-        m_start_time(Clock::get())
+        m_start_time(Clock::get()),
+        m_lx(0),
+        m_ly(0)
       {
         // Retrieve configuration values.
         param("Stream Speed North", m_args.wx)
@@ -131,6 +135,16 @@ namespace Simulators
       }
 
       void
+      onUpdateParameters()
+      {
+        m_lx = m_sstate.x;
+        m_ly = m_sstate.y;
+        m_start_time = Clock::get();
+        if (m_world)
+          m_world->takeStep();
+      }
+
+      void
       consume(const IMC::GpsFix* msg)
       {
         if (msg->type != IMC::GpsFix::GFT_MANUAL_INPUT)
@@ -146,6 +160,7 @@ namespace Simulators
         m_sstate.height = msg->height;
 
         m_start_time = Clock::get();
+        m_lx = m_ly = 0;
 
         requestActivation();
 
@@ -181,8 +196,8 @@ namespace Simulators
         // Fill position.
         double* position = m_vehicle->getPosition();
         double sim_time = Clock::get() - m_start_time;
-        m_sstate.x = position[0] + sim_time * m_args.wx;
-        m_sstate.y = position[1] + sim_time * m_args.wy;
+        m_sstate.x = position[0] + m_lx + sim_time * m_args.wx;
+        m_sstate.y = position[1] + m_ly + sim_time * m_args.wy;
         m_sstate.z = std::max(position[2], 0.0);
 
         // Fill attitude.
