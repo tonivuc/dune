@@ -38,8 +38,8 @@ if(POINTGREY)
     dune_add_lib(flycapture-c)
 
     # Check Header
-    dune_test_header(FlyCapture2.h)
-    dune_test_header(FlyCapture2_C.h)
+    dune_test_header(flycapture/FlyCapture2.h)
+    dune_test_header(flycapture/FlyCapture2_C.h)
 
   else(HAVE_LIB_FLYCAPTURE)
     # FlyCapture not found on the system.
