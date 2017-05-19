@@ -250,21 +250,21 @@ namespace Vision
       private:
         //! Parent task.
         DUNE::Tasks::Task* m_task;
-        //!
+        //! The Image class is used to retrieve images from a camera
         FlyCapture2::Image m_image;
-        //!
+        //! The Error object of error that is returned
         FlyCapture2::Error m_error;
-        //!
+        //! Received new image to save
         bool m_new_image;
-        //!
+        //! Path to save the image
         std::string m_path_file_name;
-        //!
+        //! Options for saving JPEG image
         FlyCapture2::JPEGOption m_jpegOption;
-        //!
+        //! Save metadata to image
         Exiv2::Image::AutoPtr m_imageTag;
-        //!
+        //! Buffer for metadata
         char m_text_exif[32];
-        //!
+        //! A container for Exif data
         Exiv2::ExifData m_exifData;
 
         void
@@ -279,7 +279,7 @@ namespace Vision
               m_error = m_image.Save(m_path_file_name.c_str(), &m_jpegOption);
               if ( m_error != FlyCapture2::PGRERROR_OK )
               {
-                m_task->war("save error %s", m_name_thread.c_str());
+                m_task->war("save error %s - %s", m_name_thread.c_str(), m_path_file_name.c_str());
               }
               else
               {

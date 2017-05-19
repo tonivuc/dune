@@ -40,6 +40,7 @@
 //FlyCapture headers
 #include <flycapture/FlyCapture2.h>
 
+//Exiv2 headers
 #include <exiv2/exiv2.hpp>
 
 #include <Vision/PointGrey/SaveImage.hpp>
@@ -72,6 +73,10 @@ namespace Vision
       std::string save_image_dir;
       //! Number of frames/s
       int number_fs;
+      //! Split photos by folder
+      bool split_photos;
+      //! Number of photos to folder
+      unsigned int number_photos;
     };
 
     //! Device driver task.
@@ -79,37 +84,37 @@ namespace Vision
     {
       //! Configuration parameters
       Arguments m_args;
-      //!
+      //! Camera object
       FlyCapture2::Camera m_camera;
-      //!
+      //! Structure of Camera object
       FlyCapture2::CameraInfo m_camInfo;
-      //!
+      //! The Error object of error that is returned
       FlyCapture2::Error m_error;
-      //!
+      //! Buffer raw image from a camera
       FlyCapture2::Image m_rawImage;
-      //!
+      //! Buffer for rgb;
       FlyCapture2::Image m_rgbImage;
-      //!
+      //! Latitude deg
       int m_lat_deg;
-      //!
+      //! Latitude min
       int m_lat_min;
-      //!
+      //! Latitude sec
       double m_lat_sec;
-      //!
+      //! Longitude deg
       int m_lon_deg;
-      //!
+      //! Longitude min
       int m_lon_min;
-      //!
+      //! Longitude sec
       double m_lon_sec;
-      //!
+      //! Buffer for exif timestamp
       char m_text_exif_timestamp[16];
-      //!
+      //! Buffer to backup epoch
       std::string m_back_epoch;
-      //!
+      //! Buffer to backup time
       std::string m_back_time;
-      //!
+      //! Buffer for path to save image
       std::string m_path_image;
-      //!
+      //! Buffer for backup of path to save image
       std::string m_back_path_image;
       //!
       Path m_log_dir;
@@ -127,6 +132,12 @@ namespace Vision
       SaveImage *m_save[c_number_max_thread];
       //!
       std::string m_note_comment;
+      //!
+      unsigned int m_cnt_photos_by_folder;
+      //!
+      unsigned m_folder_number;
+      //!
+      std::string m_log_name;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -162,6 +173,18 @@ namespace Vision
         .maximumValue("5")
         .description("Number Frames/s.");
 
+        param("Split Photos", m_args.split_photos)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("true")
+        .description("Split photos by folder.");
+
+        param("Number of photos to divide", m_args.number_photos)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("1000")
+        .minimumValue("500")
+        .maximumValue("3000")
+        .description("Split photos by folder.");
+
         bind<IMC::EstimatedState>(this);
         bind<IMC::LoggingControl>(this);
       }
@@ -181,8 +204,23 @@ namespace Vision
         else
           m_cnt_fps.setTop(0.5);
 
+        if(m_args.number_photos < 500 && m_args.split_photos)
+        {
+          war("Number of photos by folder is to small (mim: 500)");
+          war("Setting Number of photos by folder to default (1000)");
+          m_args.number_photos = 1000;
+        }
+        else if(m_args.number_photos > 3000 && m_args.split_photos)
+        {
+          war("Number of photos by folder is to high (max: 3000)");
+          war("Setting Number of photos by folder to default (1000)");
+          m_args.number_photos = 1000;
+        }
+
         m_thread_cnt = 0;
         m_frame_cnt = 0;
+        m_cnt_photos_by_folder = 0;
+        m_folder_number = 0;
 
         char text[8];
         for(int i = 0; i < c_number_max_thread; i++)
@@ -233,9 +271,17 @@ namespace Vision
 
         if (msg->op == IMC::LoggingControl::COP_STARTED)
         {
-          m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+          m_frame_cnt = 0;
+          m_cnt_photos_by_folder = 0;
+          m_folder_number = 0;
+          if(m_args.split_photos)
+            m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+          else
+            m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+
           m_back_path_image = m_log_dir.c_str();
           m_log_dir.create();
+          m_log_name = msg->name;
         }
       }
 
@@ -270,6 +316,8 @@ namespace Vision
       {
         inf("on Activation");
         m_frame_cnt = 0;
+        m_cnt_photos_by_folder = 0;
+        m_folder_number = 0;
         releaseRamCached();
         updateStrobe();
         try
@@ -566,6 +614,18 @@ namespace Vision
                 else
                 {
                   m_frame_cnt++;
+                  if(m_args.split_photos)
+                  {
+                    m_cnt_photos_by_folder++;
+                    if(m_cnt_photos_by_folder >= m_args.number_photos)
+                    {
+                      m_cnt_photos_by_folder = 0;
+                      m_folder_number++;
+                      m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+                      m_back_path_image = m_log_dir.c_str();
+                      m_log_dir.create();
+                    }
+                  }
                 }
               }
               catch(...)
