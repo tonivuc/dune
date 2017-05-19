@@ -274,22 +274,22 @@ namespace Vision
           {
             if(m_new_image)
             {
+              m_new_image = false;
               m_task->debug("Save thread: %s", m_name_thread.c_str());
               m_error = m_image.Save(m_path_file_name.c_str(), &m_jpegOption);
               if ( m_error != FlyCapture2::PGRERROR_OK )
               {
-                m_task->err("save error %s", m_name_thread.c_str());
+                m_task->war("save error %s", m_name_thread.c_str());
               }
               else
               {
                 writeExifData(m_path_file_name);
                 m_image.ReleaseBuffer();
               }
-              m_new_image = false;
             }
             else
             {
-              Delay::waitMsec(10);
+              Delay::waitMsec(50);
             }
           }
         }
