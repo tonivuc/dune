@@ -43,6 +43,7 @@
 //Exiv2 headers
 #include <exiv2/exiv2.hpp>
 
+//Local header
 #include <Vision/PointGrey/SaveImage.hpp>
 
 namespace Vision
@@ -51,10 +52,11 @@ namespace Vision
   {
     using DUNE_NAMESPACES;
 
-    static const int c_number_max_thread = 12;
-    static const int c_time_to_release_cached_ram = 60;
-    static const float c_time_to_release_camera = 5.0;
-    static const float c_time_to_update_cnt_info = 5.0;
+    static const int c_number_max_thread = 5;
+    static const int c_number_max_fps = 5;
+    static const float c_time_to_release_cached_ram = 30.0;
+    static const float c_time_to_release_camera = 3.0;
+    static const float c_time_to_update_cnt_info = 10.0;
 
     //! %Task arguments.
     struct Arguments
@@ -94,6 +96,10 @@ namespace Vision
       FlyCapture2::Image m_rawImage;
       //! Buffer for rgb;
       FlyCapture2::Image m_rgbImage;
+      //!
+      FlyCapture2::BusManager m_busMgr;
+      //!
+      FlyCapture2::PGRGuid m_guid;
       //! Latitude deg
       int m_lat_deg;
       //! Latitude min
@@ -116,27 +122,27 @@ namespace Vision
       std::string m_path_image;
       //! Buffer for backup of path to save image
       std::string m_back_path_image;
-      //!
+      //! Path to save image
       Path m_log_dir;
-      //!
+      //! Timer to control fps
       Time::Counter<float> m_cnt_fps;
-      //!
+      //! Timer to control the cached ram
       Time::Counter<float> m_clean_cached_ram;
-      //!
+      //! Timer to control the refresh of captured frames
       Time::Counter<float> m_update_cnt_frames;
-      //!
+      //! Id thread
       int m_thread_cnt;
-      //!
+      //! Number of frames captured
       long unsigned int m_frame_cnt;
-      //!
+      //! Clase/thread to save image/exif data
       SaveImage *m_save[c_number_max_thread];
-      //!
+      //! Buffer for the note comment of user
       std::string m_note_comment;
-      //!
+      //! Number of photos in folder
       unsigned int m_cnt_photos_by_folder;
-      //!
+      //! Number of folder
       unsigned m_folder_number;
-      //!
+      //! Bufer for name log
       std::string m_log_name;
 
       Task(const std::string& name, Tasks::Context& ctx):
@@ -199,10 +205,10 @@ namespace Vision
       {
         set_cpu_governor();
 
-        if(m_args.number_fs > 0 && m_args.number_fs <= 5)
+        if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
           m_cnt_fps.setTop((1.0/m_args.number_fs));
         else
-          m_cnt_fps.setTop(0.5);
+          m_cnt_fps.setTop(0.25);
 
         if(m_args.number_photos < 500 && m_args.split_photos)
         {
@@ -323,7 +329,10 @@ namespace Vision
         try
         {
           if(!setUpCamera())
-            throw RestartNeeded("Cannot detect camera", 5);
+          {
+            onRequestDeactivation();
+            throw RestartNeeded("Cannot detect camera", 10);
+          }
 
           setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs));
           m_thread_cnt = 0;
@@ -331,7 +340,8 @@ namespace Vision
         }
         catch(...)
         {
-          throw RestartNeeded("Erro Flycapture API", 5);
+          onRequestDeactivation();
+          throw RestartNeeded("Erro Flycapture API", 10);
         }
       }
 
@@ -382,7 +392,7 @@ namespace Vision
           }
           else
           {
-            war("CPU governor is not in mode ondemand, setting to ondemand");
+            war("CPU governor is not in ondemand, setting to ondemand");
             return std::system("echo ondemand > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
           }
         }
@@ -462,8 +472,16 @@ namespace Vision
       setUpCamera(void)
       {
         inf("Initialization of Camera");
+        // Get Flea2 camera
+        m_error = m_busMgr.GetCameraFromIndex( 0, &m_guid );
+
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to get camera index: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
         // Connect the camera
-        m_error = m_camera.Connect( 0 );
+        m_error = m_camera.Connect( &m_guid );
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           err("Failed to connect to camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
@@ -492,9 +510,9 @@ namespace Vision
         /*error = camera.WriteRegister( 0x1110, 0x80080001 );
                 if ( error != FlyCapture2::PGRERROR_OK )
                   err("erro writing");*/
-        m_error = m_camera.WriteRegister( 0x1120, 0x80080001 );
+        /*m_error = m_camera.WriteRegister( 0x1120, 0x80080001 );
         if ( m_error != FlyCapture2::PGRERROR_OK )
-          err("erro writing");
+          err("erro writing");*/
 
         //current gpio config
         /*checkValueOfCamera(&camera, 0x1110, false);
@@ -511,28 +529,53 @@ namespace Vision
       {
         bool result = false;
         saveInfoExif();
-        m_error = m_camera.RetrieveBuffer( &m_rawImage );
+        try
+        {
+          m_error = m_camera.RetrieveBuffer( &m_rawImage );
+        }
+        catch (...)
+        {
+          war("erro RetrieveBuffer");
+          return false;
+        }
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           war("capture error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
+
         // convert to rgb
-        m_error = m_rawImage.Convert( FlyCapture2::PIXEL_FORMAT_BGR, &m_rgbImage );
+        try
+        {
+          m_error = m_rawImage.Convert( FlyCapture2::PIXEL_FORMAT_BGR, &m_rgbImage );
+        }
+        catch(...)
+        {
+          war("erro Convert");
+          return false;
+        }
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           war("convert error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
 
-        debug("Size Image Capture: %u x %u", m_rgbImage.GetCols(), m_rgbImage.GetRows());
-
         m_path_image = m_back_path_image.c_str();
         m_path_image.append("/");
         m_path_image.append(m_back_epoch);
         m_path_image.append(".jpg");
 
-        result = m_save[m_thread_cnt]->saveNewImage(m_rgbImage, m_path_image);
+        debug("Size Image Capture: %u x %u", m_rgbImage.GetCols(), m_rgbImage.GetRows());
+        debug("Path: %s", m_path_image.c_str());
+
+        try
+        {
+          result = m_save[m_thread_cnt]->saveNewImage(m_rgbImage, m_path_image);
+        }
+        catch(...)
+        {
+          war("erro thread");
+        }
 
         m_thread_cnt++;
         if(m_thread_cnt >= c_number_max_thread)
@@ -594,55 +637,49 @@ namespace Vision
             if(m_cnt_fps.overflow())
             {
               m_cnt_fps.reset();
-              try
-              {
-                if(!getImage())
-                {
-                  war("Restarting camera...");
-                  if(m_camera.IsConnected())
-                  {
-                    m_error = m_camera.StopCapture();
-                    if ( m_error != FlyCapture2::PGRERROR_OK )
-                      war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
-                    m_error = m_camera.Disconnect();
-                    if ( m_error != FlyCapture2::PGRERROR_OK )
-                      war("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-                  }
+              if(!getImage())
+              {
+                war("Restarting camera...");
+                if(m_camera.IsConnected())
+                {
+                  m_error = m_camera.StopCapture();
+                  if ( m_error != FlyCapture2::PGRERROR_OK )
+                    war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
+                  m_error = m_camera.Disconnect();
+                  if ( m_error != FlyCapture2::PGRERROR_OK )
+                    war("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+                }
+                if (isActive())
                   setUpCamera();
-                }
-                else
+              }
+              else
+              {
+                m_frame_cnt++;
+                if(m_args.split_photos)
                 {
-                  m_frame_cnt++;
-                  if(m_args.split_photos)
+                  m_cnt_photos_by_folder++;
+                  if(m_cnt_photos_by_folder >= m_args.number_photos)
                   {
-                    m_cnt_photos_by_folder++;
-                    if(m_cnt_photos_by_folder >= m_args.number_photos)
-                    {
-                      m_cnt_photos_by_folder = 0;
-                      m_folder_number++;
-                      m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
-                      m_back_path_image = m_log_dir.c_str();
-                      m_log_dir.create();
-                    }
+                    m_cnt_photos_by_folder = 0;
+                    m_folder_number++;
+                    m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+                    m_back_path_image = m_log_dir.c_str();
+                    m_log_dir.create();
                   }
                 }
               }
-              catch(...)
-              {
-                war("Erro saving image %s", m_path_image.c_str());
-              }
-              trace("Capture: thr %d", m_thread_cnt);
-            }
 
-            if(m_clean_cached_ram.overflow())
+              debug("Capture: thr %d", m_thread_cnt);
+            }
+            else if(m_clean_cached_ram.overflow())
             {
               m_clean_cached_ram.reset();
               debug("Releasing cache ram.");
               releaseRamCached();
             }
-
-            if(m_update_cnt_frames.overflow())
+            else if(m_update_cnt_frames.overflow())
             {
               m_update_cnt_frames.reset();
               setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt));

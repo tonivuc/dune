@@ -17,13 +17,17 @@ using DUNE_NAMESPACES;
 //FlyCapture headers
 #include <flycapture/FlyCapture2.h>
 
+//Exiv headers
 #include <exiv2/exiv2.hpp>
+
+//OpenCV headers
+#include <opencv2/opencv.hpp>
 
 namespace Vision
 {
   namespace PointGrey
   {
-    class SaveImage : public Thread
+    class SaveImage : public Concurrency::Thread
     {
       struct exifData
       {
@@ -88,18 +92,20 @@ namespace Vision
             return false;
 
           m_path_file_name = fileName;
-          m_new_image = true;
           m_image = rgbImage;
           rgbImage.ReleaseBuffer();
+          //ScopedMutex m(m_mutex);
+          m_new_image = true;
+          //this->run();
 
           return true;
         }
 
-        void
+        bool
         writeExifData(std::string image)
         {
           if(image.empty())
-            return;
+            return false;
 
           try
           {
@@ -109,7 +115,7 @@ namespace Vision
           {
             m_task->war("erro writing exif data to %s", image.c_str());
             m_imageTag.release();
-            return;
+            return false;
           }
 
           m_imageTag->readMetadata();
@@ -146,6 +152,8 @@ namespace Vision
           m_imageTag->writeMetadata();
           m_imageTag.release();
           m_exifData.clear();
+
+          return true;
         }
 
         std::string
@@ -245,6 +253,45 @@ namespace Vision
           return "OTHER";
         }
 
+        void
+        run(void)
+        {
+          while(!isStopping())
+          {
+            if(m_new_image)
+            {
+              m_new_image = false;
+              m_task->debug("Save thread: %s", m_name_thread.c_str());
+              try
+              {
+                m_row_bytes = (double)m_image.GetReceivedDataSize()/(double)m_image.GetRows();
+                m_mat_image = cv::Mat(m_image.GetRows(), m_image.GetCols(), CV_8UC3, m_image.GetData(),m_row_bytes);
+                if(save_image())
+                {
+                  try
+                  {
+                    writeExifData(m_path_file_name);
+                  }
+                  catch(...)
+                  {
+                    m_task->war("erro write exif data - thr: %s", m_name_thread.c_str());
+                  }
+                }
+                m_image.ReleaseBuffer();
+                m_mat_image.~Mat();
+              }
+              catch(...)
+              {
+                m_task->war("save error - thr: %s", m_name_thread.c_str());
+              }
+            }
+            else
+            {
+              Delay::waitMsec(10);
+            }
+          }
+        }
+
         exifData m_exif_data;
 
       private:
@@ -266,31 +313,26 @@ namespace Vision
         char m_text_exif[32];
         //! A container for Exif data
         Exiv2::ExifData m_exifData;
+        //! Mutex lock/unlock
+        Concurrency::Mutex m_mutex;
+        //! Number of row bytes of image
+        unsigned int m_row_bytes;
+        //! Buffer to opencv mat image
+        cv::Mat m_mat_image;
 
-        void
-        run(void)
+        bool
+        save_image(void)
         {
-          while (!isStopping())
+          try
           {
-            if(m_new_image)
-            {
-              m_new_image = false;
-              m_task->debug("Save thread: %s", m_name_thread.c_str());
-              m_error = m_image.Save(m_path_file_name.c_str(), &m_jpegOption);
-              if ( m_error != FlyCapture2::PGRERROR_OK )
-              {
-                m_task->war("save error %s - %s", m_name_thread.c_str(), m_path_file_name.c_str());
-              }
-              else
-              {
-                writeExifData(m_path_file_name);
-                m_image.ReleaseBuffer();
-              }
-            }
-            else
-            {
-              Delay::waitMsec(50);
-            }
+            ScopedMutex m(m_mutex);
+            imwrite( m_path_file_name.c_str(), m_mat_image );
+            return true;
+          }
+          catch (std::runtime_error& ex)
+          {
+            m_task->war("Exception converting image to PNG format: %s\n", ex.what());
+            return false;
           }
         }
     };
