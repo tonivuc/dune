@@ -27,6 +27,9 @@ namespace Vision
 {
   namespace PointGrey
   {
+    //! Mutex lock/unlock
+    static Concurrency::Mutex m_mutex;
+
     class SaveImage : public Concurrency::Thread
     {
       struct exifData
@@ -75,7 +78,11 @@ namespace Vision
         {
           m_name_thread = name;
           m_new_image = false;
-          m_jpegOption.quality = 85;
+          m_jpeg_params.push_back(CV_IMWRITE_JPEG_QUALITY);
+          m_jpeg_params.push_back(85);
+          m_row_bytes = 0;
+          cv::setNumThreads(1);
+          m_is_free = true;
         }
 
         //! Destructor.
@@ -91,12 +98,15 @@ namespace Vision
           if(rgbImage.GetData() == NULL)
             return false;
 
+          if(!m_is_free)
+            return false;
+
+          m_is_free = false;
+
           m_path_file_name = fileName;
           m_image = rgbImage;
           rgbImage.ReleaseBuffer();
-          //ScopedMutex m(m_mutex);
           m_new_image = true;
-          //this->run();
 
           return true;
         }
@@ -284,6 +294,8 @@ namespace Vision
               {
                 m_task->war("save error - thr: %s", m_name_thread.c_str());
               }
+
+              m_is_free = true;
             }
             else
             {
@@ -306,32 +318,34 @@ namespace Vision
         //! Path to save the image
         std::string m_path_file_name;
         //! Options for saving JPEG image
-        FlyCapture2::JPEGOption m_jpegOption;
+        std::vector<int> m_jpeg_params;
         //! Save metadata to image
         Exiv2::Image::AutoPtr m_imageTag;
         //! Buffer for metadata
         char m_text_exif[32];
         //! A container for Exif data
         Exiv2::ExifData m_exifData;
-        //! Mutex lock/unlock
-        Concurrency::Mutex m_mutex;
         //! Number of row bytes of image
         unsigned int m_row_bytes;
         //! Buffer to opencv mat image
         cv::Mat m_mat_image;
+        //! Flag to control state of thread
+        bool m_is_free;
 
         bool
         save_image(void)
         {
           try
           {
-            ScopedMutex m(m_mutex);
-            imwrite( m_path_file_name.c_str(), m_mat_image );
+            m_mutex.lock();
+            imwrite( m_path_file_name.c_str(), m_mat_image, m_jpeg_params );
+            m_mutex.unlock();
             return true;
           }
           catch (std::runtime_error& ex)
           {
-            m_task->war("Exception converting image to PNG format: %s\n", ex.what());
+            m_mutex.unlock();
+            m_task->war("Exception saving image: %s\n", ex.what());
             return false;
           }
         }

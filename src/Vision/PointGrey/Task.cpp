@@ -54,7 +54,7 @@ namespace Vision
 
     static const int c_number_max_thread = 5;
     static const int c_number_max_fps = 5;
-    static const float c_time_to_release_cached_ram = 30.0;
+    static const float c_time_to_release_cached_ram = 300.0;
     static const float c_time_to_release_camera = 3.0;
     static const float c_time_to_update_cnt_info = 10.0;
 
@@ -324,6 +324,7 @@ namespace Vision
         m_frame_cnt = 0;
         m_cnt_photos_by_folder = 0;
         m_folder_number = 0;
+        std::system("sync");
         releaseRamCached();
         updateStrobe();
         try
@@ -349,6 +350,7 @@ namespace Vision
       onDeactivation(void)
       {
         inf("on Deactivation");
+        std::system("sync");
         m_error = m_camera.StopCapture();
         if ( m_error != FlyCapture2::PGRERROR_OK )
           war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
@@ -568,16 +570,9 @@ namespace Vision
         debug("Size Image Capture: %u x %u", m_rgbImage.GetCols(), m_rgbImage.GetRows());
         debug("Path: %s", m_path_image.c_str());
 
-        try
-        {
-          result = m_save[m_thread_cnt]->saveNewImage(m_rgbImage, m_path_image);
-        }
-        catch(...)
-        {
-          war("erro thread");
-        }
+        m_thread_cnt = send_image_thread(m_thread_cnt);
+        result = true;
 
-        m_thread_cnt++;
         if(m_thread_cnt >= c_number_max_thread)
           m_thread_cnt = 0;
 
@@ -585,6 +580,48 @@ namespace Vision
         m_rawImage.ReleaseBuffer();
 
         return result;
+      }
+
+      int
+      send_image_thread(int cnt_thread)
+      {
+        int m_pointer_cnt_thread = cnt_thread;
+        bool jump_over = false;
+        bool result_thread;
+        while(!jump_over && !stopping())
+        {
+          try
+          {
+            result_thread = m_save[m_pointer_cnt_thread]->saveNewImage(m_rgbImage, m_path_image);
+          }
+          catch(...)
+          {
+            war("erro thread");
+          }
+
+          if(result_thread)
+          {
+            m_pointer_cnt_thread++;
+            jump_over = true;
+            return m_pointer_cnt_thread;
+          }
+          else
+          {
+            war("thread %d is working, jump to other", m_pointer_cnt_thread);
+            m_pointer_cnt_thread++;
+            if(m_pointer_cnt_thread >= c_number_max_thread)
+              m_pointer_cnt_thread = 0;
+            if(cnt_thread == m_pointer_cnt_thread)
+            {
+              m_pointer_cnt_thread++;
+              war("Erro saving image, all thread working");
+              jump_over = true;
+              return m_pointer_cnt_thread;
+            }
+          }
+        }
+
+        return m_pointer_cnt_thread;
       }
 
       int
