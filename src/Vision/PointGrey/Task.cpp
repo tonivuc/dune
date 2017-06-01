@@ -52,7 +52,7 @@ namespace Vision
   {
     using DUNE_NAMESPACES;
 
-    static const int c_number_max_thread = 5;
+    static const int c_number_max_thread = 15;
     static const int c_number_max_fps = 5;
     static const float c_time_to_release_cached_ram = 300.0;
     static const float c_time_to_release_camera = 3.0;
@@ -134,6 +134,8 @@ namespace Vision
       int m_thread_cnt;
       //! Number of frames captured
       long unsigned int m_frame_cnt;
+      //! Number of frames lost
+      long unsigned int m_frame_lost_cnt;
       //! Clase/thread to save image/exif data
       SaveImage *m_save[c_number_max_thread];
       //! Buffer for the note comment of user
@@ -144,6 +146,8 @@ namespace Vision
       unsigned m_folder_number;
       //! Bufer for name log
       std::string m_log_name;
+      //! Flag to control capture of image
+      bool m_is_to_capture;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -225,8 +229,10 @@ namespace Vision
 
         m_thread_cnt = 0;
         m_frame_cnt = 0;
+        m_frame_lost_cnt = 0;
         m_cnt_photos_by_folder = 0;
         m_folder_number = 0;
+        m_is_to_capture = false;
 
         char text[8];
         for(int i = 0; i < c_number_max_thread; i++)
@@ -245,6 +251,7 @@ namespace Vision
       void
       onResourceRelease(void)
       {
+        m_is_to_capture = false;
         Delay::wait(c_time_to_release_camera);
 
         for(int i = 0; i < c_number_max_thread; i++)
@@ -261,11 +268,11 @@ namespace Vision
         {
           m_error = m_camera.StopCapture();
           if ( m_error != FlyCapture2::PGRERROR_OK )
-            war("Erro stopping camera capture: %s , already stop?", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+            inf("Erro stopping camera capture: %s , already stop?", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
           m_error = m_camera.Disconnect();
           if ( m_error != FlyCapture2::PGRERROR_OK )
-            war("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+            inf("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
         }
       }
 
@@ -278,6 +285,7 @@ namespace Vision
         if (msg->op == IMC::LoggingControl::COP_STARTED)
         {
           m_frame_cnt = 0;
+          m_frame_lost_cnt = 0;
           m_cnt_photos_by_folder = 0;
           m_folder_number = 0;
           if(m_args.split_photos)
@@ -322,6 +330,7 @@ namespace Vision
       {
         inf("on Activation");
         m_frame_cnt = 0;
+        m_frame_lost_cnt = 0;
         m_cnt_photos_by_folder = 0;
         m_folder_number = 0;
         std::system("sync");
@@ -344,6 +353,8 @@ namespace Vision
           onRequestDeactivation();
           throw RestartNeeded("Erro Flycapture API", 10);
         }
+        m_is_to_capture = true;
+        inf("Starting Capture.");
       }
 
       void
@@ -351,6 +362,7 @@ namespace Vision
       {
         inf("on Deactivation");
         std::system("sync");
+        m_is_to_capture = false;
         m_error = m_camera.StopCapture();
         if ( m_error != FlyCapture2::PGRERROR_OK )
           war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
@@ -540,9 +552,11 @@ namespace Vision
           war("erro RetrieveBuffer");
           return false;
         }
-        if ( m_error != FlyCapture2::PGRERROR_OK )
+        if ( m_error != FlyCapture2::PGRERROR_OK)
         {
-          war("capture error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          if(m_is_to_capture)
+            war("capture error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
           return false;
         }
 
@@ -585,14 +599,14 @@ namespace Vision
       int
       send_image_thread(int cnt_thread)
       {
-        int m_pointer_cnt_thread = cnt_thread;
+        int pointer_cnt_thread = cnt_thread;
         bool jump_over = false;
         bool result_thread;
         while(!jump_over && !stopping())
         {
           try
           {
-            result_thread = m_save[m_pointer_cnt_thread]->saveNewImage(m_rgbImage, m_path_image);
+            result_thread = m_save[pointer_cnt_thread]->saveNewImage(m_rgbImage, m_path_image);
           }
           catch(...)
           {
@@ -601,33 +615,36 @@ namespace Vision
 
           if(result_thread)
           {
-            m_pointer_cnt_thread++;
+            pointer_cnt_thread++;
             jump_over = true;
-            return m_pointer_cnt_thread;
+            m_frame_cnt++;
+            return pointer_cnt_thread;
           }
           else
           {
-            war("thread %d is working, jump to other", m_pointer_cnt_thread);
-            m_pointer_cnt_thread++;
-            if(m_pointer_cnt_thread >= c_number_max_thread)
-              m_pointer_cnt_thread = 0;
-            if(cnt_thread == m_pointer_cnt_thread)
+            debug("thread %d is working, jump to other", pointer_cnt_thread);
+            pointer_cnt_thread++;
+            if(pointer_cnt_thread >= c_number_max_thread)
+              pointer_cnt_thread = 0;
+
+            if(cnt_thread == pointer_cnt_thread)
             {
-              m_pointer_cnt_thread++;
-              war("Erro saving image, all thread working");
+              pointer_cnt_thread++;
+              inf("Erro saving image, all thread working");
+              m_frame_lost_cnt++;
               jump_over = true;
-              return m_pointer_cnt_thread;
+              return pointer_cnt_thread;
             }
           }
         }
 
-        return m_pointer_cnt_thread;
+        return pointer_cnt_thread;
       }
 
       int
       releaseRamCached(void)
       {
-        debug("Releasing ram cached.");
+        debug("Releasing cache ram.");
         return std::system("echo 1 > /proc/sys/vm/drop_caches");
       }
 
@@ -664,6 +681,44 @@ namespace Vision
       }
 
       void
+      triger_frame(void)
+      {
+        if(!getImage() && m_is_to_capture)
+        {
+          war("Restarting camera...");
+          if(m_camera.IsConnected())
+          {
+            m_error = m_camera.StopCapture();
+            if ( m_error != FlyCapture2::PGRERROR_OK )
+              war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
+            m_error = m_camera.Disconnect();
+            if ( m_error != FlyCapture2::PGRERROR_OK )
+              war("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          }
+          if (isActive())
+            setUpCamera();
+        }
+        else
+        {
+          if(m_args.split_photos)
+          {
+            m_cnt_photos_by_folder++;
+            if(m_cnt_photos_by_folder >= m_args.number_photos)
+            {
+              m_cnt_photos_by_folder = 0;
+              m_folder_number++;
+              m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+              m_back_path_image = m_log_dir.c_str();
+              m_log_dir.create();
+            }
+          }
+        }
+
+        debug("Capture: thr %d", m_thread_cnt);
+      }
+
+      void
       onMain(void)
       {
         while (!stopping())
@@ -674,52 +729,18 @@ namespace Vision
             if(m_cnt_fps.overflow())
             {
               m_cnt_fps.reset();
+              triger_frame();
 
-              if(!getImage())
-              {
-                war("Restarting camera...");
-                if(m_camera.IsConnected())
-                {
-                  m_error = m_camera.StopCapture();
-                  if ( m_error != FlyCapture2::PGRERROR_OK )
-                    war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-
-                  m_error = m_camera.Disconnect();
-                  if ( m_error != FlyCapture2::PGRERROR_OK )
-                    war("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-                }
-                if (isActive())
-                  setUpCamera();
-              }
-              else
-              {
-                m_frame_cnt++;
-                if(m_args.split_photos)
-                {
-                  m_cnt_photos_by_folder++;
-                  if(m_cnt_photos_by_folder >= m_args.number_photos)
-                  {
-                    m_cnt_photos_by_folder = 0;
-                    m_folder_number++;
-                    m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
-                    m_back_path_image = m_log_dir.c_str();
-                    m_log_dir.create();
-                  }
-                }
-              }
-
-              debug("Capture: thr %d", m_thread_cnt);
             }
             else if(m_clean_cached_ram.overflow())
             {
               m_clean_cached_ram.reset();
-              debug("Releasing cache ram.");
               releaseRamCached();
             }
             else if(m_update_cnt_frames.overflow())
             {
               m_update_cnt_frames.reset();
-              setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt));
+              setEntityState(IMC::EntityState::ESTA_NORMAL, m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt)+" - "+to_string(m_frame_lost_cnt));
             }
           }
           else
