@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d292e724592557940354dddbfc5a9d32                            *
+// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -24607,6 +24607,324 @@ namespace DUNE
       IMC::toJSON(os__, "channel", channel, nindent__);
       IMC::toJSON(os__, "value", value, nindent__);
       IMC::toJSON(os__, "gain", gain, nindent__);
+    }
+
+    TemporalAction::TemporalAction(void)
+    {
+      m_header.mgid = 911;
+      clear();
+      action.setParent(this);
+    }
+
+    void
+    TemporalAction::clear(void)
+    {
+      action_id.clear();
+      system_id = 0;
+      status = 0;
+      start_time = 0;
+      duration = 0;
+      action.clear();
+    }
+
+    bool
+    TemporalAction::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::TemporalAction& other__ = static_cast<const TemporalAction&>(msg__);
+      if (action_id != other__.action_id) return false;
+      if (system_id != other__.system_id) return false;
+      if (status != other__.status) return false;
+      if (start_time != other__.start_time) return false;
+      if (duration != other__.duration) return false;
+      if (action != other__.action) return false;
+      return true;
+    }
+
+    int
+    TemporalAction::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    TemporalAction::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(action_id, ptr__);
+      ptr__ += IMC::serialize(system_id, ptr__);
+      ptr__ += IMC::serialize(status, ptr__);
+      ptr__ += IMC::serialize(start_time, ptr__);
+      ptr__ += IMC::serialize(duration, ptr__);
+      ptr__ += action.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    TemporalAction::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(action_id, bfr__, size__);
+      bfr__ += IMC::deserialize(system_id, bfr__, size__);
+      bfr__ += IMC::deserialize(status, bfr__, size__);
+      bfr__ += IMC::deserialize(start_time, bfr__, size__);
+      bfr__ += IMC::deserialize(duration, bfr__, size__);
+      bfr__ += action.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    TemporalAction::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(action_id, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(system_id, bfr__, size__);
+      bfr__ += IMC::deserialize(status, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(start_time, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(duration, bfr__, size__);
+      bfr__ += action.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    TemporalAction::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "action_id", action_id, nindent__);
+      IMC::toJSON(os__, "system_id", system_id, nindent__);
+      IMC::toJSON(os__, "status", status, nindent__);
+      IMC::toJSON(os__, "start_time", start_time, nindent__);
+      IMC::toJSON(os__, "duration", duration, nindent__);
+      action.toJSON(os__, "action", nindent__);
+    }
+
+    void
+    TemporalAction::setTimeStampNested(double value__)
+    {
+      if (!action.isNull())
+      {
+        action.get()->setTimeStamp(value__);
+      }
+    }
+
+    void
+    TemporalAction::setSourceNested(uint16_t value__)
+    {
+      if (!action.isNull())
+      {
+        action.get()->setSource(value__);
+      }
+    }
+
+    void
+    TemporalAction::setSourceEntityNested(uint8_t value__)
+    {
+      if (!action.isNull())
+      {
+        action.get()->setSourceEntity(value__);
+      }
+    }
+
+    void
+    TemporalAction::setDestinationNested(uint16_t value__)
+    {
+      if (!action.isNull())
+      {
+        action.get()->setDestination(value__);
+      }
+    }
+
+    void
+    TemporalAction::setDestinationEntityNested(uint8_t value__)
+    {
+      if (!action.isNull())
+      {
+        action.get()->setDestinationEntity(value__);
+      }
+    }
+
+    TemporalPlan::TemporalPlan(void)
+    {
+      m_header.mgid = 910;
+      clear();
+      actions.setParent(this);
+    }
+
+    void
+    TemporalPlan::clear(void)
+    {
+      plan_id.clear();
+      actions.clear();
+    }
+
+    bool
+    TemporalPlan::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::TemporalPlan& other__ = static_cast<const TemporalPlan&>(msg__);
+      if (plan_id != other__.plan_id) return false;
+      if (actions != other__.actions) return false;
+      return true;
+    }
+
+    int
+    TemporalPlan::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    TemporalPlan::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(plan_id, ptr__);
+      ptr__ += actions.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    TemporalPlan::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(plan_id, bfr__, size__);
+      bfr__ += actions.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    TemporalPlan::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(plan_id, bfr__, size__);
+      bfr__ += actions.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    TemporalPlan::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "plan_id", plan_id, nindent__);
+      actions.toJSON(os__, "actions", nindent__);
+    }
+
+    void
+    TemporalPlan::setTimeStampNested(double value__)
+    {
+      actions.setTimeStamp(value__);
+    }
+
+    void
+    TemporalPlan::setSourceNested(uint16_t value__)
+    {
+      actions.setSource(value__);
+    }
+
+    void
+    TemporalPlan::setSourceEntityNested(uint8_t value__)
+    {
+      actions.setSourceEntity(value__);
+    }
+
+    void
+    TemporalPlan::setDestinationNested(uint16_t value__)
+    {
+      actions.setDestination(value__);
+    }
+
+    void
+    TemporalPlan::setDestinationEntityNested(uint8_t value__)
+    {
+      actions.setDestinationEntity(value__);
+    }
+
+    TemporalPlanStatus::TemporalPlanStatus(void)
+    {
+      m_header.mgid = 912;
+      clear();
+      actions.setParent(this);
+    }
+
+    void
+    TemporalPlanStatus::clear(void)
+    {
+      plan_id.clear();
+      actions.clear();
+    }
+
+    bool
+    TemporalPlanStatus::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::TemporalPlanStatus& other__ = static_cast<const TemporalPlanStatus&>(msg__);
+      if (plan_id != other__.plan_id) return false;
+      if (actions != other__.actions) return false;
+      return true;
+    }
+
+    int
+    TemporalPlanStatus::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    TemporalPlanStatus::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(plan_id, ptr__);
+      ptr__ += actions.serialize(ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    TemporalPlanStatus::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(plan_id, bfr__, size__);
+      bfr__ += actions.deserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    TemporalPlanStatus::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(plan_id, bfr__, size__);
+      bfr__ += actions.reverseDeserialize(bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    TemporalPlanStatus::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "plan_id", plan_id, nindent__);
+      actions.toJSON(os__, "actions", nindent__);
+    }
+
+    void
+    TemporalPlanStatus::setTimeStampNested(double value__)
+    {
+      actions.setTimeStamp(value__);
+    }
+
+    void
+    TemporalPlanStatus::setSourceNested(uint16_t value__)
+    {
+      actions.setSource(value__);
+    }
+
+    void
+    TemporalPlanStatus::setSourceEntityNested(uint8_t value__)
+    {
+      actions.setSourceEntity(value__);
+    }
+
+    void
+    TemporalPlanStatus::setDestinationNested(uint16_t value__)
+    {
+      actions.setDestination(value__);
+    }
+
+    void
+    TemporalPlanStatus::setDestinationEntityNested(uint8_t value__)
+    {
+      actions.setDestinationEntity(value__);
     }
   }
 }

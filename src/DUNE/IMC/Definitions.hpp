@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d292e724592557940354dddbfc5a9d32                            *
+// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -23141,6 +23141,286 @@ namespace DUNE
 
       void
       fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
+    //! Temporal Action.
+    class TemporalAction: public Message
+    {
+    public:
+      //! Status.
+      enum StatusEnum
+      {
+        //! Unknown.
+        ASTAT_UKNOWN = 0,
+        //! Ignored.
+        ASTAT_IGNORED = 1,
+        //! Scheduled.
+        ASTAT_SCHEDULED = 2,
+        //! Failed.
+        ASTAT_FAILED = 3,
+        //! Cancelled.
+        ASTAT_CANCELLED = 4,
+        //! Finished.
+        ASTAT_FINISHED = 5
+      };
+
+      //! Action Identifier.
+      std::string action_id;
+      //! System Identifier.
+      uint16_t system_id;
+      //! Status.
+      uint8_t status;
+      //! Start Time.
+      fp64_t start_time;
+      //! Duration.
+      fp64_t duration;
+      //! Action.
+      InlineMessage<PlanSpecification> action;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 911;
+      }
+
+      TemporalAction(void);
+
+      Message*
+      clone(void) const
+      {
+        return new TemporalAction(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TemporalAction::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TemporalAction";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 19;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(action_id) + action.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! Temporal Plan.
+    class TemporalPlan: public Message
+    {
+    public:
+      //! Plan Identifier.
+      std::string plan_id;
+      //! Actions.
+      MessageList<TemporalAction> actions;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 910;
+      }
+
+      TemporalPlan(void);
+
+      Message*
+      clone(void) const
+      {
+        return new TemporalPlan(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TemporalPlan::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TemporalPlan";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(plan_id) + actions.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
+    };
+
+    //! Temporal Plan Status.
+    class TemporalPlanStatus: public Message
+    {
+    public:
+      //! Plan Identifier.
+      std::string plan_id;
+      //! Actions.
+      MessageList<TemporalAction> actions;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 912;
+      }
+
+      TemporalPlanStatus(void);
+
+      Message*
+      clone(void) const
+      {
+        return new TemporalPlanStatus(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return TemporalPlanStatus::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "TemporalPlanStatus";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 0;
+      }
+
+      unsigned
+      getVariableSerializationSize(void) const
+      {
+        return IMC::getSerializationSize(plan_id) + actions.getSerializationSize();
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+
+    protected:
+      void
+      setTimeStampNested(double value__);
+
+      void
+      setSourceNested(uint16_t value__);
+
+      void
+      setSourceEntityNested(uint8_t value__);
+
+      void
+      setDestinationNested(uint16_t value__);
+
+      void
+      setDestinationEntityNested(uint8_t value__);
     };
   }
 }

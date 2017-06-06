@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: d292e724592557940354dddbfc5a9d32                            *
+// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -612,5 +612,11 @@
 #define DUNE_IMC_APMSTATUS 906
 //! SadcReadings identification number.
 #define DUNE_IMC_SADCREADINGS 907
+//! TemporalPlan identification number.
+#define DUNE_IMC_TEMPORALPLAN 910
+//! TemporalAction identification number.
+#define DUNE_IMC_TEMPORALACTION 911
+//! TemporalPlanStatus identification number.
+#define DUNE_IMC_TEMPORALPLANSTATUS 912
 
 #endif
