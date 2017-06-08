@@ -164,7 +164,9 @@ namespace Vision
       //! Flag to control capture of image
       bool m_is_to_capture;
       //! flag to control
-      bool is_strobe;
+      bool m_is_strobe;
+      //! Strobe delay
+      float m_strobe_delay;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -217,12 +219,14 @@ namespace Vision
         .description("GPIO of RPI2 for strobe.");
 
         param("Strobe Delay (us)", m_args.delay_capture)
-        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_MANEUVER)
         .defaultValue("1000")
         .description("Strobe Delay in us.");
 
         param("Shutter Value (ms)", m_args.shutter_value)
-        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_MANEUVER)
         .defaultValue("8")
         .minimumValue("1")
         .maximumValue("300")
@@ -235,6 +239,14 @@ namespace Vision
       void
       onUpdateParameters(void)
       {
+        if (paramChanged(m_args.shutter_value))
+        {
+          set_shutter_value(m_args.shutter_value);
+          inf("shutter: %f", m_args.shutter_value);
+        }
+
+        if (paramChanged(m_args.delay_capture))
+          inf("strobe delay: %d", m_args.delay_capture);
       }
 
       void
@@ -267,6 +279,7 @@ namespace Vision
         m_cnt_photos_by_folder = 0;
         m_folder_number = 0;
         m_is_to_capture = false;
+        m_strobe_delay = m_args.delay_capture;
 
         char text[8];
         for(int i = 0; i < c_number_max_thread; i++)
@@ -368,7 +381,6 @@ namespace Vision
         m_frame_lost_cnt = 0;
         m_cnt_photos_by_folder = 0;
         m_folder_number = 0;
-        std::system("sync");
         releaseRamCached();
         updateStrobe();
         try
@@ -396,7 +408,6 @@ namespace Vision
       onDeactivation(void)
       {
         inf("on Deactivation");
-        std::system("sync");
         m_is_to_capture = false;
         m_error = m_camera.StopCapture();
         if ( m_error != FlyCapture2::PGRERROR_OK )
@@ -520,12 +531,12 @@ namespace Vision
       void
       updateStrobe(void)
       {
-        is_strobe = false;
+        m_is_strobe = false;
         init_gpio_strobe();
         if (m_args.led_type == "STROBE")
         {
           war("enabling strobe output");
-          is_strobe = true;
+          m_is_strobe = true;
           return;
         }
         else if (m_args.led_type == "ON")
@@ -665,7 +676,7 @@ namespace Vision
       {
         bool result = false;
         saveInfoExif();
-        if(is_strobe)
+        if(m_is_strobe)
         {
           set_led(LED_ON);
           Delay::waitUsec(m_args.delay_capture);
@@ -692,7 +703,7 @@ namespace Vision
         }
         else
         {
-          if(is_strobe)
+          if(m_is_strobe)
             set_led(LED_OFF);
         }
 
@@ -781,8 +792,9 @@ namespace Vision
       releaseRamCached(void)
       {
         debug("Releasing cache ram.");
-        std::system("sync");
-        return std::system("echo 1 > /proc/sys/vm/drop_caches");
+        int result = std::system("sync");
+        result = std::system("echo 1 > /proc/sys/vm/drop_caches");
+        return result;
       }
 
       void
