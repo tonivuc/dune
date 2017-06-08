@@ -50,9 +50,18 @@ namespace Vision
 {
   namespace PointGrey
   {
+    //! Command types.
+    enum CommandType
+    {
+      //! Set GPIO LOW (on).
+      LED_ON = 0,
+      //! Set GPIO HIGH (off).
+      LED_OFF = 1
+    };
+
     using DUNE_NAMESPACES;
 
-    static const int c_number_max_thread = 15;
+    static const int c_number_max_thread = 25;
     static const int c_number_max_fps = 5;
     static const float c_time_to_release_cached_ram = 300.0;
     static const float c_time_to_release_camera = 3.0;
@@ -79,6 +88,12 @@ namespace Vision
       bool split_photos;
       //! Number of photos to folder
       unsigned int number_photos;
+      //! Gpio Number for strobe
+      int gpio_strobe;
+      //! Delay before capture image
+      int delay_capture;
+      //! shutter value for image
+      float shutter_value;
     };
 
     //! Device driver task.
@@ -148,12 +163,13 @@ namespace Vision
       std::string m_log_name;
       //! Flag to control capture of image
       bool m_is_to_capture;
+      //! flag to control
+      bool is_strobe;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
         m_log_dir(ctx.dir_log)
       {
-        // Retrieve configuration values.
         paramActive(Tasks::Parameter::SCOPE_MANEUVER,
                     Tasks::Parameter::VISIBILITY_USER);
 
@@ -195,6 +211,23 @@ namespace Vision
         .maximumValue("3000")
         .description("Split photos by folder.");
 
+        param("GPIO Strobe", m_args.gpio_strobe)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("17")
+        .description("GPIO of RPI2 for strobe.");
+
+        param("Strobe Delay (us)", m_args.delay_capture)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("1000")
+        .description("Strobe Delay in us.");
+
+        param("Shutter Value (ms)", m_args.shutter_value)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("8")
+        .minimumValue("1")
+        .maximumValue("300")
+        .description("Shutter Value time in ms.");
+
         bind<IMC::EstimatedState>(this);
         bind<IMC::LoggingControl>(this);
       }
@@ -208,6 +241,7 @@ namespace Vision
       onResourceInitialization(void)
       {
         set_cpu_governor();
+        init_gpio_strobe();
 
         if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
           m_cnt_fps.setTop((1.0/m_args.number_fs));
@@ -253,6 +287,7 @@ namespace Vision
       {
         m_is_to_capture = false;
         Delay::wait(c_time_to_release_camera);
+        set_led(LED_OFF);
 
         for(int i = 0; i < c_number_max_thread; i++)
         {
@@ -367,6 +402,7 @@ namespace Vision
         if ( m_error != FlyCapture2::PGRERROR_OK )
           war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
+        set_led(LED_OFF);
         setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
       }
 
@@ -414,16 +450,87 @@ namespace Vision
         return -1;
       }
 
+      bool
+      init_gpio_strobe(void)
+      {
+        char buffer[64];
+        FILE* pipe;
+        if ((pipe = fopen("/sys/class/gpio/export", "ab")) == NULL)
+        {
+          err("Unable to export GPIO pin (%d)", m_args.gpio_strobe);
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
+          return false;
+        }
+        else
+        {
+          fwrite(to_string(m_args.gpio_strobe).c_str(), sizeof(char), 2, pipe);
+          fclose(pipe);
+          sprintf(buffer, "/sys/class/gpio/gpio%d/direction", m_args.gpio_strobe);
+          if ((pipe = fopen(buffer, "rb+")) == NULL)
+          {
+            err("Unable to open direction handle (%d)", m_args.gpio_strobe);
+            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
+            return false;
+          }
+          else
+          {
+            fwrite("out", sizeof(char), 3, pipe);
+            fclose(pipe);
+            return set_led(LED_OFF);
+          }
+        }
+
+        return false;
+      }
+
+      bool
+      set_led(CommandType mode)
+      {
+        char buffer[64];
+        sprintf(buffer, "/sys/class/gpio/gpio%d/value", m_args.gpio_strobe);
+        FILE* pipe;
+        if ((pipe = fopen(buffer, "rb+")) == NULL)
+        {
+          err("Unable to open value handle (%d)", m_args.gpio_strobe);
+          return false;
+        }
+        else
+        {
+          switch (mode)
+          {
+            case LED_OFF:
+              fwrite("1", sizeof(char), 1, pipe);
+              fclose(pipe);
+              break;
+
+            case LED_ON:
+              fwrite("0", sizeof(char), 1, pipe);
+              fclose(pipe);
+              break;
+
+            default:
+              fclose(pipe);
+              break;
+          }
+        }
+
+        return false;
+      }
+
       void
       updateStrobe(void)
       {
+        is_strobe = false;
+        init_gpio_strobe();
         if (m_args.led_type == "STROBE")
         {
           war("enabling strobe output");
+          is_strobe = true;
           return;
         }
         else if (m_args.led_type == "ON")
         {
+          set_led(LED_ON);
           war("leds always on");
           return;
         }
@@ -431,41 +538,6 @@ namespace Vision
         {
           war("leds always off");
         }
-      }
-
-      // Check for the presence of feature
-      bool
-      checkValueOfCamera( FlyCapture2::Camera* pCam , unsigned int feature, bool isFeature)
-      {
-        FlyCapture2::Error error2;
-        unsigned int regVal = 0;
-        error2 = pCam->ReadRegister( feature, &regVal );
-        if ( error2 != FlyCapture2::PGRERROR_OK )
-        {
-          war("erro reading feature: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-          return false;
-        }
-
-        if(isFeature)
-        {
-          if( ( regVal & 0x10000 ) != 0x10000 )
-          {
-            war("Feature not present.");
-            inf("Value: %u", regVal);
-            return false;
-          }
-          else
-          {
-            war("Feature present.");
-            inf("Value: %u", regVal);
-          }
-        }
-        else
-        {
-          inf("Value: %u", regVal);
-        }
-
-        return true;
       }
 
       void
@@ -488,7 +560,6 @@ namespace Vision
         inf("Initialization of Camera");
         // Get Flea2 camera
         m_error = m_busMgr.GetCameraFromIndex( 0, &m_guid );
-
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           err("Failed to get camera index: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
@@ -501,7 +572,6 @@ namespace Vision
           err("Failed to connect to camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
-
         // Get the camera info and print it out
         m_error = m_camera.GetCameraInfo( &m_camInfo );
         if ( m_error != FlyCapture2::PGRERROR_OK )
@@ -509,6 +579,15 @@ namespace Vision
           err("Failed to get camera info from camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
+        // Get the camera info and print it out
+        m_error = m_camera.RestoreFromMemoryChannel( 1 );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to restore config %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
+
+        set_shutter_value(m_args.shutter_value);
 
         m_error = m_camera.StartCapture();
         if ( m_error != FlyCapture2::PGRERROR_OK )
@@ -517,24 +596,67 @@ namespace Vision
           return false;
         }
 
-        //const unsigned int k_triggerInq = 0x530;
-        //checkValueOfCamera(&camera, 0x530, true);
-
-        //set IO1 (4) Output
-        /*error = camera.WriteRegister( 0x1110, 0x80080001 );
-                if ( error != FlyCapture2::PGRERROR_OK )
-                  err("erro writing");*/
-        /*m_error = m_camera.WriteRegister( 0x1120, 0x80080001 );
-        if ( m_error != FlyCapture2::PGRERROR_OK )
-          err("erro writing");*/
-
-        //current gpio config
-        /*checkValueOfCamera(&camera, 0x1110, false);
-                checkValueOfCamera(&camera, 0x1120, false);
-                checkValueOfCamera(&camera, 0x11F8, false);*/
-
         getInfoCamera();
         inf("Camera ready.");
+        return true;
+      }
+
+      // Start polling for trigger ready
+      bool
+      PollForTriggerReady(void)
+      {
+        unsigned int k_softwareTrigger = 0x62C;
+        unsigned int regVal = 0;
+
+        do
+        {
+          m_error = m_camera.ReadRegister( k_softwareTrigger, &regVal );
+          if ( m_error != FlyCapture2::PGRERROR_OK )
+          {
+            err("Failed of PollForTriggerReady: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+            return false;
+          }
+        } while ( (regVal >> 31) != 0  && !stopping());
+        return true;
+      }
+
+      bool
+      set_shutter_value(float value)
+      {
+        //Declare a Property struct.
+        FlyCapture2::Property prop;
+        //Define the property to adjust.
+        prop.type = FlyCapture2::SHUTTER;
+        //Ensure the property is on.
+        prop.onOff = true;
+        //Ensure auto-adjust mode is off.
+        prop.autoManualMode = false;
+        //Ensure the property is set up to use absolute value control.
+        prop.absControl = true;
+        //Set the absolute value of shutter to 20 ms.
+        prop.absValue = value;
+        //Set the property.
+        m_error = m_camera.SetProperty( &prop );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to set shutter value: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
+        return true;
+      }
+
+      // Launch the software trigger event
+      bool
+      FireSoftwareTrigger(void)
+      {
+        const unsigned int k_softwareTrigger = 0x62C;
+        const unsigned int k_fireVal = 0x80000000;
+        m_error = m_camera.WriteRegister( k_softwareTrigger, k_fireVal );
+        if ( m_error != FlyCapture2::PGRERROR_OK )
+        {
+          err("Failed to FireSoftwareTrigger: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          return false;
+        }
         return true;
       }
 
@@ -543,6 +665,15 @@ namespace Vision
       {
         bool result = false;
         saveInfoExif();
+        if(is_strobe)
+        {
+          set_led(LED_ON);
+          Delay::waitUsec(m_args.delay_capture);
+        }
+        // Check that the trigger is ready
+        PollForTriggerReady();
+        // Fire software trigger
+        FireSoftwareTrigger();
         try
         {
           m_error = m_camera.RetrieveBuffer( &m_rawImage );
@@ -558,6 +689,11 @@ namespace Vision
             war("capture error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
           return false;
+        }
+        else
+        {
+          if(is_strobe)
+            set_led(LED_OFF);
         }
 
         // convert to rgb
@@ -645,6 +781,7 @@ namespace Vision
       releaseRamCached(void)
       {
         debug("Releasing cache ram.");
+        std::system("sync");
         return std::system("echo 1 > /proc/sys/vm/drop_caches");
       }
 
@@ -746,6 +883,7 @@ namespace Vision
           else
           {
             waitForMessages(1.0);
+            set_led(LED_OFF);
           }
         }
       }
