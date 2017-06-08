@@ -61,6 +61,8 @@ namespace Simulators
       std::string prng_type;
       //! PRNG seed.
       int prng_seed;
+      //! Require simulation for running
+      bool require_simulation;
     };
 
     //! Gaussian simulator task.
@@ -70,6 +72,9 @@ namespace Simulators
       IMC::Message* m_msg;
       //! Last simulated state.
       IMC::SimulatedState m_last_state;
+      //! Last simulated state.
+      IMC::EstimatedState m_last_estate;
+
       //! Pseudo-random number generator.
       Random::Generator* m_prng;
       //! Task arguments.
@@ -111,10 +116,14 @@ namespace Simulators
         param("PRNG Seed", m_args.prng_seed)
         .defaultValue("-1");
 
+        param("Require Simulation", m_args.require_simulation)
+        .defaultValue("false");
+
         m_ctx.config.get("General", "Underwater Depth Threshold", "0.3", m_args.depth_threshold);
 
         // Register consumers.
         bind<IMC::SimulatedState>(this);
+        bind<IMC::EstimatedState>(this);
       }
 
       //! Parse arguments.
@@ -132,6 +141,7 @@ namespace Simulators
 
         if (paramChanged(m_args.peak_lon))
           m_args.peak_lon = Angles::radians(m_args.peak_lon);
+
       }
 
       //! Acquire resources.
@@ -141,6 +151,12 @@ namespace Simulators
         Memory::clear(m_msg);
         m_msg = IMC::Factory::produce(m_args.message_name);
         m_prng = Random::Factory::create(m_args.prng_type, m_args.prng_seed);
+
+        if (!m_args.require_simulation)
+        {
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+          requestActivation();
+        }
       }
 
       //! Release resources.
@@ -164,6 +180,12 @@ namespace Simulators
       }
 
       void
+      consume(const IMC::EstimatedState* msg)
+      {
+        m_last_estate = *msg;
+      }
+
+      void
       task(void)
       {
         // Return if task is not active.
@@ -180,12 +202,25 @@ namespace Simulators
           }
         }
 
-        double slat, slon, dx, dy, dz;
-        slat = m_last_state.lat;
-        slon = m_last_state.lon;
+        double slat, slon, dx, dy, dz, x, y;
+
+        if (m_args.require_simulation)
+        {
+          slat = m_last_state.lat;
+          slon = m_last_state.lon;
+          x = m_last_state.x;
+          y = m_last_state.y;
+        }
+        else
+        {
+          slat = m_last_estate.lat;
+          slon = m_last_estate.lon;
+          x = m_last_estate.x;
+          y = m_last_estate.y;
+        }
 
         // get absolute (simulated) position
-        WGS84::displace(m_last_state.x, m_last_state.y, &slat, &slon);
+        WGS84::displace(x, y, &slat, &slon);
 
         // compute offset from plume peak
         WGS84::displacement(slat, slon, 0, m_args.peak_lat, m_args.peak_lon, 0, &dx, &dy, &dz);
