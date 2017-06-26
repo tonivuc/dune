@@ -202,6 +202,11 @@ namespace Transports
         m_uris_loc.insert(imcvers.str());
         m_uris_ext.insert(imcvers.str());
 
+        std::ostringstream os;
+        os << "glued://0.0.0.0/version/" << fetchGluedVersion();
+        m_uris_loc.insert(os.str());
+        m_uris_ext.insert(os.str());
+
         generateServiceStrings();
 
         // Add additional services defined statically.
@@ -428,6 +433,25 @@ namespace Transports
           catch (...)
           { }
         }
+      }
+
+      std::string
+      fetchGluedVersion()
+      {
+        std::ifstream infile("/etc/config");
+        bool found = false;
+        std::string line;
+        std::string version = "n/a";
+
+        while(infile >> line && !found)
+        {
+          if(Utils::String::startsWith(line, "cfg_glued_git_version="))
+          {
+            version = line.substr(22);
+            found = true;
+          }
+        }
+        return version;
       }
 
       void
