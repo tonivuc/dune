@@ -24,37 +24,84 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Ricardo Martins                                                  *
-//***************************************************************************
-// Automatically generated.                                                 *
-//***************************************************************************
-// IMC XML MD5: d292e724592557940354dddbfc5a9d32                            *
+// Author: Manuel Ribeiro                                                   *
 //***************************************************************************
 
-#ifndef DUNE_IMC_CONSTANTS_HPP_INCLUDED_
-#define DUNE_IMC_CONSTANTS_HPP_INCLUDED_
+#ifndef MANEUVER_MULTIPLEXER_DROP_HPP_INCLUDED_
+#define MANEUVER_MULTIPLEXER_DROP_HPP_INCLUDED_
 
-//! IMC version string.
-#define DUNE_IMC_CONST_VERSION "5.4.11"
-//! Git repository information.
-#define DUNE_IMC_CONST_GIT_INFO "2017-05-17 ec59290  (HEAD -> master, origin/master, origin/HEAD)"
-//! MD5 sum of XML specification file.
-#define DUNE_IMC_CONST_MD5 "d292e724592557940354dddbfc5a9d32"
-//! Synchronization number.
-#define DUNE_IMC_CONST_SYNC 0xFE54
-//! Reversed synchronization number.
-#define DUNE_IMC_CONST_SYNC_REV 0x54FE
-//! Size of the header in bytes.
-#define DUNE_IMC_CONST_HEADER_SIZE 20
-//! Size of the footer in bytes.
-#define DUNE_IMC_CONST_FOOTER_SIZE 2
-//! Identification number of the null message.
-#define DUNE_IMC_CONST_NULL_ID 65535
-//! Maximum message data size.
-#define DUNE_IMC_CONST_MAX_SIZE 65535
-//! Unknown entity identifier.
-#define DUNE_IMC_CONST_UNK_EID 255
-//! System entity identifier.
-#define DUNE_IMC_CONST_SYS_EID 0
+#include <DUNE/DUNE.hpp>
+
+// Local headers
+#include "MuxedManeuver.hpp"
+
+namespace Maneuver
+{
+  namespace Multiplexer
+  {
+    using DUNE_NAMESPACES;
+    //!Variables
+    struct DropArgs
+    {
+      // Servo Id
+      int servoId;
+      // Servo Id
+      float servoValue;
+    };
+
+    //! Drop maneuver
+    class Drop: public MuxedManeuver<IMC::Drop, DropArgs>
+    {
+    public:
+      //! Default constructor.
+      //! @param[in] task pointer to Maneuver task
+      //! @param[in] args drop arguments
+      Drop(Maneuvers::Maneuver* task, DropArgs* args):
+        MuxedManeuver<IMC::Drop, DropArgs>(task, args)
+      { }
+
+      ~Drop(void)
+      { }
+
+      //! Start maneuver function
+      //! @param[in] maneuver drop maneuver message
+      void
+      onStart(const IMC::Drop* maneuver)
+      {
+        m_task->setControl(IMC::CL_PATH);
+
+        IMC::DesiredPath path;
+        path.end_lat = maneuver->lat;
+        path.end_lon = maneuver->lon;
+        path.end_z = maneuver->z;
+        path.end_z_units = maneuver->z_units;
+        path.speed = maneuver->speed;
+        path.speed_units = maneuver->speed_units;
+
+        m_task->dispatch(path);
+      }
+
+      //! On PathControlState message
+      //! @param[in] pcs pointer to PathControlState message
+      void
+      onPathControlState(const IMC::PathControlState* pcs)
+      {
+        if (pcs->flags & IMC::PathControlState::FL_NEAR)
+        {
+          IMC::SetServoPosition setServo;
+          setServo.id = m_args->servoId;
+          setServo.value = m_args->servoValue;
+          m_task->dispatch(setServo);
+
+          m_task->signalCompletion();
+        }
+        else
+        {
+          m_task->signalProgress(pcs->eta);
+        }
+      }
+    };
+  }
+}
 
 #endif
