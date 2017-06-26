@@ -50,6 +50,11 @@ Main.prototype.m_fields = [
         "side": "left"
     },
     {
+        "label": "Glued:",
+        "data_function": getGluedVersion,
+	"side": "left"
+    },
+    {
         "label": "Date:",
         "data_function": function(data) { return dateToString(data.dune_time_current); },
         "side": "left"
@@ -328,4 +333,26 @@ function getUptime(data)
     }
 
     return str;
+}
+
+function getGluedVersion(data)
+{
+    var msg = findMessage(data, 'Announce')
+    var glued_service_str="glued://0.0.0.0/version/";
+    var glued_version = "";
+
+    if (msg == null)
+        return glued_version;
+
+    var services_list = msg.services.split(";");
+    for (var i = 0; i < services_list.length; i++)
+    {
+	if(services_list[i].indexOf(glued_service_str) == -1)
+	    continue;
+
+	glued_version = services_list[i].split(glued_service_str)[1];
+	break;
+    }
+
+    return glued_version;
 }
