@@ -159,6 +159,8 @@ namespace Control
         bool use_external_nav;
         //! Temperature of ESC failure (degrees)
         float esc_temp;
+        //! Switch RC receivers (for ground tests)
+        bool toggle_rc;
       };
 
       struct Task: public DUNE::Tasks::Task
@@ -206,8 +208,6 @@ namespace Control
         bool m_reboot;
         //! Flag indicating MSL-WGS84 offset has already been calculated.
         bool m_offset_st;
-        //! WGS84 height on ground
-        float m_href;
         //! External control
         bool m_external;
         //! Current waypoint
@@ -241,6 +241,10 @@ namespace Control
         float m_gb_pan, m_gb_tilt, m_gb_retract;
         //! Flag to signal if a land maneuver occured
         bool m_land;
+        //! Rx-A PCC state
+        bool m_rca;
+        //! Rx-B PCC state
+        bool m_rcb;
 
         Task(const std::string& name, Tasks::Context& ctx):
           Tasks::Task(name, ctx),
@@ -271,7 +275,9 @@ namespace Control
           m_vehicle_type(VEHICLE_UNKNOWN),
           m_service(false),
           m_last_wp(0),
-          m_land(false)
+          m_land(false),
+          m_rca(true),
+          m_rcb(false)
         {
           param("Communications Timeout", m_args.comm_timeout)
           .minimumValue("1")
@@ -428,6 +434,10 @@ namespace Control
           .defaultValue("70.0")
           .description("Temperature of ESC failure (degrees).");
 
+          param("Toggle RC receivers", m_args.toggle_rc)
+          .defaultValue("false")
+          .description("Toggle RC receivers (Rx-A and Rx-B).");
+
           // Setup packet handlers
           // IMPORTANT: set up function to handle each type of MAVLINK packet here
           m_mlh[MAVLINK_MSG_ID_ATTITUDE] = &Task::handleAttitudePacket;
@@ -438,7 +448,6 @@ namespace Control
           m_mlh[MAVLINK_MSG_ID_WIND] = &Task::handleWindPacket;
           m_mlh[MAVLINK_MSG_ID_COMMAND_ACK] = &Task::handleCmdAckPacket;
           m_mlh[MAVLINK_MSG_ID_MISSION_ACK] = &Task::handleMissionAckPacket;
-          //m_mlh[MAVLINK_MSG_ID_MISSION_CURRENT] = &Task::handleMissionCurrentPacket;
           m_mlh[MAVLINK_MSG_ID_STATUSTEXT] = &Task::handleStatusTextPacket;
           m_mlh[MAVLINK_MSG_ID_HEARTBEAT] = &Task::handleHeartbeatPacket;
           m_mlh[MAVLINK_MSG_ID_NAV_CONTROLLER_OUTPUT] = &Task::handleNavControllerPacket;
@@ -446,7 +455,6 @@ namespace Control
           m_mlh[MAVLINK_MSG_ID_SYS_STATUS] = &Task::handleSystemStatusPacket;
           m_mlh[MAVLINK_MSG_ID_VFR_HUD] = &Task::handleHUDPacket;
           m_mlh[MAVLINK_MSG_ID_SYSTEM_TIME] = &Task::handleSystemTimePacket;
-          //m_mlh[MAVLINK_MSG_ID_MISSION_REQUEST] = &Task::handleMissionRequestPacket;
           m_mlh[MAVLINK_MSG_ID_RAW_IMU] = &Task::handleImuRaw;
 
           // Setup processing of IMC messages
@@ -498,6 +506,33 @@ namespace Control
           //! are simetrical to maximum values, no need to input them manually
           m_args.rc1.val_min = -m_args.rc1.val_max;
           m_args.rc2.val_min = -m_args.rc2.val_max;
+
+          if(paramChanged(m_args.toggle_rc) && m_args.toggle_rc)
+          {
+            // Switch RC receivers.
+            IMC::PowerChannelControl pcc_rca;
+            IMC::PowerChannelControl pcc_rcb;
+
+            pcc_rca.name = m_ctx.config.get("Power.LUEMB", "Power Channel 1 - Name");
+            m_rca ? pcc_rca.op = IMC::PowerChannelControl::PCC_OP_TURN_OFF : pcc_rca.op = IMC::PowerChannelControl::PCC_OP_TURN_ON;
+            dispatch(pcc_rca);
+
+            pcc_rcb.name = m_ctx.config.get("Power.LUEMB", "Power Channel 2 - Name");
+            m_rcb ? pcc_rcb.op = IMC::PowerChannelControl::PCC_OP_TURN_OFF : pcc_rcb.op = IMC::PowerChannelControl::PCC_OP_TURN_ON;
+            dispatch(pcc_rcb);
+
+            m_rca = !m_rca;
+            m_rcb = !m_rcb;
+
+            // Change toggle parameter back to false >> TODO: NOT WORKING!
+            IMC::EntityParameter p;
+            p.name = "Toggle RC receivers";
+            p.value = "false";
+            IMC::SetEntityParameters msg;
+            msg.name = getEntityId();
+            msg.params.push_back(p);
+            dispatch(msg);
+          }
         }
 
         void
@@ -597,7 +632,7 @@ namespace Control
                                                m_sysid,
                                                0,
                                                MAV_DATA_STREAM_RAW_SENSORS,
-                                               rate/2,
+                                               rate,
                                                1);
 
           n = mavlink_msg_to_send_buffer(buf, &msg);
@@ -1984,6 +2019,28 @@ namespace Control
         }
 
         void
+        handleMissionCurrentPacket(const mavlink_message_t* msg)
+        {
+          mavlink_mission_current_t miss_curr;
+
+          mavlink_msg_mission_current_decode(msg, &miss_curr);
+          m_current_wp = miss_curr.seq;
+          trace("Current mission item: %d", miss_curr.seq);
+
+          uint8_t buf[512];
+
+          mavlink_message_t msg_out;
+
+          mavlink_msg_mission_request_pack(255, 0, &msg_out,
+                                           m_sysid, //! target_system System ID
+                                           0, //! target_component Component ID
+                                           m_current_wp); //! Mission item to request
+
+          uint16_t n = mavlink_msg_to_send_buffer(buf, &msg_out);
+          sendData(buf, n);
+        }
+
+        void
         handleStatusTextPacket(const mavlink_message_t* msg)
         {
           mavlink_statustext_t stat_tex;
@@ -2344,6 +2401,17 @@ namespace Control
 
           if (!m_args.hitl)
             dispatch(m_fix);
+        }
+
+        void
+        handleMissionRequestPacket(const mavlink_message_t* msg)
+        {
+          mavlink_mission_request_t mission_request;
+          mavlink_msg_mission_request_decode(msg, &mission_request);
+
+          debug("Requesting item #%d", mission_request.seq);
+
+          sendMissionItem(true);
         }
       };
     }
