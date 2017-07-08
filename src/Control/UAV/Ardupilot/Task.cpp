@@ -208,6 +208,8 @@ namespace Control
         bool m_reboot;
         //! Flag indicating MSL-WGS84 offset has already been calculated.
         bool m_offset_st;
+        //! WGS84 height on ground
+        float m_href;
         //! External control
         bool m_external;
         //! Current waypoint
