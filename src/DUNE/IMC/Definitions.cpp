@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
+// IMC XML MD5: 3d77e08c98acf3cacade2e1645b8e078                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -24625,6 +24625,7 @@ namespace DUNE
       start_time = 0;
       duration = 0;
       action.clear();
+      type = 0;
     }
 
     bool
@@ -24637,6 +24638,7 @@ namespace DUNE
       if (start_time != other__.start_time) return false;
       if (duration != other__.duration) return false;
       if (action != other__.action) return false;
+      if (type != other__.type) return false;
       return true;
     }
 
@@ -24656,6 +24658,7 @@ namespace DUNE
       ptr__ += IMC::serialize(start_time, ptr__);
       ptr__ += IMC::serialize(duration, ptr__);
       ptr__ += action.serialize(ptr__);
+      ptr__ += IMC::serialize(type, ptr__);
       return ptr__;
     }
 
@@ -24669,6 +24672,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(start_time, bfr__, size__);
       bfr__ += IMC::deserialize(duration, bfr__, size__);
       bfr__ += action.deserialize(bfr__, size__);
+      bfr__ += IMC::deserialize(type, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -24682,6 +24686,7 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(start_time, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(duration, bfr__, size__);
       bfr__ += action.reverseDeserialize(bfr__, size__);
+      bfr__ += IMC::deserialize(type, bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -24694,6 +24699,7 @@ namespace DUNE
       IMC::toJSON(os__, "start_time", start_time, nindent__);
       IMC::toJSON(os__, "duration", duration, nindent__);
       action.toJSON(os__, "action", nindent__);
+      IMC::toJSON(os__, "type", type, nindent__);
     }
 
     void
@@ -24741,11 +24747,86 @@ namespace DUNE
       }
     }
 
+    VehicleDepot::VehicleDepot(void)
+    {
+      m_header.mgid = 913;
+      clear();
+    }
+
+    void
+    VehicleDepot::clear(void)
+    {
+      vehicle = 0;
+      lat = 0;
+      lon = 0;
+      deadline = 0;
+    }
+
+    bool
+    VehicleDepot::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::VehicleDepot& other__ = static_cast<const VehicleDepot&>(msg__);
+      if (vehicle != other__.vehicle) return false;
+      if (lat != other__.lat) return false;
+      if (lon != other__.lon) return false;
+      if (deadline != other__.deadline) return false;
+      return true;
+    }
+
+    int
+    VehicleDepot::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    VehicleDepot::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(vehicle, ptr__);
+      ptr__ += IMC::serialize(lat, ptr__);
+      ptr__ += IMC::serialize(lon, ptr__);
+      ptr__ += IMC::serialize(deadline, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    VehicleDepot::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(vehicle, bfr__, size__);
+      bfr__ += IMC::deserialize(lat, bfr__, size__);
+      bfr__ += IMC::deserialize(lon, bfr__, size__);
+      bfr__ += IMC::deserialize(deadline, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    VehicleDepot::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(vehicle, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lat, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(lon, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(deadline, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    VehicleDepot::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "vehicle", vehicle, nindent__);
+      IMC::toJSON(os__, "lat", lat, nindent__);
+      IMC::toJSON(os__, "lon", lon, nindent__);
+      IMC::toJSON(os__, "deadline", deadline, nindent__);
+    }
+
     TemporalPlan::TemporalPlan(void)
     {
       m_header.mgid = 910;
       clear();
       actions.setParent(this);
+      depots.setParent(this);
     }
 
     void
@@ -24753,6 +24834,7 @@ namespace DUNE
     {
       plan_id.clear();
       actions.clear();
+      depots.clear();
     }
 
     bool
@@ -24761,6 +24843,7 @@ namespace DUNE
       const IMC::TemporalPlan& other__ = static_cast<const TemporalPlan&>(msg__);
       if (plan_id != other__.plan_id) return false;
       if (actions != other__.actions) return false;
+      if (depots != other__.depots) return false;
       return true;
     }
 
@@ -24776,6 +24859,7 @@ namespace DUNE
       uint8_t* ptr__ = bfr__;
       ptr__ += IMC::serialize(plan_id, ptr__);
       ptr__ += actions.serialize(ptr__);
+      ptr__ += depots.serialize(ptr__);
       return ptr__;
     }
 
@@ -24785,6 +24869,7 @@ namespace DUNE
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::deserialize(plan_id, bfr__, size__);
       bfr__ += actions.deserialize(bfr__, size__);
+      bfr__ += depots.deserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -24794,6 +24879,7 @@ namespace DUNE
       const uint8_t* start__ = bfr__;
       bfr__ += IMC::reverseDeserialize(plan_id, bfr__, size__);
       bfr__ += actions.reverseDeserialize(bfr__, size__);
+      bfr__ += depots.reverseDeserialize(bfr__, size__);
       return bfr__ - start__;
     }
 
@@ -24802,36 +24888,47 @@ namespace DUNE
     {
       IMC::toJSON(os__, "plan_id", plan_id, nindent__);
       actions.toJSON(os__, "actions", nindent__);
+      depots.toJSON(os__, "depots", nindent__);
     }
 
     void
     TemporalPlan::setTimeStampNested(double value__)
     {
       actions.setTimeStamp(value__);
+
+      depots.setTimeStamp(value__);
     }
 
     void
     TemporalPlan::setSourceNested(uint16_t value__)
     {
       actions.setSource(value__);
+
+      depots.setSource(value__);
     }
 
     void
     TemporalPlan::setSourceEntityNested(uint8_t value__)
     {
       actions.setSourceEntity(value__);
+
+      depots.setSourceEntity(value__);
     }
 
     void
     TemporalPlan::setDestinationNested(uint16_t value__)
     {
       actions.setDestination(value__);
+
+      depots.setDestination(value__);
     }
 
     void
     TemporalPlan::setDestinationEntityNested(uint8_t value__)
     {
       actions.setDestinationEntity(value__);
+
+      depots.setDestinationEntity(value__);
     }
 
     TemporalPlanStatus::TemporalPlanStatus(void)

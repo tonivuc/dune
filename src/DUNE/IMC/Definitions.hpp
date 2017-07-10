@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
+// IMC XML MD5: 3d77e08c98acf3cacade2e1645b8e078                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -23164,6 +23164,23 @@ namespace DUNE
         ASTAT_FINISHED = 5
       };
 
+      //! Type.
+      enum TypeEnum
+      {
+        //! Move.
+        ATYPE_MOVE = 1,
+        //! Surface.
+        ATYPE_SURFACE = 2,
+        //! Communicate.
+        ATYPE_COMMUNICATE = 3,
+        //! Sample.
+        ATYPE_SAMPLE = 4,
+        //! Survey.
+        ATYPE_SURVEY = 5,
+        //! Locate.
+        ATYPE_LOCATE = 6
+      };
+
       //! Action Identifier.
       std::string action_id;
       //! System Identifier.
@@ -23176,6 +23193,8 @@ namespace DUNE
       fp64_t duration;
       //! Action.
       InlineMessage<PlanSpecification> action;
+      //! Type.
+      uint8_t type;
 
       static uint16_t
       getIdStatic(void)
@@ -23224,7 +23243,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 19;
+        return 20;
       }
 
       unsigned
@@ -23253,6 +23272,73 @@ namespace DUNE
       setDestinationEntityNested(uint8_t value__);
     };
 
+    //! Vehicle Depot.
+    class VehicleDepot: public Message
+    {
+    public:
+      //! vehicle.
+      uint16_t vehicle;
+      //! Latitude.
+      fp64_t lat;
+      //! Longitude.
+      fp64_t lon;
+      //! Deadline.
+      fp64_t deadline;
+
+      static uint16_t
+      getIdStatic(void)
+      {
+        return 913;
+      }
+
+      VehicleDepot(void);
+
+      Message*
+      clone(void) const
+      {
+        return new VehicleDepot(*this);
+      }
+
+      void
+      clear(void);
+
+      bool
+      fieldsEqual(const Message& msg__) const;
+
+      int
+      validate(void) const;
+
+      uint8_t*
+      serializeFields(uint8_t* bfr__) const;
+
+      uint16_t
+      deserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__);
+
+      uint16_t
+      getId(void) const
+      {
+        return VehicleDepot::getIdStatic();
+      }
+
+      const char*
+      getName(void) const
+      {
+        return "VehicleDepot";
+      }
+
+      unsigned
+      getFixedSerializationSize(void) const
+      {
+        return 26;
+      }
+
+      void
+      fieldsToJSON(std::ostream& os__, unsigned nindent__) const;
+    };
+
     //! Temporal Plan.
     class TemporalPlan: public Message
     {
@@ -23261,6 +23347,8 @@ namespace DUNE
       std::string plan_id;
       //! Actions.
       MessageList<TemporalAction> actions;
+      //! Depots.
+      MessageList<VehicleDepot> depots;
 
       static uint16_t
       getIdStatic(void)
@@ -23315,7 +23403,7 @@ namespace DUNE
       unsigned
       getVariableSerializationSize(void) const
       {
-        return IMC::getSerializationSize(plan_id) + actions.getSerializationSize();
+        return IMC::getSerializationSize(plan_id) + actions.getSerializationSize() + depots.getSerializationSize();
       }
 
       void

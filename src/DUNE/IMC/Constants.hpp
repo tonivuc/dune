@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
+// IMC XML MD5: 3d77e08c98acf3cacade2e1645b8e078                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_CONSTANTS_HPP_INCLUDED_
@@ -37,9 +37,9 @@
 //! IMC version string.
 #define DUNE_IMC_CONST_VERSION "5.4.11"
 //! Git repository information.
-#define DUNE_IMC_CONST_GIT_INFO "2017-06-05 7e02089  (HEAD -> feature/mvplanner, origin/feature/mvplanner)"
+#define DUNE_IMC_CONST_GIT_INFO "2017-06-29 52253ab  (HEAD -> feature/mvplanner, origin/feature/mvplanner)"
 //! MD5 sum of XML specification file.
-#define DUNE_IMC_CONST_MD5 "1fea102982a7b159f5ecc8e021e68e7c"
+#define DUNE_IMC_CONST_MD5 "3d77e08c98acf3cacade2e1645b8e078"
 //! Synchronization number.
 #define DUNE_IMC_CONST_SYNC 0xFE54
 //! Reversed synchronization number.

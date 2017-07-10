@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 1fea102982a7b159f5ecc8e021e68e7c                            *
+// IMC XML MD5: 3d77e08c98acf3cacade2e1645b8e078                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_MACROS_HPP_INCLUDED_
@@ -618,5 +618,7 @@
 #define DUNE_IMC_TEMPORALACTION 911
 //! TemporalPlanStatus identification number.
 #define DUNE_IMC_TEMPORALPLANSTATUS 912
+//! VehicleDepot identification number.
+#define DUNE_IMC_VEHICLEDEPOT 913
 
 #endif
