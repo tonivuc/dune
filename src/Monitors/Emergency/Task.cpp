@@ -70,6 +70,8 @@ namespace Monitors
       float m_progress;
       //! Iridium request identifier.
       unsigned m_req;
+      //! Vehicle State
+      uint8_t m_vstate;
       //! Lost communications timer.
       Counter<double> m_lost_coms_timer;
       //! Current height.
@@ -128,6 +130,7 @@ namespace Monitors
         bind<IMC::VehicleMedium>(this);
         bind<IMC::TextMessage>(this);
         bind<IMC::EstimatedState>(this);
+        bind<IMC::VehicleState>(this);
       }
 
       void
@@ -156,6 +159,7 @@ namespace Monitors
         m_fuel = -1.0;
         m_fuel_conf = -1.0;
         m_progress = -1.0;
+        m_vstate = '?';
       }
 
       void
@@ -191,11 +195,11 @@ namespace Monitors
 
           Time::BrokenDown bdt;
 
-          m_emsg = String::str("(%s) %02u:%02u:%02u / %d %f, %d %f, %f / f:%d c:%d",
+          m_emsg = String::str("(%s) %02u:%02u:%02u / %d %f, %d %f / f:%d c:%d / s:%c",
                                getSystemName(),
                                bdt.hour, bdt.minutes, bdt.seconds,
-                               lat_deg, lat_min, lon_deg, lon_min, m_height,
-                               (int)m_fuel, (int)m_fuel_conf);
+                               lat_deg, lat_min, lon_deg, lon_min,
+                               (int)m_fuel, (int)m_fuel_conf), vehicleStateChar(m_vstate);
 
           m_emsg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
         }
@@ -279,6 +283,34 @@ namespace Monitors
           m_lost_coms_timer.reset();
       }
 
+      void
+      consume(const IMC::VehicleState* msg)
+      {
+        m_vstate = msg->op_mode;
+      }
+
+      char
+      vehicleStateChar(const uint8_t vstate)
+      {
+        switch((IMC::VehicleState::OperationModeEnum) vstate)
+        {
+          case IMC::VehicleState::VS_BOOT:
+            return 'B';
+          case IMC::VehicleState::VS_CALIBRATION:
+            return 'C';
+          case IMC::VehicleState::VS_ERROR:
+            return 'E';
+          case IMC::VehicleState::VS_EXTERNAL:
+            return 'X';
+          case IMC::VehicleState::VS_MANEUVER:
+            return 'M';
+          case IMC::VehicleState::VS_SERVICE:
+            return 'S';
+          default:
+            return '?';
+        }
+      }
+
       //! Send SMS request.
       //! @param[in] prefix message prefix.
       //! @param[in] timeout time to live.
@@ -308,6 +340,7 @@ namespace Monitors
                                (int)m_fuel, (int)m_fuel_conf);
 
           msg += m_in_mission ? String::str(" / p:%d", (int)m_progress) : "";
+          msg += String::str("/ s:%c", vehicleStateChar(m_vstate));
 
           sms.contents = String::str("(%s) %s", prefix, msg.c_str());
         }
