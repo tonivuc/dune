@@ -44,7 +44,8 @@
 #include <exiv2/exiv2.hpp>
 
 //Local header
-#include <Vision/PointGrey/SaveImage.hpp>
+#include "SaveImage.hpp"
+#include "EntityActivationMaster.hpp"
 
 namespace Vision
 {
@@ -70,6 +71,10 @@ namespace Vision
     //! %Task arguments.
     struct Arguments
     {
+      //! Master Name.
+      std::string master_name;
+      //! Load task in mode master
+      bool is_master_mode;
       //! Power channel of strobe
       std::string channel_strobe;
       //! LED scheme.
@@ -94,6 +99,8 @@ namespace Vision
       int delay_capture;
       //! shutter value for image
       float shutter_value;
+      //! Slave entities
+      std::vector<std::string> slave_entities;
     };
 
     //! Device driver task.
@@ -109,11 +116,11 @@ namespace Vision
       FlyCapture2::Error m_error;
       //! Buffer raw image from a camera
       FlyCapture2::Image m_rawImage;
-      //! Buffer for rgb;
+      //! Buffer for rgb image;
       FlyCapture2::Image m_rgbImage;
-      //!
+      //! Bus Manager of connection to camera
       FlyCapture2::BusManager m_busMgr;
-      //!
+      //! Identifier of camera
       FlyCapture2::PGRGuid m_guid;
       //! Latitude deg
       int m_lat_deg;
@@ -167,16 +174,27 @@ namespace Vision
       bool m_is_strobe;
       //! Strobe delay
       float m_strobe_delay;
+      //! Flag to control init state
+      bool isStartTask;
+      //! Slave entities
+      EntityActivationMaster* m_slave_entities;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
-        m_log_dir(ctx.dir_log)
+        m_log_dir(ctx.dir_log),
+        m_slave_entities(NULL)
       {
         paramActive(Tasks::Parameter::SCOPE_MANEUVER,
                     Tasks::Parameter::VISIBILITY_USER);
 
         param("Power Channel - Strobe", m_args.channel_strobe)
         .description("Power Channel of Strobe.");
+
+        param("Master Name", m_args.master_name)
+        .description("Master Name.");
+
+        param("Master Mode", m_args.is_master_mode)
+        .description("Load task in master mode.");
 
         param("Led Mode", m_args.led_type)
     	  .description("Led type mode.");
@@ -232,118 +250,175 @@ namespace Vision
         .maximumValue("300")
         .description("Shutter Value time in ms.");
 
+        param("Slave Entities", m_args.slave_entities)
+        .defaultValue("")
+        .description("Slave entities to activate/deactivate");
+
         bind<IMC::EstimatedState>(this);
         bind<IMC::LoggingControl>(this);
       }
 
       void
+      updateSlaveEntities(void)
+      {
+        if (m_slave_entities == NULL)
+          return;
+
+        m_slave_entities->clear();
+
+        std::size_t sep;
+        std::vector<std::string>::const_iterator itr = m_args.slave_entities.begin();
+        for (; itr != m_args.slave_entities.end(); ++itr)
+        {
+          sep = itr->find_first_of(':');
+
+          if (sep == std::string::npos)
+            // Local entity
+            m_slave_entities->addEntity(*itr);
+          else
+            // Remote entity
+            m_slave_entities->addEntity(itr->substr(sep + 1), itr->substr(0, sep));
+        }
+      }
+
+      void
       onUpdateParameters(void)
       {
-        if (paramChanged(m_args.shutter_value))
-        {
-          set_shutter_value(m_args.shutter_value);
-          inf("shutter: %f", m_args.shutter_value);
-        }
+        updateSlaveEntities();
 
-        if (paramChanged(m_args.delay_capture))
+        if (paramChanged(m_args.shutter_value) && isStartTask)
+          inf("shutter: %f", m_args.shutter_value);
+
+        if (paramChanged(m_args.delay_capture) && isStartTask)
           inf("strobe delay: %d", m_args.delay_capture);
+      }
+
+      void
+      onResourceAcquisition(void)
+      {
+        m_slave_entities = new EntityActivationMaster(this);
+        updateSlaveEntities();
+        if(m_args.is_master_mode)
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
       }
 
       void
       onResourceInitialization(void)
       {
-        set_cpu_governor();
-        init_gpio_strobe();
-
-        if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
-          m_cnt_fps.setTop((1.0/m_args.number_fs));
-        else
-          m_cnt_fps.setTop(0.25);
-
-        if(m_args.number_photos < 500 && m_args.split_photos)
+        if(!m_args.is_master_mode)
         {
-          war("Number of photos by folder is to small (mim: 500)");
-          war("Setting Number of photos by folder to default (1000)");
-          m_args.number_photos = 1000;
+          isStartTask = false;
+          set_cpu_governor();
+          init_gpio_strobe();
+
+          if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
+          {
+            m_cnt_fps.setTop((1.0/m_args.number_fs));
+          }
+          else
+          {
+            war("Number of frames are wrong (1 <> 5)");
+            war("Setting number of frames to default (4)");
+            m_cnt_fps.setTop(0.25);
+          }
+
+          if(m_args.number_photos < 500 && m_args.split_photos)
+          {
+            war("Number of photos by folder is to small (mim: 500)");
+            war("Setting Number of photos by folder to default (1000)");
+            m_args.number_photos = 1000;
+          }
+          else if(m_args.number_photos > 3000 && m_args.split_photos)
+          {
+            war("Number of photos by folder is to high (max: 3000)");
+            war("Setting Number of photos by folder to default (1000)");
+            m_args.number_photos = 1000;
+          }
+
+          m_thread_cnt = 0;
+          m_frame_cnt = 0;
+          m_frame_lost_cnt = 0;
+          m_cnt_photos_by_folder = 0;
+          m_folder_number = 0;
+          m_is_to_capture = false;
+          m_strobe_delay = m_args.delay_capture;
+
+          char text[8];
+          for(int i = 0; i < c_number_max_thread; i++)
+          {
+            sprintf(text, "thr%d", i);
+            m_save[i] = new SaveImage(this, text);
+            m_save[i]->start();
+          }
+
+          m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
+          m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
+
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+          isStartTask = true;
         }
-        else if(m_args.number_photos > 3000 && m_args.split_photos)
-        {
-          war("Number of photos by folder is to high (max: 3000)");
-          war("Setting Number of photos by folder to default (1000)");
-          m_args.number_photos = 1000;
-        }
-
-        m_thread_cnt = 0;
-        m_frame_cnt = 0;
-        m_frame_lost_cnt = 0;
-        m_cnt_photos_by_folder = 0;
-        m_folder_number = 0;
-        m_is_to_capture = false;
-        m_strobe_delay = m_args.delay_capture;
-
-        char text[8];
-        for(int i = 0; i < c_number_max_thread; i++)
-        {
-          sprintf(text, "thr%d", i);
-          m_save[i] = new SaveImage(this, text);
-          m_save[i]->start();
-        }
-
-        m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
-        m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
-
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
       }
 
       void
       onResourceRelease(void)
       {
-        m_is_to_capture = false;
-        Delay::wait(c_time_to_release_camera);
-        set_led(LED_OFF);
-
-        for(int i = 0; i < c_number_max_thread; i++)
+        if (!m_args.is_master_mode)
         {
-          if (m_save[i] != NULL)
+          m_is_to_capture = false;
+          if(isStartTask)
           {
-            m_save[i]->stopAndJoin();
-            delete m_save[i];
-            m_save[i] = NULL;
+            Delay::wait(c_time_to_release_camera);
+            setLed(LED_OFF);
+
+            for(int i = 0; i < c_number_max_thread; i++)
+            {
+              if (m_save[i] != NULL)
+              {
+                m_save[i]->stopAndJoin();
+                delete m_save[i];
+                m_save[i] = NULL;
+              }
+            }
+
+            if(m_camera.IsConnected())
+            {
+              m_error = m_camera.StopCapture();
+              if ( m_error != FlyCapture2::PGRERROR_OK )
+                inf("Erro stopping camera capture: %s , already stop?", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+
+              m_error = m_camera.Disconnect();
+              if ( m_error != FlyCapture2::PGRERROR_OK )
+                inf("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+            }
           }
         }
-
-        if(m_camera.IsConnected())
-        {
-          m_error = m_camera.StopCapture();
-          if ( m_error != FlyCapture2::PGRERROR_OK )
-            inf("Erro stopping camera capture: %s , already stop?", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-
-          m_error = m_camera.Disconnect();
-          if ( m_error != FlyCapture2::PGRERROR_OK )
-            inf("Erro disconnecting camera: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
-        }
       }
+
 
       void
       consume(const IMC::LoggingControl* msg)
       {
-        if(msg->getSource() != getSystemId())
-          return;
-
-        if (msg->op == IMC::LoggingControl::COP_STARTED)
+        if (!m_args.is_master_mode)
         {
-          m_frame_cnt = 0;
-          m_frame_lost_cnt = 0;
-          m_cnt_photos_by_folder = 0;
-          m_folder_number = 0;
-          if(m_args.split_photos)
-            m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir / String::str("%06u", m_folder_number);
-          else
-            m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+          std::string sysName = resolveSystemId(msg->getSource());
+          if(sysName != m_args.master_name)
+            return;
 
-          m_back_path_image = m_log_dir.c_str();
-          m_log_dir.create();
-          m_log_name = msg->name;
+          if (msg->op == IMC::LoggingControl::COP_STARTED)
+          {
+            m_frame_cnt = 0;
+            m_frame_lost_cnt = 0;
+            m_cnt_photos_by_folder = 0;
+            m_folder_number = 0;
+            if(m_args.split_photos)
+              m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+            else
+              m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+
+            m_back_path_image = m_log_dir.c_str();
+            m_log_dir.create();
+            m_log_name = msg->name;
+          }
         }
       }
 
@@ -351,12 +426,16 @@ namespace Vision
       void
       consume(const IMC::EstimatedState* msg)
       {
-        if(msg->getSource() != getSystemId())
-          return;
+        if (!m_args.is_master_mode)
+        {
+          std::string sysName = resolveSystemId(msg->getSource());
+          if(sysName != m_args.master_name)
+            return;
 
-        Angles::convertDecimalToDMS(Angles::degrees(msg->lat), m_lat_deg, m_lat_min, m_lat_sec);
-        Angles::convertDecimalToDMS(Angles::degrees(msg->lon), m_lon_deg, m_lon_min, m_lon_sec);
-        m_note_comment = "Depth: "+to_string(msg->depth)+" m # Altitude: "+to_string(msg->alt)+" m";
+          Angles::convertDecimalToDMS(Angles::degrees(msg->lat), m_lat_deg, m_lat_min, m_lat_sec);
+          Angles::convertDecimalToDMS(Angles::degrees(msg->lon), m_lon_deg, m_lon_min, m_lon_sec);
+          m_note_comment = "Depth: "+to_string(msg->depth)+" m # Altitude: "+to_string(msg->alt)+" m";
+        }
       }
 
       void
@@ -376,45 +455,48 @@ namespace Vision
       void
       onActivation(void)
       {
-        inf("on Activation");
-        m_frame_cnt = 0;
-        m_frame_lost_cnt = 0;
-        m_cnt_photos_by_folder = 0;
-        m_folder_number = 0;
-        releaseRamCached();
-        updateStrobe();
-        try
+        if (!m_args.is_master_mode)
         {
-          if(!setUpCamera())
+          inf("on Activation");
+          m_frame_cnt = 0;
+          m_frame_lost_cnt = 0;
+          m_cnt_photos_by_folder = 0;
+          m_folder_number = 0;
+          releaseRamCached();
+          updateStrobe();
+          try
           {
-            onRequestDeactivation();
-            throw RestartNeeded("Cannot detect camera", 10);
-          }
+            if(!setUpCamera())
+              throw RestartNeeded("Cannot detect camera", 10);
 
-          setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs));
-          m_thread_cnt = 0;
-          m_cnt_fps.reset();
+            setEntityState(IMC::EntityState::ESTA_NORMAL, "Led Mode - "+m_args.led_type+" # Fps: "+to_string(m_args.number_fs));
+            set_shutter_value(m_args.shutter_value);
+            m_thread_cnt = 0;
+            m_cnt_fps.reset();
+          }
+          catch(...)
+          {
+            throw RestartNeeded("Erro Flycapture API", 10);
+          }
+          m_is_to_capture = true;
+          inf("Starting Capture.");
         }
-        catch(...)
-        {
-          onRequestDeactivation();
-          throw RestartNeeded("Erro Flycapture API", 10);
-        }
-        m_is_to_capture = true;
-        inf("Starting Capture.");
       }
 
       void
       onDeactivation(void)
       {
-        inf("on Deactivation");
-        m_is_to_capture = false;
-        m_error = m_camera.StopCapture();
-        if ( m_error != FlyCapture2::PGRERROR_OK )
-          war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+        if (!m_args.is_master_mode)
+        {
+          inf("on Deactivation");
+          m_is_to_capture = false;
+          m_error = m_camera.StopCapture();
+          if ( m_error != FlyCapture2::PGRERROR_OK )
+            war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
-        set_led(LED_OFF);
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+          setLed(LED_OFF);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+        }
       }
 
       int
@@ -423,10 +505,10 @@ namespace Vision
         char buffer[16];
         char governor[16];
         std::string result = "";
-        FILE* pipe = popen("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r");
-        if (!pipe)
+        FILE* pipe;
+        if ((pipe = popen("cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor", "r")) == NULL)
         {
-          war("popen() failed!");
+          war("fopen() failed!");
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
         }
         else
@@ -434,18 +516,18 @@ namespace Vision
           std::memset(&buffer, '\0', sizeof(buffer));
           try
           {
-            while (!feof(pipe))
+            while (!std::feof(pipe))
             {
-              if (fgets(buffer, sizeof(buffer), pipe) != NULL)
+              if (std::fgets(buffer, sizeof(buffer), pipe) != NULL)
                 result += buffer;
             }
           }
           catch (...)
           {
-            pclose(pipe);
+            std::fclose(pipe);
             throw;
           }
-          pclose(pipe);
+          std::fclose(pipe);
           std::sscanf(buffer, "%s", governor);
           if( std::strcmp(governor, "ondemand") == 0)
           {
@@ -474,9 +556,9 @@ namespace Vision
         }
         else
         {
-          fwrite(to_string(m_args.gpio_strobe).c_str(), sizeof(char), 2, pipe);
-          fclose(pipe);
-          sprintf(buffer, "/sys/class/gpio/gpio%d/direction", m_args.gpio_strobe);
+          std::fwrite(to_string(m_args.gpio_strobe).c_str(), sizeof(char), 2, pipe);
+          std::fclose(pipe);
+          std::sprintf(buffer, "/sys/class/gpio/gpio%d/direction", m_args.gpio_strobe);
           if ((pipe = fopen(buffer, "rb+")) == NULL)
           {
             err("Unable to open direction handle (%d)", m_args.gpio_strobe);
@@ -485,9 +567,10 @@ namespace Vision
           }
           else
           {
-            fwrite("out", sizeof(char), 3, pipe);
-            fclose(pipe);
-            return set_led(LED_OFF);
+            std::fwrite("out", sizeof(char), 3, pipe);
+            std::fclose(pipe);
+            Delay::wait(2);
+            return setLed(LED_OFF);
           }
         }
 
@@ -495,12 +578,12 @@ namespace Vision
       }
 
       bool
-      set_led(CommandType mode)
+      setLed(CommandType mode)
       {
         char buffer[64];
-        sprintf(buffer, "/sys/class/gpio/gpio%d/value", m_args.gpio_strobe);
+        std::sprintf(buffer, "/sys/class/gpio/gpio%d/value", m_args.gpio_strobe);
         FILE* pipe;
-        if ((pipe = fopen(buffer, "rb+")) == NULL)
+        if ((pipe = std::fopen(buffer, "rb+")) == NULL)
         {
           err("Unable to open value handle (%d)", m_args.gpio_strobe);
           return false;
@@ -510,22 +593,22 @@ namespace Vision
           switch (mode)
           {
             case LED_OFF:
-              fwrite("1", sizeof(char), 1, pipe);
-              fclose(pipe);
+              std::fwrite("1", sizeof(char), 1, pipe);
+              std::fclose(pipe);
               break;
 
             case LED_ON:
-              fwrite("0", sizeof(char), 1, pipe);
-              fclose(pipe);
+              std::fwrite("0", sizeof(char), 1, pipe);
+              std::fclose(pipe);
               break;
 
             default:
-              fclose(pipe);
+              std::fclose(pipe);
               break;
           }
         }
 
-        return false;
+        return true;
       }
 
       void
@@ -537,13 +620,11 @@ namespace Vision
         {
           war("enabling strobe output");
           m_is_strobe = true;
-          return;
         }
         else if (m_args.led_type == "ON")
         {
-          set_led(LED_ON);
+          setLed(LED_ON);
           war("leds always on");
-          return;
         }
         else
         {
@@ -614,7 +695,7 @@ namespace Vision
 
       // Start polling for trigger ready
       bool
-      PollForTriggerReady(void)
+      pollForTriggerReady(void)
       {
         unsigned int k_softwareTrigger = 0x62C;
         unsigned int regVal = 0;
@@ -644,13 +725,14 @@ namespace Vision
         prop.autoManualMode = false;
         //Ensure the property is set up to use absolute value control.
         prop.absControl = true;
-        //Set the absolute value of shutter to 20 ms.
+        //Set the absolute value of shutter to x ms.
         prop.absValue = value;
         //Set the property.
         m_error = m_camera.SetProperty( &prop );
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           err("Failed to set shutter value: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
+          m_error.PrintErrorTrace();
           return false;
         }
         return true;
@@ -658,7 +740,7 @@ namespace Vision
 
       // Launch the software trigger event
       bool
-      FireSoftwareTrigger(void)
+      fireSoftwareTrigger(void)
       {
         const unsigned int k_softwareTrigger = 0x62C;
         const unsigned int k_fireVal = 0x80000000;
@@ -678,13 +760,13 @@ namespace Vision
         saveInfoExif();
         if(m_is_strobe)
         {
-          set_led(LED_ON);
+          setLed(LED_ON);
           Delay::waitUsec(m_args.delay_capture);
         }
         // Check that the trigger is ready
-        PollForTriggerReady();
+        pollForTriggerReady();
         // Fire software trigger
-        FireSoftwareTrigger();
+        fireSoftwareTrigger();
         try
         {
           m_error = m_camera.RetrieveBuffer( &m_rawImage );
@@ -704,7 +786,7 @@ namespace Vision
         else
         {
           if(m_is_strobe)
-            set_led(LED_OFF);
+            setLed(LED_OFF);
         }
 
         // convert to rgb
@@ -731,7 +813,7 @@ namespace Vision
         debug("Size Image Capture: %u x %u", m_rgbImage.GetCols(), m_rgbImage.GetRows());
         debug("Path: %s", m_path_image.c_str());
 
-        m_thread_cnt = send_image_thread(m_thread_cnt);
+        m_thread_cnt = sendImageThread(m_thread_cnt);
         result = true;
 
         if(m_thread_cnt >= c_number_max_thread)
@@ -744,7 +826,7 @@ namespace Vision
       }
 
       int
-      send_image_thread(int cnt_thread)
+      sendImageThread(int cnt_thread)
       {
         int pointer_cnt_thread = cnt_thread;
         bool jump_over = false;
@@ -830,7 +912,7 @@ namespace Vision
       }
 
       void
-      triger_frame(void)
+      trigerFrame(void)
       {
         if(!getImage() && m_is_to_capture)
         {
@@ -872,30 +954,42 @@ namespace Vision
       {
         while (!stopping())
         {
-          if (isActive())
+          if (!m_args.is_master_mode)
           {
-            consumeMessages();
-            if(m_cnt_fps.overflow())
+            if (isActive())
             {
-              m_cnt_fps.reset();
-              triger_frame();
+              consumeMessages();
+              if(m_cnt_fps.overflow())
+              {
+                m_cnt_fps.reset();
+                trigerFrame();
 
+              }
+              else if(m_clean_cached_ram.overflow())
+              {
+                m_clean_cached_ram.reset();
+                releaseRamCached();
+              }
+              else if(m_update_cnt_frames.overflow())
+              {
+                m_update_cnt_frames.reset();
+                setEntityState(IMC::EntityState::ESTA_NORMAL, m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt)+" - "+to_string(m_frame_lost_cnt));
+              }
             }
-            else if(m_clean_cached_ram.overflow())
+            else
             {
-              m_clean_cached_ram.reset();
-              releaseRamCached();
-            }
-            else if(m_update_cnt_frames.overflow())
-            {
-              m_update_cnt_frames.reset();
-              setEntityState(IMC::EntityState::ESTA_NORMAL, m_args.led_type+" # Fps: "+to_string(m_args.number_fs)+" # "+to_string(m_frame_cnt)+" - "+to_string(m_frame_lost_cnt));
+              waitForMessages(1.0);
+              setLed(LED_OFF);
             }
           }
           else
           {
-            waitForMessages(1.0);
-            set_led(LED_OFF);
+            waitForMessages(0.1);
+            Delay::waitMsec(200);
+            if(isActive())
+              setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
+            else
+              setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
           }
         }
       }
