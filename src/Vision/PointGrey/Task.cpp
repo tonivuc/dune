@@ -45,7 +45,7 @@
 
 //Local header
 #include "SaveImage.hpp"
-#include "EntityActivationMaster.hpp"
+#include "Vision/Lumenera/EntityActivationMaster.hpp"
 
 namespace Vision
 {
@@ -67,6 +67,8 @@ namespace Vision
     static const float c_time_to_release_cached_ram = 300.0;
     static const float c_time_to_release_camera = 3.0;
     static const float c_time_to_update_cnt_info = 10.0;
+    static const std::string c_log_path = "/opt/lsts/dune/log/";
+    static const std::string c_camera_log_folder = "camera_log/";
 
     //! %Task arguments.
     struct Arguments
@@ -136,6 +138,10 @@ namespace Vision
       double m_lon_sec;
       //! Buffer for exif timestamp
       char m_text_exif_timestamp[16];
+      //! Buffer to backup path log
+      std::string m_back_path_log;
+      //! Buffer to backup path to main system log
+      std::string m_back_path_main_log;
       //! Buffer to backup epoch
       std::string m_back_epoch;
       //! Buffer to backup time
@@ -177,7 +183,7 @@ namespace Vision
       //! Flag to control init state
       bool isStartTask;
       //! Slave entities
-      EntityActivationMaster* m_slave_entities;
+      Lumenera::EntityActivationMaster* m_slave_entities;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -296,7 +302,7 @@ namespace Vision
       void
       onResourceAcquisition(void)
       {
-        m_slave_entities = new EntityActivationMaster(this);
+        m_slave_entities = new Lumenera::EntityActivationMaster(this);
         updateSlaveEntities();
         if(m_args.is_master_mode)
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
@@ -400,24 +406,36 @@ namespace Vision
       {
         if (!m_args.is_master_mode)
         {
-          std::string sysName = resolveSystemId(msg->getSource());
-          if(sysName != m_args.master_name)
+          std::string sysNameMsg = resolveSystemId(msg->getSource());
+          std::string sysLocalName = getSystemName();
+          if(sysNameMsg != m_args.master_name && sysNameMsg != sysLocalName)
             return;
 
-          if (msg->op == IMC::LoggingControl::COP_STARTED)
+          if(sysNameMsg != sysLocalName)
           {
-            m_frame_cnt = 0;
-            m_frame_lost_cnt = 0;
-            m_cnt_photos_by_folder = 0;
-            m_folder_number = 0;
-            if(m_args.split_photos)
-              m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir / String::str("%06u", m_folder_number);
-            else
-              m_log_dir = m_ctx.dir_log / msg->name / m_args.save_image_dir;
+            if (msg->op == IMC::LoggingControl::COP_STARTED)
+            {
+              m_frame_cnt = 0;
+              m_frame_lost_cnt = 0;
+              m_cnt_photos_by_folder = 0;
+              m_folder_number = 0;
+              std::string m_path = c_log_path + m_args.master_name;
+              m_back_path_main_log = m_path + "/" + msg->name;
 
-            m_back_path_image = m_log_dir.c_str();
-            m_log_dir.create();
-            m_log_name = msg->name;
+              if(m_args.split_photos)
+                m_log_dir = m_path / msg->name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+              else
+                m_log_dir = m_path / msg->name / m_args.save_image_dir;
+
+              m_back_path_image = m_log_dir.c_str();
+              m_log_dir.create();
+              m_log_name = msg->name;
+            }
+          }
+          else
+          {
+            std::string m_base_path = m_ctx.dir_log.c_str();
+            m_back_path_log = m_base_path + "/" + msg->name;
           }
         }
       }
@@ -495,8 +513,38 @@ namespace Vision
             war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
           setLed(LED_OFF);
+
+          moveLogFiles();
+
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         }
+      }
+
+      void
+      moveLogFiles(void)
+      {
+        std::string system_comand = "mkdir " + m_back_path_main_log + "/" + c_camera_log_folder;
+        system(system_comand.c_str());
+
+        std::string file_name_old = m_back_path_log + "/Output.txt ";
+        std::string file_name_new = m_back_path_main_log + "/camera_log/camera_Output.txt";
+        system_comand = "mv " + file_name_old + file_name_new;
+        system(system_comand.c_str());
+
+        file_name_old = m_back_path_log + "/Config.ini ";
+        file_name_new = m_back_path_main_log + "/camera_log/camera_Config.ini";
+        system_comand = "mv " + file_name_old + file_name_new;
+        system(system_comand.c_str());
+
+        file_name_old = m_back_path_log + "/Data.lsf.gz ";
+        file_name_new = m_back_path_main_log + "/camera_log/camera_Data.lsf.gz";
+        system_comand = "mv " + file_name_old + file_name_new;
+        system(system_comand.c_str());
+
+        file_name_old = m_back_path_log + "/IMC.xml.gz ";
+        file_name_new = m_back_path_main_log + "/camera_log/camera_IMC.xml.gz";
+        system_comand = "mv " + file_name_old + file_name_new;
+        system(system_comand.c_str());
       }
 
       int
@@ -616,12 +664,12 @@ namespace Vision
       {
         m_is_strobe = false;
         init_gpio_strobe();
-        if (m_args.led_type == "STROBE")
+        if (m_args.led_type == "Strobe")
         {
           war("enabling strobe output");
           m_is_strobe = true;
         }
-        else if (m_args.led_type == "ON")
+        else if (m_args.led_type == "On")
         {
           setLed(LED_ON);
           war("leds always on");
@@ -937,9 +985,10 @@ namespace Vision
             m_cnt_photos_by_folder++;
             if(m_cnt_photos_by_folder >= m_args.number_photos)
             {
+              std::string m_path = c_log_path + m_args.master_name;
               m_cnt_photos_by_folder = 0;
               m_folder_number++;
-              m_log_dir = m_ctx.dir_log / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
+              m_log_dir = m_path / m_log_name / m_args.save_image_dir / String::str("%06u", m_folder_number);
               m_back_path_image = m_log_dir.c_str();
               m_log_dir.create();
             }
