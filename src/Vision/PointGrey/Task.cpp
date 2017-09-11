@@ -183,9 +183,11 @@ namespace Vision
       //! Strobe delay
       float m_strobe_delay;
       //! Flag to control init state
-      bool isStartTask;
+      bool m_isStartTask;
       //! Slave entities
       Lumenera::EntityActivationMaster* m_slave_entities;
+      //! Control state of capture
+      bool m_isCapturing;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -221,7 +223,7 @@ namespace Vision
         .description("Saved Images Dir.");
 
         param("Number Frames/s", m_args.number_fs)
-        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
         .defaultValue("4")
         .minimumValue("1")
         .maximumValue("5")
@@ -299,11 +301,22 @@ namespace Vision
       {
         updateSlaveEntities();
 
-        if (paramChanged(m_args.shutter_value) && isStartTask)
+        if (paramChanged(m_args.shutter_value) && m_isStartTask)
           inf("shutter: %f", m_args.shutter_value);
 
-        if (paramChanged(m_args.delay_capture) && isStartTask)
+        if (paramChanged(m_args.delay_capture) && m_isStartTask)
           inf("strobe delay: %d", m_args.delay_capture);
+
+        if (paramChanged(m_args.number_fs) && !m_isCapturing && !m_args.is_master_mode)
+        {
+          inf("Fps: %d", m_args.number_fs);
+          m_cnt_fps.setTop((1.0/m_args.number_fs));
+        }
+        else
+        {
+          inf("Cannot change frames in capturing mode");
+          m_args.number_fs = 1;
+        }
       }
 
       void
@@ -320,7 +333,8 @@ namespace Vision
       {
         if(!m_args.is_master_mode)
         {
-          isStartTask = false;
+          m_isStartTask = false;
+          m_isCapturing = false;
           set_cpu_governor();
           init_gpio_driver();
           init_gpio_strobe();
@@ -369,7 +383,7 @@ namespace Vision
           m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
 
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
-          isStartTask = true;
+          m_isStartTask = true;
         }
       }
 
@@ -379,7 +393,7 @@ namespace Vision
         if (!m_args.is_master_mode)
         {
           m_is_to_capture = false;
-          if(isStartTask)
+          if(m_isStartTask)
           {
             Delay::wait(c_time_to_release_camera);
             setGpio(GPIO_LOW, m_args.gpio_strobe);
@@ -485,6 +499,7 @@ namespace Vision
         if (!m_args.is_master_mode)
         {
           inf("on Activation");
+          m_isCapturing = true;
           m_frame_cnt = 0;
           m_frame_lost_cnt = 0;
           m_cnt_photos_by_folder = 0;
@@ -517,6 +532,7 @@ namespace Vision
         {
           inf("on Deactivation");
           m_is_to_capture = false;
+          m_isCapturing = false;
           m_error = m_camera.StopCapture();
           if ( m_error != FlyCapture2::PGRERROR_OK )
             war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
