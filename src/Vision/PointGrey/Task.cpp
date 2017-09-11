@@ -55,9 +55,9 @@ namespace Vision
     enum CommandType
     {
       //! Set GPIO LOW (on).
-      LED_ON = 0,
+      GPIO_HIGH = 1,
       //! Set GPIO HIGH (off).
-      LED_OFF = 1
+      GPIO_LOW = 0
     };
 
     using DUNE_NAMESPACES;
@@ -95,6 +95,8 @@ namespace Vision
       bool split_photos;
       //! Number of photos to folder
       unsigned int number_photos;
+      //! Gpio Number for driver power
+      int gpio_drive_power;
       //! Gpio Number for strobe
       int gpio_strobe;
       //! Delay before capture image
@@ -237,9 +239,14 @@ namespace Vision
         .maximumValue("3000")
         .description("Split photos by folder.");
 
-        param("GPIO Strobe", m_args.gpio_strobe)
+        param("GPIO Driver Power", m_args.gpio_drive_power)
         .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
         .defaultValue("17")
+        .description("GPIO of RPI2 for driver power.");
+
+        param("GPIO Strobe", m_args.gpio_strobe)
+        .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
+        .defaultValue("27")
         .description("GPIO of RPI2 for strobe.");
 
         param("Strobe Delay (us)", m_args.delay_capture)
@@ -315,6 +322,7 @@ namespace Vision
         {
           isStartTask = false;
           set_cpu_governor();
+          init_gpio_driver();
           init_gpio_strobe();
 
           if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
@@ -374,7 +382,8 @@ namespace Vision
           if(isStartTask)
           {
             Delay::wait(c_time_to_release_camera);
-            setLed(LED_OFF);
+            setGpio(GPIO_LOW, m_args.gpio_strobe);
+            setGpio(GPIO_LOW, m_args.gpio_drive_power);
 
             for(int i = 0; i < c_number_max_thread; i++)
             {
@@ -512,7 +521,7 @@ namespace Vision
           if ( m_error != FlyCapture2::PGRERROR_OK )
             war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
-          setLed(LED_OFF);
+          setGpio(GPIO_LOW, m_args.gpio_strobe);
 
           moveLogFiles();
 
@@ -520,31 +529,33 @@ namespace Vision
         }
       }
 
-      void
+      int
       moveLogFiles(void)
       {
         std::string system_comand = "mkdir " + m_back_path_main_log + "/" + c_camera_log_folder;
-        system(system_comand.c_str());
+        int result = std::system(system_comand.c_str());
 
         std::string file_name_old = m_back_path_log + "/Output.txt ";
         std::string file_name_new = m_back_path_main_log + "/camera_log/camera_Output.txt";
         system_comand = "mv " + file_name_old + file_name_new;
-        system(system_comand.c_str());
+        result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/Config.ini ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_Config.ini";
         system_comand = "mv " + file_name_old + file_name_new;
-        system(system_comand.c_str());
+        result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/Data.lsf.gz ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_Data.lsf.gz";
         system_comand = "mv " + file_name_old + file_name_new;
-        system(system_comand.c_str());
+        result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/IMC.xml.gz ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_IMC.xml.gz";
         system_comand = "mv " + file_name_old + file_name_new;
-        system(system_comand.c_str());
+        result = std::system(system_comand.c_str());
+
+        return result;
       }
 
       int
@@ -594,7 +605,6 @@ namespace Vision
       bool
       init_gpio_strobe(void)
       {
-        char buffer[64];
         FILE* pipe;
         if ((pipe = fopen("/sys/class/gpio/export", "ab")) == NULL)
         {
@@ -606,47 +616,78 @@ namespace Vision
         {
           std::fwrite(to_string(m_args.gpio_strobe).c_str(), sizeof(char), 2, pipe);
           std::fclose(pipe);
-          std::sprintf(buffer, "/sys/class/gpio/gpio%d/direction", m_args.gpio_strobe);
-          if ((pipe = fopen(buffer, "rb+")) == NULL)
-          {
-            err("Unable to open direction handle (%d)", m_args.gpio_strobe);
-            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
-            return false;
-          }
-          else
-          {
-            std::fwrite("out", sizeof(char), 3, pipe);
-            std::fclose(pipe);
-            Delay::wait(2);
-            return setLed(LED_OFF);
-          }
+          setGpioDirection(m_args.gpio_strobe, true);
+          return setGpio(GPIO_LOW, m_args.gpio_strobe);
         }
-
         return false;
       }
 
       bool
-      setLed(CommandType mode)
+      init_gpio_driver(void)
+      {
+        FILE* pipe;
+        if ((pipe = fopen("/sys/class/gpio/export", "ab")) == NULL)
+        {
+          err("Unable to export GPIO pin (%d)", m_args.gpio_drive_power);
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
+          return false;
+        }
+        else
+        {
+          std::fwrite(to_string(m_args.gpio_drive_power).c_str(), sizeof(char), 2, pipe);
+          std::fclose(pipe);
+          setGpioDirection(m_args.gpio_drive_power, true);
+          return setGpio(GPIO_HIGH, m_args.gpio_drive_power);
+        }
+        return false;
+      }
+
+      bool
+      setGpioDirection(int gpio, bool isOut)
       {
         char buffer[64];
-        std::sprintf(buffer, "/sys/class/gpio/gpio%d/value", m_args.gpio_strobe);
+        FILE* pipe;
+        std::sprintf(buffer, "/sys/class/gpio/gpio%d/direction", gpio);
+        if ((pipe = fopen(buffer, "rb+")) == NULL)
+        {
+          err("Unable to open direction handle (%d)", gpio);
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_INTERNAL_ERROR);
+          return false;
+        }
+        else
+        {
+          if(isOut)
+            std::fwrite("out", sizeof(char), 3, pipe);
+          else
+            std::fwrite("in", sizeof(char), 3, pipe);
+          std::fclose(pipe);
+          Delay::wait(1);
+          return true;
+        }
+      }
+
+      bool
+      setGpio(CommandType mode, int gpio)
+      {
+        char buffer[64];
+        std::sprintf(buffer, "/sys/class/gpio/gpio%d/value", gpio);
         FILE* pipe;
         if ((pipe = std::fopen(buffer, "rb+")) == NULL)
         {
-          err("Unable to open value handle (%d)", m_args.gpio_strobe);
+          err("Unable to open value handle (%d)", gpio);
           return false;
         }
         else
         {
           switch (mode)
           {
-            case LED_OFF:
-              std::fwrite("1", sizeof(char), 1, pipe);
+            case GPIO_LOW:
+              std::fwrite("0", sizeof(char), 1, pipe);
               std::fclose(pipe);
               break;
 
-            case LED_ON:
-              std::fwrite("0", sizeof(char), 1, pipe);
+            case GPIO_HIGH:
+              std::fwrite("1", sizeof(char), 1, pipe);
               std::fclose(pipe);
               break;
 
@@ -671,7 +712,7 @@ namespace Vision
         }
         else if (m_args.led_type == "On")
         {
-          setLed(LED_ON);
+          setGpio(GPIO_HIGH, m_args.gpio_strobe);
           war("leds always on");
         }
         else
@@ -808,9 +849,10 @@ namespace Vision
         saveInfoExif();
         if(m_is_strobe)
         {
-          setLed(LED_ON);
+          setGpio(GPIO_HIGH, m_args.gpio_strobe);
           Delay::waitUsec(m_args.delay_capture);
         }
+
         // Check that the trigger is ready
         pollForTriggerReady();
         // Fire software trigger
@@ -824,6 +866,7 @@ namespace Vision
           war("erro RetrieveBuffer");
           return false;
         }
+
         if ( m_error != FlyCapture2::PGRERROR_OK)
         {
           if(m_is_to_capture)
@@ -831,11 +874,9 @@ namespace Vision
 
           return false;
         }
-        else
-        {
-          if(m_is_strobe)
-            setLed(LED_OFF);
-        }
+
+        if(m_is_strobe)
+          setGpio(GPIO_LOW, m_args.gpio_strobe);
 
         // convert to rgb
         try
@@ -847,6 +888,7 @@ namespace Vision
           war("erro Convert");
           return false;
         }
+
         if ( m_error != FlyCapture2::PGRERROR_OK )
         {
           war("convert error: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
@@ -1028,7 +1070,7 @@ namespace Vision
             else
             {
               waitForMessages(1.0);
-              setLed(LED_OFF);
+              setGpio(GPIO_LOW, m_args.gpio_strobe);
             }
           }
           else
