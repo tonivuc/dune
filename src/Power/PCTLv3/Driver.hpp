@@ -273,75 +273,84 @@ namespace Power
           {
             std::size_t rv = m_uart->readString(m_bfr, sizeof(m_bfr));
 
-            if (rv == 0)
+            if (rv <= 0)
             {
               m_task->err(DTR("I/O error"));
               return false;
             }
 
-            m_bfr[strlen(m_bfr) - 3] = '\0';
+            try
+            {
+              m_bfr[strlen(m_bfr) - 3] = '\0';
 
-            char* parameter = std::strtok(m_bfr, ",");
-            if(std::strcmp(parameter, "$VOLT") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.voltage);
-              m_task->debug("Volt: %.3f V", m_pctlData.voltage);
-              m_pctlData.state_new_data[0] = true;
-            }
-            else if(std::strcmp(parameter, "$AMPE") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.current);
-              m_task->debug("Ampe: %.3f A", m_pctlData.current);
-              m_pctlData.state_new_data[1] = true;
-            }
-            else if(std::strcmp(parameter, "$TEMP") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.temperature);
-              m_task->debug("Temp: %.3f C", m_pctlData.temperature);
-              m_pctlData.state_new_data[2] = true;
-            }
-            else if(std::strcmp(parameter, "$RCAP") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.r_cap);
-              m_task->debug("RCap: %.3f Ah", m_pctlData.r_cap);
-              m_pctlData.state_new_data[3] = true;
-            }
-            else if(std::strcmp(parameter, "$FCAP") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.f_cap);
-              m_task->debug("FCap: %.3f Ah", m_pctlData.f_cap);
-              m_pctlData.state_new_data[4] = true;
-            }
-            else if(std::strcmp(parameter, "$DCAP") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%f", &m_pctlData.d_cap);
-              m_task->debug("DCap: %.3f Ah", m_pctlData.d_cap);
-              m_pctlData.state_new_data[5] = true;
-            }
-            else if (std::strcmp(parameter, "$HEAL") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              std::sscanf(parameter, "%d", &m_pctlData.health);
-              m_task->debug("Health: %d %%", m_pctlData.health);
-              m_pctlData.state_new_data[6] = true;
-            }
-            else if (std::strcmp(parameter, "$CELL") == 0)
-            {
-              parameter = std::strtok(NULL, ",");
-              for(int i = 0; i < m_numberCell; i++)
+              char* parameter = std::strtok(m_bfr, ",");
+              if(std::strcmp(parameter, "$VOLT") == 0)
               {
                 parameter = std::strtok(NULL, ",");
-                std::sscanf(parameter, "%f", &m_pctlData.cell_volt[i]);
-                m_task->debug("Cell %d: %.3f V", i+1, m_pctlData.cell_volt[i]);
+                std::sscanf(parameter, "%f", &m_pctlData.voltage);
+                m_task->debug("Volt: %.3f V", m_pctlData.voltage);
+                m_pctlData.state_new_data[0] = true;
               }
-              m_pctlData.state_new_data[7] = true;
-              m_task->debug(" ");
+              else if(std::strcmp(parameter, "$AMPE") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.current);
+                m_task->debug("Ampe: %.3f A", m_pctlData.current);
+                m_pctlData.state_new_data[1] = true;
+              }
+              else if(std::strcmp(parameter, "$TEMP") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.temperature);
+                m_task->debug("Temp: %.3f C", m_pctlData.temperature);
+                m_pctlData.state_new_data[2] = true;
+              }
+              else if(std::strcmp(parameter, "$RCAP") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.r_cap);
+                m_task->debug("RCap: %.3f Ah", m_pctlData.r_cap);
+                m_pctlData.state_new_data[3] = true;
+              }
+              else if(std::strcmp(parameter, "$FCAP") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.f_cap);
+                m_task->debug("FCap: %.3f Ah", m_pctlData.f_cap);
+                m_pctlData.state_new_data[4] = true;
+              }
+              else if(std::strcmp(parameter, "$DCAP") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.d_cap);
+                m_task->debug("DCap: %.3f Ah", m_pctlData.d_cap);
+                m_pctlData.state_new_data[5] = true;
+              }
+              else if (std::strcmp(parameter, "$HEAL") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%d", &m_pctlData.health);
+                m_task->debug("Health: %d %%", m_pctlData.health);
+                m_pctlData.state_new_data[6] = true;
+              }
+              else if (std::strcmp(parameter, "$CELL") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                for(int i = 0; i < m_numberCell; i++)
+                {
+                  parameter = std::strtok(NULL, ",");
+                  std::sscanf(parameter, "%f", &m_pctlData.cell_volt[i]);
+                  m_task->debug("Cell %d: %.3f V", i+1, m_pctlData.cell_volt[i]);
+                }
+                m_pctlData.state_new_data[7] = true;
+                m_task->debug(" ");
+              }
+
+            }
+            catch(...)
+            {
+              m_task->err("catch error");
+              return false;
             }
 
             bool result = true;
