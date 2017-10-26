@@ -57,6 +57,38 @@ namespace Power
               LED_WHITE_T   = 3
           };
 
+          enum
+          {
+              CHANNEL1      = 1,
+              CHANNEL2      = 2,
+              CHANNEL3      = 3,
+              CHANNEL4      = 4,
+              CHANNEL5      = 5,
+              CHANNEL6      = 6,
+              CHANNEL7      = 7,
+              CHANNEL8      = 8,
+              CHANNEL9      = 9,
+              CHANNEL10     = 10,
+              CHANNEL11     = 11,
+              CHANNEL12     = 12,
+              CHANNEL13     = 13,
+              CHANNEL14     = 14,
+              CHANNEL15     = 15,
+              CHANNEL16     = 16,
+              CHANNEL17     = 17,
+              CHANNEL18     = 18,
+              CHANNEL19     = 19,
+              CHANNEL20     = 20,
+              CHANNEL21     = 21,
+              CHANNEL22     = 22,
+              CHANNEL23     = 23,
+              CHANNEL24     = 24,
+              CHANNEL25     = 25,
+              CHANNEL26     = 26,
+              CHANNEL27     = 27,
+              CHANNEL28     = 28
+          };
+
           struct PCTLv3Data
           {
             //! Firmware version
@@ -97,12 +129,8 @@ namespace Power
             m_timeout_uart = 2.0f;
             m_numberCell = numberCell;
             resetStateNewData();
-            for(uint8_t t = 0; t < 4; t++)
-            {
-              m_last_state_led[t] = 1;
-              m_state_led[t] = 1;
-            }
-
+            m_last_state_led = 0;
+            m_state_led = 0;
             c_delay = 10.0f;
           }
 
@@ -125,19 +153,25 @@ namespace Power
           }
 
           bool
-          initPCTLv3(int cellNumber, float scale)
+          initPCTLv3(int cellNumber, float scale, float samples)
           {
             char textCmd[32];
+            bool result = true;
+
             std::sprintf(textCmd, "@CELL,%d,*", cellNumber);
             if(sendCommand(textCmd, "$RSP,ACK,,*"))
             {
               std::memset(&textCmd, '\0', sizeof(textCmd));
               std::sprintf(textCmd, "@SCALE,%.2f,*", scale);
-              if(sendCommand(textCmd, "$RSP,ACK,,*"))
-                return true;
+              if(!sendCommand(textCmd, "$RSP,ACK,,*"))
+                result = false;
             }
 
-            return false;
+            std::sprintf(textCmd, "@SAMP,%.0f,*", samples*1000);
+            if (!sendCommand(textCmd, "$RSP,ACK,,*"))
+                result = false;
+
+            return result;
           }
 
           bool
@@ -199,7 +233,7 @@ namespace Power
             std::sprintf(cmdText, "%s%c\n", cmd, (Algorithms::XORChecksum::compute((uint8_t*)cmd, strlen(cmd) - 1) | 0x80));
             m_task->spew("Command (no rsp): %s", cmdText);
             m_uart->writeString(cmdText);
-            Delay::waitMsec(c_delay);
+            //Delay::waitMsec(c_delay);
           }
 
           void
@@ -211,62 +245,42 @@ namespace Power
           }
 
           void
-          updateBufferLed(uint8_t led, bool value)
+          turnOnChannel(uint8_t channel)
           {
-            m_state_led[led] = value;
+            char cmd[32];
+            std::sprintf(cmd, "@CHAN,%d,1,*", channel);
+            sendCommandNoRsp(cmd);
           }
 
           void
-          updateLedState(uint8_t led)
+          turnOffChannel(uint8_t channel)
           {
             char cmd[32];
-            switch(led)
-            {
-              case LED_GREEN:
-                if (m_last_state_led[LED_GREEN] != m_state_led[led])
-                {
-                  std::sprintf(cmd, "@LGRE,%d,*", m_state_led[led]);
-                  m_last_state_led[LED_GREEN] = m_state_led[led];
-                  //m_task->war("GREEN - %d", m_state_led[led]);
-                  sendCommandNoRsp(cmd);
-                }
-                break;
-
-              case LED_RED:
-                if (m_last_state_led[LED_RED] != m_state_led[led])
-                {
-                  std::sprintf(cmd, "@LRED,%d,*", m_state_led[led]);
-                  m_last_state_led[LED_RED] = m_state_led[led];
-                  //m_task->war("RED - %d", m_state_led[led]);
-                  sendCommandNoRsp(cmd);
-                }
-                break;
-
-              case LED_WHITE_B:
-                if (m_last_state_led[LED_WHITE_B] != m_state_led[led])
-                {
-                  std::sprintf(cmd, "@LWIB,%d,*", m_state_led[led]);
-                  m_last_state_led[LED_WHITE_B] = m_state_led[led];
-                  //m_task->war("LED_WHITE_B - %d", m_state_led[led]);
-                  sendCommandNoRsp(cmd);
-                }
-                break;
-
-              case LED_WHITE_T:
-                if (m_last_state_led[LED_WHITE_T] != m_state_led[led])
-                {
-                  std::sprintf(cmd, "@LWIT,%d,*", m_state_led[led]);
-                  m_last_state_led[LED_WHITE_T] = m_state_led[led];
-                  //m_task->war("LED_WHITE_T - %d", m_state_led[led]);
-                  sendCommandNoRsp(cmd);
-                }
-                break;
-
-              default:
-                break;
-            }
+            std::sprintf(cmd, "@CHAN,%d,0,*", channel);
+            sendCommandNoRsp(cmd);
           }
 
+          void
+          updateBufferLed(uint8_t led, bool value)
+          {
+            if (value)
+              m_state_led |= 1 << led;
+            else
+              m_state_led &= ~(1 << led);
+          }
+
+          void
+          updateLedState(void)
+          {
+            char cmd[32];
+            if (m_last_state_led != m_state_led)
+            {
+              std::sprintf(cmd, "@SLED,%d,*", m_state_led);
+              m_last_state_led = m_state_led;
+              //m_task->war("LED STATE - %d", m_state_led);
+              sendCommandNoRsp(cmd);
+            }
+          }
 
           bool
           haveNewData(void)
@@ -380,9 +394,9 @@ namespace Power
           //! Buffer of uart
           char m_bfr[64];
           //! Backup last state of leds
-          bool m_last_state_led[4];
+          int m_last_state_led;
           //! State of leds
-          bool m_state_led[4];
+          int m_state_led;
           //! Delay
           float c_delay;
       };

@@ -42,6 +42,7 @@ namespace Power
     static const float c_delay_startup = 1.0f;
     static const uint8_t c_max_values_voltage = 16;
     static const uint8_t c_max_values_current = 3;
+    static const float c_usart_timeout = 0.1f;
 
     struct Arguments
     {
@@ -53,6 +54,8 @@ namespace Power
       double input_timeout;
       //! Input number cell
       unsigned int number_cell;
+      //! Time between each acquisition
+      float sample_time;
       //! Scale conversion for A/Ah
       float scale_factor;
       //! Cell entity labels
@@ -128,6 +131,12 @@ namespace Power
         .minimumValue("1")
         .maximumValue("15")
         .description("Number of cells to read.");
+
+        param("Time between each acquisition", m_args.sample_time)
+        .defaultValue("1.0")
+        .minimumValue("1.0")
+        .units(Units::Second)
+        .description("Time between each acquisition.");
 
         param("Scale Factor A/Ah", m_args.scale_factor)
         .defaultValue("1")
@@ -234,7 +243,13 @@ namespace Power
         else
           inf("Firmware Version: %s", m_driver->getFirmwareVersion().c_str());
 
-        if(!m_driver->initPCTLv3(m_args.number_cell, m_args.scale_factor))
+        if(m_args.sample_time >= m_args.input_timeout)
+        {
+          m_args.input_timeout++,
+          war(DTR("Incorrect Timeout, setting to %.0f sec."), m_args.input_timeout);
+        }
+
+        if(!m_driver->initPCTLv3(m_args.number_cell, m_args.scale_factor, m_args.sample_time))
           throw RestartNeeded(DTR("failed to init PCTLv3"), 5, true);
 
         if(!m_driver->startAcquisition())
@@ -242,10 +257,8 @@ namespace Power
 
         m_driver->turnOffAllLed();
         Delay::wait(c_delay_startup);
-
         debug("Init and Start OK");
-
-        m_wdog.setTop(m_args.input_timeout);
+        m_wdog.setTop(m_args.sample_time + m_args.input_timeout);
       }
 
       //! Release resources.
@@ -274,7 +287,6 @@ namespace Power
       void
       consume(const IMC::SetLedBrightness *msg)
       {
-        //err("%d", msg->value);
         if (msg->getSource() != getSystemId())
           return;
 
@@ -282,8 +294,8 @@ namespace Power
         {
           if (m_args.led_ids[i].compare(msg->name) == 0)
           {
-            //inf("%d", msg->value);
             m_driver->updateBufferLed(i, msg->value);
+            m_driver->updateLedState();
             break;
           }
         }
@@ -344,11 +356,7 @@ namespace Power
       {
         while (!stopping())
         {
-          waitForMessages(0.1);
-          //consumeMessages();
-
-          for(uint8_t t = 0; t < 4; t++)
-            m_driver->updateLedState(t);
+          waitForMessages(0.15);
 
           if (m_wdog.overflow())
           {
@@ -356,7 +364,7 @@ namespace Power
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
           }
 
-          if (!Poll::poll(*m_uart, m_args.input_timeout))
+          if (!Poll::poll(*m_uart, c_usart_timeout))
             continue;
 
           if(m_driver->haveNewData())
