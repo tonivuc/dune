@@ -219,9 +219,56 @@ nat_stop()
     log info "nat: stopped"
 }
 
+qmi_start()
+{
+    if [ -z "$(ls /dev | grep cdc-wdm0)" ]; then
+        log err "qmi: /dev/cdc-wdm0 interface found"
+        exit 1
+    fi
+
+
+    /sbin/route del default dev eth0 > /dev/null 2>&1
+    interface=wwan0
+
+    log info "qmi: using $interface"
+    qmicli -d /dev/cdc-wdm0 --wds-start-network="internet"  --client-no-release-cid --device-open-sync
+
+    ifconfig "$interface" up
+    tmp=$(echo $(udhcpc -i "$interface") | awk '/Sending select for / {print $9}')
+    ip=${tmp%...}
+    log info "qmi: getting lease for $ip"
+    ifconfig "$interface" up "$ip"
+
+    /sbin/route add default dev wwan0 > /dev/null 2>&1
+
+    if [ $? -ne 0 ]; then
+        log err "qmi: failed to establish a connection"
+        exit 1
+    fi
+}
+
+qmi_stop()
+{
+    log info "qmi: stopping"
+
+    qmi-network /dev/cdc-wdm0 stop
+    ifconfig wwan0 down
+    /sbin/route del default dev wwan0 > /dev/null 2>&1
+
+    log info "qmi: stopped"
+}
+
 start()
 {
-    ppp_start
+    if [ -z "$NET_PROTOCOL" ]; then
+        ppp_start
+    elif [ "$NET_PROTOCOL" = "qmi" ]; then
+        qmi_start
+    else
+        log err "Unrecognized protocol: $NET_PROTOCOL"
+        exit 1
+    fi
+
     if [ $? -ne 0 ]; then
         log err "failed to establish a connection"
         exit 1
@@ -230,7 +277,15 @@ start()
 
 stop()
 {
-    ppp_stop
+    if [ -z "$NET_PROTOCOL" ]; then
+        ppp_stop
+    elif [ "$NET_PROTOCOL" = "qmi" ]; then
+        qmi_stop
+    else
+        log err "Unrecognized protocol: $NET_PROTOCOL"
+        exit 1
+    fi
+
     if [ $? -eq 0 ]; then
         log info "stopped"
     else
