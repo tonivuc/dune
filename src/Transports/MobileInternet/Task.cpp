@@ -55,7 +55,7 @@ namespace Transports
       SM_ACT_POWER_WAIT,
       //! Wait for serial port device to become available.
       SM_ACT_MODEM_WAIT,
-      //! Start PPP session.
+      //! Start Network session.
       SM_ACT_CONNECT,
       //! Activation sequence is complete.
       SM_ACT_DONE,
@@ -88,8 +88,10 @@ namespace Transports
       std::string gsm_pin;
       //! GSM mode.
       std::string gsm_mode;
-      //! PPP interface.
-      std::string ppp_interface;
+      //! Network interface.
+      std::string net_interface;
+      //! Mobile Internet protocol (ppp, qmi, etc)
+      std::string net_protocol;
       //! UART device.
       std::string uart_dev;
       //! Power channel name.
@@ -176,15 +178,19 @@ namespace Transports
         .defaultValue("true")
         .description("Code Presentation Mode");
 
-        param("PPP - Interface", m_args.ppp_interface)
+        param("Network - Interface", m_args.net_interface)
         .visibility(Tasks::Parameter::VISIBILITY_DEVELOPER)
         .scope(Tasks::Parameter::SCOPE_GLOBAL)
         .defaultValue("ppp0")
-        .description("PPP Interface");
+        .description("Network Interface");
 
         param("Enable IP Forwarding", m_args.ip_fwd)
         .defaultValue("true")
         .description("Enable or disable IP forward");
+
+        param("Mobile Protocol", m_args.net_protocol)
+        .defaultValue("")
+        .description("Which protocol to use - if left empty PPP is assumed");
 
         Path script = m_ctx.dir_scripts / "dune-mobile-inet.sh";
         m_command_connect = String::str("/bin/sh %s start > /dev/null 2>&1", script.c_str());
@@ -285,6 +291,8 @@ namespace Transports
           pin.append(m_args.gsm_pin);
         }
 
+        Environment::set("FWL_EXT_ITF", m_args.net_interface);
+        Environment::set("NET_PROTOCOL", m_args.net_protocol);
         Environment::set("GSM_USER", m_args.gsm_user);
         Environment::set("GSM_PASS", m_args.gsm_pass);
         Environment::set("GSM_APN", m_args.gsm_apn);
@@ -321,7 +329,7 @@ namespace Transports
         std::vector<Interface> interfaces = Interface::get();
         for (size_t i = 0; i < interfaces.size(); ++i)
         {
-          if (interfaces[i].name() == m_args.ppp_interface)
+          if (interfaces[i].name() == m_args.net_interface)
           {
             if (address != NULL)
               *address = interfaces[i].address();
