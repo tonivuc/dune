@@ -110,7 +110,11 @@ namespace Power
             //! Cell Voltage
             float cell_volt[16];
             //! State of new data received
-            bool state_new_data[8];
+            bool state_new_data[9];
+            //! Time, in min to full empty battery
+            float time_empty;
+            //! Time, in min, to full charge of battery
+            float time_full;
           };
 
           //! Serial port
@@ -132,6 +136,7 @@ namespace Power
             m_last_state_led = 0;
             m_state_led = 0;
             c_delay = 10.0f;
+            m_is_power_off = false;
           }
 
           ~DriverPCTLv3(void){}
@@ -153,7 +158,13 @@ namespace Power
           }
 
           bool
-          initPCTLv3(int cellNumber, float scale, float samples)
+          isPowerOff(void)
+          {
+            return m_is_power_off;
+          }
+
+          bool
+          initPCTLv3(int cellNumber, float scale, float samples, bool cont_sample)
           {
             char textCmd[32];
             bool result = true;
@@ -170,6 +181,10 @@ namespace Power
             std::sprintf(textCmd, "@SAMP,%.0f,*", samples*1000);
             if (!sendCommand(textCmd, "$RSP,ACK,,*"))
                 result = false;
+
+            std::sprintf(textCmd, "@CONT,%d,*", (int)cont_sample);
+            if (!sendCommand(textCmd, "$RSP,ACK,,*"))
+              result = false;
 
             return result;
           }
@@ -233,7 +248,6 @@ namespace Power
             std::sprintf(cmdText, "%s%c\n", cmd, (Algorithms::XORChecksum::compute((uint8_t*)cmd, strlen(cmd) - 1) | 0x80));
             m_task->spew("Command (no rsp): %s", cmdText);
             m_uart->writeString(cmdText);
-            //Delay::waitMsec(c_delay);
           }
 
           void
@@ -277,9 +291,16 @@ namespace Power
             {
               std::sprintf(cmd, "@SLED,%d,*", m_state_led);
               m_last_state_led = m_state_led;
-              //m_task->war("LED STATE - %d", m_state_led);
               sendCommandNoRsp(cmd);
             }
+          }
+
+          void
+          sendPowerOff(void)
+          {
+            char cmd[32];
+            std::sprintf(cmd, "@POFF,*");
+            sendCommandNoRsp(cmd);
           }
 
           bool
@@ -296,7 +317,6 @@ namespace Power
             try
             {
               m_bfr[strlen(m_bfr) - 3] = '\0';
-
               char* parameter = std::strtok(m_bfr, ",");
               if(std::strcmp(parameter, "$VOLT") == 0)
               {
@@ -359,6 +379,26 @@ namespace Power
                 m_pctlData.state_new_data[7] = true;
                 m_task->debug(" ");
               }
+              else if (std::strcmp(parameter, "$BATS") == 0)
+              {
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.time_empty);
+                if(m_pctlData.time_empty == 65535)
+                  m_pctlData.time_empty = -1;
+
+                m_task->debug("Average Time to Empty: %.0f min", m_pctlData.time_empty);
+                parameter = std::strtok(NULL, ",");
+                std::sscanf(parameter, "%f", &m_pctlData.time_full);
+                if(m_pctlData.time_full == 65535)
+                  m_pctlData.time_full = -1;
+
+                m_task->debug("Average Time to Full: %.0f min", m_pctlData.time_full);
+                m_pctlData.state_new_data[8] = true;
+              }
+              else if (std::strcmp(parameter, "$PSOFF") == 0)
+              {
+                m_is_power_off = true;
+              }
 
             }
             catch(...)
@@ -399,6 +439,8 @@ namespace Power
           int m_state_led;
           //! Delay
           float c_delay;
+          //! Flag to controlpower state
+          bool m_is_power_off;
       };
     }
 }

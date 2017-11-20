@@ -84,6 +84,8 @@ namespace Power
       DriverPCTLv3 *m_driver;
       //! Watchdog.
       Counter<double> m_wdog;
+      //! Power operation.
+      IMC::PowerOperation m_pwr_op;
       //! Temperature message
       IMC::Temperature m_tmp;
       //! Voltage message
@@ -98,8 +100,8 @@ namespace Power
       char m_bufer_entity[128];
       //! Read timestamp.
       double m_tstamp;
-      //! Flag to control state of shutdow;
-      bool m_is_to_pwr_off;
+      //! Flag to control dispatch of PowerOperation
+      bool m_have_send_pwr_dow_ip;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -109,7 +111,7 @@ namespace Power
         m_uart(NULL),
         m_driver(0),
         m_tstamp(0),
-        m_is_to_pwr_off(0)
+        m_have_send_pwr_dow_ip(0)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -215,6 +217,8 @@ namespace Power
       onResourceAcquisition(void)
       {
         setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+        m_pwr_op.setDestination(getSystemId());
+        m_have_send_pwr_dow_ip = false;
         try
         {
           m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
@@ -222,7 +226,6 @@ namespace Power
           m_uart->flush();
           m_poll.add(*m_uart);
           m_driver = new DriverPCTLv3(this, m_uart, m_poll, m_args.number_cell);
-          m_is_to_pwr_off = false;
         }
         catch (std::runtime_error& e)
         {
@@ -249,11 +252,11 @@ namespace Power
           war(DTR("Incorrect Timeout, setting to %.0f sec."), m_args.input_timeout);
         }
 
-        if(!m_driver->initPCTLv3(m_args.number_cell, m_args.scale_factor, m_args.sample_time))
-          throw RestartNeeded(DTR("failed to init PCTLv3"), 5, true);
+        if(!m_driver->initPCTLv3(m_args.number_cell, m_args.scale_factor, m_args.sample_time, true))
+          throw RestartNeeded(DTR("failed to init PCTLv3"), 10, true);
 
         if(!m_driver->startAcquisition())
-          throw RestartNeeded(DTR("failed to start acquisition"), 5, true);
+          throw RestartNeeded(DTR("failed to start acquisition"), 10, true);
 
         m_driver->turnOffAllLed();
         Delay::wait(c_delay_startup);
@@ -267,6 +270,9 @@ namespace Power
       {
         if (m_uart != NULL)
         {
+          debug("Sending stop to PCTLv3");
+          m_driver->turnOffAllLed();
+          m_driver->stopAcquisition();
           m_poll.remove(*m_uart);
           Memory::clear(m_driver);
           Memory::clear(m_uart);
@@ -276,11 +282,12 @@ namespace Power
       void
       consume(const IMC::PowerChannelControl *msg)
       {
-        war("aqui 1");
         if(msg->op == IMC::PowerChannelControl::PCC_OP_TURN_OFF)
         {
           war("turn off");
-          m_is_to_pwr_off = true;
+          m_driver->sendPowerOff();
+          Delay::wait(2.0);
+          exit(2);
         }
       }
 
@@ -306,8 +313,17 @@ namespace Power
       {
         m_driver->resetStateNewData();
         std::memset(&m_bufer_entity, '\0', sizeof(m_bufer_entity));
-        std::sprintf(m_bufer_entity, "H: %d %%, Volt: %.3f V, RCap: %.3f Ah", m_driver->m_pctlData.health,
-            m_driver->m_pctlData.voltage, m_driver->m_pctlData.r_cap);
+
+        if(m_driver->m_pctlData.time_full > 0)
+          std::sprintf(m_bufer_entity, "H: %d %%, Volt: %.3f V, RCap: %.3f Ah, Time Full: %.0f min", m_driver->m_pctlData.health,
+                m_driver->m_pctlData.voltage, m_driver->m_pctlData.r_cap, m_driver->m_pctlData.time_full);
+        else if(m_driver->m_pctlData.time_empty > 0)
+          std::sprintf(m_bufer_entity, "H: %d %%, Volt: %.3f V, RCap: %.3f Ah, Time Empty: %.0f min", m_driver->m_pctlData.health,
+                m_driver->m_pctlData.voltage, m_driver->m_pctlData.r_cap, m_driver->m_pctlData.time_empty);
+        else
+          std::sprintf(m_bufer_entity, "H: %d %%, Volt: %.3f V, RCap: %.3f Ah", m_driver->m_pctlData.health,
+                m_driver->m_pctlData.voltage, m_driver->m_pctlData.r_cap);
+
         setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
 
         m_volt[0].setTimeStamp(m_tstamp);
@@ -361,7 +377,16 @@ namespace Power
           if (m_wdog.overflow())
           {
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 5);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+          }
+
+          if (m_driver->isPowerOff() && !m_have_send_pwr_dow_ip)
+          {
+            war("received poweroff");
+            m_pwr_op.op = IMC::PowerOperation::POP_PWR_DOWN_IP;
+            m_pwr_op.time_remain = 20;
+            dispatch(m_pwr_op);
+            m_have_send_pwr_dow_ip = true;
           }
 
           if (!Poll::poll(*m_uart, c_usart_timeout))
@@ -375,16 +400,6 @@ namespace Power
           }
 
         }
-        debug("Sending stop to PCTLv3");
-        m_driver->turnOffAllLed();
-        m_driver->stopAcquisition();
-        Delay::wait(c_delay_startup);
-        /*m_wdog.setTop(5);
-        while(!m_is_to_pwr_off && !m_wdog.overflow())
-        {
-          waitForMessages(0.1);
-        }*/
-
       }
     };
   }
