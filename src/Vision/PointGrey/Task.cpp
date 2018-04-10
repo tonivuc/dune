@@ -37,14 +37,14 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 
+#if defined(DUNE_CPU_ARMV7)
 //FlyCapture headers
 #include <flycapture/FlyCapture2.h>
-
 //Exiv2 headers
 #include <exiv2/exiv2.hpp>
-
 //Local header
 #include "SaveImage.hpp"
+#endif
 #include "Vision/Lumenera/EntityActivationMaster.hpp"
 
 namespace Vision
@@ -112,6 +112,7 @@ namespace Vision
     {
       //! Configuration parameters
       Arguments m_args;
+      #if defined(DUNE_CPU_ARMV7)
       //! Camera object
       FlyCapture2::Camera m_camera;
       //! Structure of Camera object
@@ -126,6 +127,7 @@ namespace Vision
       FlyCapture2::BusManager m_busMgr;
       //! Identifier of camera
       FlyCapture2::PGRGuid m_guid;
+      #endif
       //! Latitude deg
       int m_lat_deg;
       //! Latitude min
@@ -166,8 +168,10 @@ namespace Vision
       long unsigned int m_frame_cnt;
       //! Number of frames lost
       long unsigned int m_frame_lost_cnt;
+      #if defined(DUNE_CPU_ARMV7)
       //! Clase/thread to save image/exif data
       SaveImage *m_save[c_number_max_thread];
+      #endif
       //! Buffer for the note comment of user
       std::string m_note_comment;
       //! Number of photos in folder
@@ -178,8 +182,10 @@ namespace Vision
       std::string m_log_name;
       //! Flag to control capture of image
       bool m_is_to_capture;
-      //! flag to control
+      //! flag to control led - strobe
       bool m_is_strobe;
+      //! flag to control led - on
+      bool m_is_on;
       //! Strobe delay
       float m_strobe_delay;
       //! Flag to control init state
@@ -312,10 +318,13 @@ namespace Vision
           inf("Fps: %d", m_args.number_fs);
           m_cnt_fps.setTop((1.0/m_args.number_fs));
         }
-        else
+        else if (m_args.is_master_mode)
+        {
+          inf(DTR("Updating state of camera"));
+        }
+        else if (paramChanged(m_args.number_fs) && m_isCapturing && !m_args.is_master_mode)
         {
           inf("Cannot change frames in capturing mode");
-          m_args.number_fs = 1;
         }
       }
 
@@ -375,8 +384,10 @@ namespace Vision
           for(int i = 0; i < c_number_max_thread; i++)
           {
             sprintf(text, "thr%d", i);
+            #if defined(DUNE_CPU_ARMV7)
             m_save[i] = new SaveImage(this, text);
             m_save[i]->start();
+            #endif
           }
 
           m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
@@ -387,6 +398,7 @@ namespace Vision
         }
       }
 
+      #if defined(DUNE_CPU_ARMV7)
       void
       onResourceRelease(void)
       {
@@ -422,6 +434,7 @@ namespace Vision
           }
         }
       }
+      #endif
 
 
       void
@@ -431,6 +444,7 @@ namespace Vision
         {
           std::string sysNameMsg = resolveSystemId(msg->getSource());
           std::string sysLocalName = getSystemName();
+
           if(sysNameMsg != m_args.master_name && sysNameMsg != sysLocalName)
             return;
 
@@ -463,7 +477,6 @@ namespace Vision
         }
       }
 
-      //! Consume message IMC::GpsFix
       void
       consume(const IMC::EstimatedState* msg)
       {
@@ -533,14 +546,15 @@ namespace Vision
           inf("on Deactivation");
           m_is_to_capture = false;
           m_isCapturing = false;
+          #if defined(DUNE_CPU_ARMV7)
           m_error = m_camera.StopCapture();
           if ( m_error != FlyCapture2::PGRERROR_OK )
             war("Erro stopping camera capture: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
 
           setGpio(GPIO_LOW, m_args.gpio_strobe);
+          #endif
 
           moveLogFiles();
-
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         }
       }
@@ -720,6 +734,7 @@ namespace Vision
       updateStrobe(void)
       {
         m_is_strobe = false;
+        m_is_on = false;
         init_gpio_strobe();
         if (m_args.led_type == "Strobe")
         {
@@ -729,6 +744,7 @@ namespace Vision
         else if (m_args.led_type == "On")
         {
           setGpio(GPIO_HIGH, m_args.gpio_strobe);
+          m_is_on = true;
           war("leds always on");
         }
         else
@@ -740,6 +756,7 @@ namespace Vision
       void
       getInfoCamera(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         debug("Vendor Name: %s", m_camInfo.vendorName);
         debug("Model Name: %s", m_camInfo.modelName);
         debug("Serial Number: %d", m_camInfo.serialNumber);
@@ -749,11 +766,13 @@ namespace Vision
         debug("copyright: %s", m_args.copyright.c_str());
         debug("Lens Model: %s", m_args.lens_model.c_str());
         debug("Lens Maker: %s", m_args.lens_maker.c_str());
+        #endif
       }
 
       bool
       setUpCamera(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         inf("Initialization of Camera");
         // Get Flea2 camera
         m_error = m_busMgr.GetCameraFromIndex( 0, &m_guid );
@@ -795,6 +814,7 @@ namespace Vision
 
         getInfoCamera();
         inf("Camera ready.");
+        #endif
         return true;
       }
 
@@ -802,6 +822,7 @@ namespace Vision
       bool
       pollForTriggerReady(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         unsigned int k_softwareTrigger = 0x62C;
         unsigned int regVal = 0;
 
@@ -814,12 +835,14 @@ namespace Vision
             return false;
           }
         } while ( (regVal >> 31) != 0  && !stopping());
+        #endif
         return true;
       }
 
       bool
       set_shutter_value(float value)
       {
+        #if defined(DUNE_CPU_ARMV7)
         //Declare a Property struct.
         FlyCapture2::Property prop;
         //Define the property to adjust.
@@ -840,6 +863,9 @@ namespace Vision
           m_error.PrintErrorTrace();
           return false;
         }
+        #else
+        (void)value;
+        #endif
         return true;
       }
 
@@ -847,6 +873,7 @@ namespace Vision
       bool
       fireSoftwareTrigger(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         const unsigned int k_softwareTrigger = 0x62C;
         const unsigned int k_fireVal = 0x80000000;
         m_error = m_camera.WriteRegister( k_softwareTrigger, k_fireVal );
@@ -855,12 +882,14 @@ namespace Vision
           err("Failed to FireSoftwareTrigger: %s", m_save[m_thread_cnt]->getNameError(m_error).c_str());
           return false;
         }
+        #endif
         return true;
       }
 
       bool
       getImage(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         bool result = false;
         saveInfoExif();
         if(m_is_strobe)
@@ -868,11 +897,16 @@ namespace Vision
           setGpio(GPIO_HIGH, m_args.gpio_strobe);
           Delay::waitUsec(m_args.delay_capture);
         }
+        else if(m_is_on)
+        {
+          setGpio(GPIO_HIGH, m_args.gpio_strobe);
+        }
 
         // Check that the trigger is ready
         pollForTriggerReady();
         // Fire software trigger
         fireSoftwareTrigger();
+
         try
         {
           m_error = m_camera.RetrieveBuffer( &m_rawImage );
@@ -893,6 +927,8 @@ namespace Vision
 
         if(m_is_strobe)
           setGpio(GPIO_LOW, m_args.gpio_strobe);
+        else if(m_is_on)
+          setGpio(GPIO_HIGH, m_args.gpio_strobe);
 
         // convert to rgb
         try
@@ -929,11 +965,15 @@ namespace Vision
         m_rawImage.ReleaseBuffer();
 
         return result;
+        #else
+        return false;
+        #endif
       }
 
       int
       sendImageThread(int cnt_thread)
       {
+        #if defined(DUNE_CPU_ARMV7)
         int pointer_cnt_thread = cnt_thread;
         bool jump_over = false;
         bool result_thread;
@@ -974,6 +1014,10 @@ namespace Vision
         }
 
         return pointer_cnt_thread;
+        #else
+        (void)cnt_thread;
+        return -1;
+        #endif
       }
 
       int
@@ -988,6 +1032,7 @@ namespace Vision
       void
       saveInfoExif(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         std::memset(&m_text_exif_timestamp, '\0', sizeof(m_text_exif_timestamp));
         std::sprintf(m_text_exif_timestamp, "%0.4f", Clock::getSinceEpoch());
         m_back_epoch = m_text_exif_timestamp;
@@ -1007,6 +1052,7 @@ namespace Vision
         m_save[m_thread_cnt]->m_exif_data.copyright = m_args.copyright.c_str();
         m_save[m_thread_cnt]->m_exif_data.artist = getSystemName();
         m_save[m_thread_cnt]->m_exif_data.notes = m_note_comment.c_str();
+        #endif
       }
 
       template <class T>
@@ -1020,6 +1066,7 @@ namespace Vision
       void
       trigerFrame(void)
       {
+        #if defined(DUNE_CPU_ARMV7)
         if(!getImage() && m_is_to_capture)
         {
           war("Restarting camera...");
@@ -1054,6 +1101,7 @@ namespace Vision
         }
 
         debug("Capture: thr %d", m_thread_cnt);
+        #endif
       }
 
       void
@@ -1091,8 +1139,7 @@ namespace Vision
           }
           else
           {
-            waitForMessages(0.1);
-            Delay::waitMsec(200);
+            waitForMessages(0.2);
             if(isActive())
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
             else
