@@ -76,6 +76,8 @@ namespace Vision
     {
       //! Master Name.
       std::string master_name;
+      //! Slave Cam Name.
+      std::string slave_name;
       //! Load task in mode master
       bool is_master_mode;
       //! Power channel of strobe
@@ -203,6 +205,12 @@ namespace Vision
       Time::Counter<float> m_timeout_reading;
       //! string for result output
       std::string m_result;
+      //! Timer to control heartbeat of cam system
+      Time::Counter<float> m_timeout_heartbeat_cam;
+      //! Flag to control state of camera in master
+      bool m_is_camera_active;
+      //! Flag to control internal error in cam system.
+      bool m_internal_error;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -220,6 +228,9 @@ namespace Vision
 
         param("Master Mode", m_args.is_master_mode)
         .description("Load task in master mode.");
+
+        param("Slave Name", m_args.slave_name)
+        .description("Slave Name.");
 
         param("Led Mode", m_args.led_type)
     	  .description("Led type mode.");
@@ -284,8 +295,12 @@ namespace Vision
         .defaultValue("")
         .description("Slave entities to activate/deactivate");
 
+        #if defined(DUNE_CPU_ARMV7)
         bind<IMC::EstimatedState>(this);
         bind<IMC::LoggingControl>(this);
+        #else
+        bind<IMC::Heartbeat>(this);
+        #endif
       }
 
       void
@@ -353,6 +368,8 @@ namespace Vision
         {
           m_isStartTask = false;
           m_isCapturing = false;
+          m_is_camera_active = false;
+          m_internal_error = false;
           set_cpu_governor();
           init_gpio_driver();
           init_gpio_strobe();
@@ -445,6 +462,18 @@ namespace Vision
       }
       #endif
 
+      void
+      consume(const IMC::Heartbeat* msg)
+      {
+        if (m_args.is_master_mode && m_is_camera_active)
+        {
+          std::string sysNameMsg = resolveSystemId(msg->getSource());
+          if(m_args.slave_name.compare(sysNameMsg) == 0)
+          {
+            m_timeout_heartbeat_cam.reset();
+          }
+        }
+      }
 
       void
       consume(const IMC::LoggingControl* msg)
@@ -550,6 +579,12 @@ namespace Vision
           m_is_to_capture = true;
           inf("Starting Capture.");
         }
+        else
+        {
+          m_timeout_heartbeat_cam.setTop(c_timeout_reading);
+          m_is_camera_active = true;
+          m_internal_error = false;
+        }
       }
 
       void
@@ -570,6 +605,10 @@ namespace Vision
 
           moveLogFiles();
           setEntityState(IMC::EntityState::ESTA_NORMAL, "idle | " + to_string(getStorageUsageLogs()) + " G");
+        }
+        else
+        {
+          m_is_camera_active = false;
         }
       }
 
@@ -622,7 +661,9 @@ namespace Vision
           {
             while (!std::feof(pipe) && !m_timeout_reading.overflow())
             {
+              #if defined(DUNE_CPU_ARMV7)
               (void)std::fgets(m_buffer, sizeof(m_buffer), pipe);
+              #endif
             }
 
             if(m_timeout_reading.overflow())
@@ -1090,9 +1131,11 @@ namespace Vision
       releaseRamCached(void)
       {
         debug("Releasing cache ram.");
+        #if defined(DUNE_CPU_ARMV7)
         (void)std::system("sync");
         (void)std::system("echo 1 > /proc/sys/vm/drop_caches");
         (void)std::system("sync");
+        #endif
       }
 
       void
@@ -1206,7 +1249,17 @@ namespace Vision
           else
           {
             waitForMessages(0.2);
-            if(isActive())
+
+            if(m_timeout_heartbeat_cam.overflow() && m_is_camera_active)
+            {
+              err("cam system stop - internal error");
+              m_internal_error = true;
+              m_is_camera_active = false;
+            }
+
+            if(m_internal_error)
+              setEntityState(IMC::EntityState::ESTA_ERROR, "cam system stop - internal error");
+            else if(isActive())
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
             else
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
