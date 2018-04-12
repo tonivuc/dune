@@ -69,6 +69,7 @@ namespace Vision
     static const float c_time_to_update_cnt_info = 10.0;
     static const std::string c_log_path = "/opt/lsts/dune/log/";
     static const std::string c_camera_log_folder = "camera_log/";
+    static const float c_timeout_reading = 3.0;
 
     //! %Task arguments.
     struct Arguments
@@ -194,6 +195,14 @@ namespace Vision
       Lumenera::EntityActivationMaster* m_slave_entities;
       //! Control state of capture
       bool m_isCapturing;
+      //! buffer for path to get storage usage of logs
+      char m_buffer[64];
+      //! Storage usage value
+      float m_storage;
+      //! Timer to control reading of storage
+      Time::Counter<float> m_timeout_reading;
+      //! string for result output
+      std::string m_result;
 
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx),
@@ -393,7 +402,7 @@ namespace Vision
           m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
           m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
 
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, "idle | " + to_string(getStorageUsageLogs()) + " G");
           m_isStartTask = true;
         }
       }
@@ -560,7 +569,7 @@ namespace Vision
           #endif
 
           moveLogFiles();
-          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
+          setEntityState(IMC::EntityState::ESTA_NORMAL, "idle | " + to_string(getStorageUsageLogs()) + " G");
         }
       }
 
@@ -591,6 +600,58 @@ namespace Vision
         result = std::system(system_comand.c_str());
 
         return result;
+      }
+
+      float
+      getStorageUsageLogs(void)
+      {
+        m_timeout_reading.setTop(c_timeout_reading);
+        std::memset(&m_buffer, '\0', sizeof(m_buffer));
+        std::sprintf(m_buffer, "du -hs /opt/lsts/dune/log");
+        FILE* pipe = popen(m_buffer, "r");
+        if (!pipe)
+        {
+          war("timeout - erro reading storage usage");
+          m_storage = 0;
+        }
+        else
+        {
+          std::memset(&m_buffer, '\0', sizeof(m_buffer));
+          m_timeout_reading.reset();
+          try
+          {
+            while (!std::feof(pipe) && !m_timeout_reading.overflow())
+            {
+              (void)std::fgets(m_buffer, sizeof(m_buffer), pipe);
+            }
+
+            if(m_timeout_reading.overflow())
+            {
+              pclose(pipe);
+              war("timeout - erro reading storage usage");
+              return 0;
+            }
+          }
+          catch (...)
+          {
+            pclose(pipe);
+            return 0;
+          }
+          pclose(pipe);
+          try
+          {
+            std::sscanf(m_buffer, "%fG	/opt/lsts/dune/log", &m_storage);
+          }
+          catch (...)
+          {
+            return 0;
+          }
+        }
+
+        if(m_storage != 0)
+          return m_storage;
+        else
+          return 0;
       }
 
       int
@@ -1025,13 +1086,13 @@ namespace Vision
         #endif
       }
 
-      int
+      void
       releaseRamCached(void)
       {
         debug("Releasing cache ram.");
-        int result = std::system("sync");
-        result = std::system("echo 1 > /proc/sys/vm/drop_caches");
-        return result;
+        (void)std::system("sync");
+        (void)std::system("echo 1 > /proc/sys/vm/drop_caches");
+        (void)std::system("sync");
       }
 
       void
