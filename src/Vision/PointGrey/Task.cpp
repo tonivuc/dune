@@ -489,6 +489,11 @@ namespace Vision
           Angles::convertDecimalToDMS(Angles::degrees(msg->lat), m_lat_deg, m_lat_min, m_lat_sec);
           Angles::convertDecimalToDMS(Angles::degrees(msg->lon), m_lon_deg, m_lon_min, m_lon_sec);
           m_note_comment = "Depth: "+to_string(msg->depth)+" m # Altitude: "+to_string(msg->alt)+" m";
+
+          IMC::GpsFix pos;
+          pos.lat = msg->lat;
+          pos.lon = msg->lon;
+          dispatch(pos);
         }
       }
 

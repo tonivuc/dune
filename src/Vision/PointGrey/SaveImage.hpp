@@ -79,7 +79,7 @@ namespace Vision
           m_name_thread = name;
           m_new_image = false;
           m_jpeg_params.push_back(CV_IMWRITE_JPEG_QUALITY);
-          m_jpeg_params.push_back(85);
+          m_jpeg_params.push_back(65);
           m_row_bytes = 0;
           cv::setNumThreads(1);
           m_is_free = true;
