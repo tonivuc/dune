@@ -123,6 +123,8 @@ namespace Control
         uint16_t TCP_port;
         //! TCP Address
         Address TCP_addr;
+        //! IPv4 Address
+        Address ip;
         //! Telemetry Rate
         uint8_t trate;
         //! Default Altitude
@@ -152,6 +154,8 @@ namespace Control
         bool loiter_idle;
         //! Dispatch ExternalNavData rather than EstimatedState
         bool use_external_nav;
+        //! Temperature of ESC failure (degrees)
+        float esc_temp;
       };
 
       struct Task: public DUNE::Tasks::Task
@@ -281,6 +285,10 @@ namespace Control
           .defaultValue("127.0.0.1")
           .description("Address for connection to Ardupilot");
 
+          param("IPv4 - Address", m_args.ip)
+          .defaultValue("0.0.0.0")
+          .description("Address for neptus connection to Ardupilot");
+
           param("Telemetry Rate", m_args.trate)
           .defaultValue("10")
           .units(Units::Hertz)
@@ -403,6 +411,10 @@ namespace Control
           .defaultValue("false")
           .description("Dispatch ExternalNavData instead of EstimatedState");
 
+          param("Temperature of ESC failure (degrees)", m_args.esc_temp)
+          .defaultValue("70.0")
+          .description("Temperature of ESC failure (degrees).");
+
           // Setup packet handlers
           // IMPORTANT: set up function to handle each type of MAVLINK packet here
           m_mlh[MAVLINK_MSG_ID_ATTITUDE] = &Task::handleAttitudePacket;
@@ -454,6 +466,14 @@ namespace Control
         onResourceAcquisition(void)
         {
           openConnection();
+
+          std::stringstream os;
+          os << "mavlink+tcp://" << m_args.ip << ":" << m_args.TCP_port << "/";
+
+          IMC::AnnounceService announce;
+          announce.service = os.str();
+          announce.service_type = IMC::AnnounceService::SRV_TYPE_EXTERNAL;
+          dispatch(announce);
         }
 
         void
@@ -556,7 +576,7 @@ namespace Control
                                                m_sysid,
                                                0,
                                                MAV_DATA_STREAM_RAW_SENSORS,
-                                               50,
+                                               rate,
                                                1);
 
           n = mavlink_msg_to_send_buffer(buf, &msg);
@@ -612,10 +632,7 @@ namespace Control
             }
 
             if (!(m_args.ardu_tracker) && (cloops->mask & IMC::CL_ROLL))
-            {
-              onUpdateParameters();
               activateFBW();
-            }
           }
           else
           {
@@ -962,7 +979,7 @@ namespace Control
                                        m_sysid, //! target_system System ID
                                        0, //! target_component Component ID
                                        "WP_LOITER_RAD", //! Parameter name
-                                       path->flags & DesiredPath::FL_CCLOCKW ? (-1 * path->lradius) : (path->lradius), //! Parameter value
+                                       path->lradius ? (path->flags & DesiredPath::FL_CCLOCKW ? (-1 * path->lradius) : (path->lradius)) : 10, //! Parameter value
                                        MAV_PARAM_TYPE_INT16); //! Parameter type
 
             n = mavlink_msg_to_send_buffer(buf, &msg);
@@ -998,11 +1015,11 @@ namespace Control
           mavlink_msg_mission_item_pack(255, 0, &msg,
                                         m_sysid, //! target_system System ID
                                         0, //! target_component Component ID
-                                        1, //! seq Sequence
+                                        0, //! seq Sequence
                                         MAV_FRAME_GLOBAL, //! frame The coordinate system of the MISSION. see MAV_FRAME in mavlink_types.h
-                                        MAV_CMD_NAV_LOITER_UNLIM, //! command The scheduled action for the MISSION. see MAV_CMD in ardupilotmega.h
+                                        (path->lradius ? MAV_CMD_NAV_LOITER_UNLIM : MAV_CMD_NAV_WAYPOINT), //! command The scheduled action for the MISSION. see MAV_CMD in ardupilotmega.h
                                         2, //! current false:0, true:1, guided mode:2
-                                        0, //! autocontinue to next wp
+                                        1, //! autocontinue to next wp
                                         0, //! Not used
                                         0, //! Not used
                                         path->flags & DesiredPath::FL_CCLOCKW ? -1 : 0, //! If <0, then CCW loiter
@@ -1808,6 +1825,14 @@ namespace Control
           m_pressure.value = sc_press.press_abs;
           m_temp.value = 0.01 * sc_press.temperature;
 
+          if(m_temp.value >= (m_args.esc_temp - 5))
+          {
+            if(m_temp.value >= m_args.esc_temp)
+              err("Autopilot temperature reached %fºC! ESC will shutdown!!!", m_temp.value);
+            else
+              war("Autopilot temperature at %fºC! ESC shuts down around %fºC.", m_temp.value, m_args.esc_temp);
+          }
+
           dispatch(m_pressure);
           dispatch(m_temp);
         }
@@ -1908,8 +1933,14 @@ namespace Control
         handleStatusTextPacket(const mavlink_message_t* msg)
         {
           mavlink_statustext_t stat_tex;
+          IMC::ApmStatus apm_status;
+
           mavlink_msg_statustext_decode(msg, &stat_tex);
-          inf("AP Status: %.*s", 50, stat_tex.text);
+          apm_status.severity = stat_tex.severity;
+          apm_status.text = stat_tex.text;
+
+          inf("APM Status: [%d] %s", apm_status.severity, apm_status.text.c_str());
+          dispatch(apm_status);
         }
 
         void
@@ -2224,13 +2255,16 @@ namespace Control
 
           IMC::IndicatedSpeed ias;
           IMC::TrueSpeed gs;
+          IMC::Throttle thr;
 
           ias.value = (fp64_t)vfr_hud.airspeed;
           gs.value = (fp64_t)vfr_hud.groundspeed;
           m_gnd_speed = (int)vfr_hud.groundspeed;
+          thr.value = (uint16_t)vfr_hud.throttle;
 
           dispatch(ias);
           dispatch(gs);
+          dispatch(thr);
         }
 
         void
