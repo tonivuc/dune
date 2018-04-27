@@ -7,20 +7,18 @@
 // Licencees holding valid commercial DUNE licences may use this file in    *
 // accordance with the commercial licence agreement provided with the       *
 // Software or, alternatively, in accordance with the terms contained in a  *
-// written agreement between you and Faculdade de Engenharia da             *
-// Universidade do Porto. For licensing terms, conditions, and further      *
-// information contact lsts@fe.up.pt.                                       *
+// written agreement between you and Universidade do Porto. For licensing   *
+// terms, conditions, and further information contact lsts@fe.up.pt.        *
 //                                                                          *
-// Modified European Union Public Licence - EUPL v.1.1 Usage                *
-// Alternatively, this file may be used under the terms of the Modified     *
-// EUPL, Version 1.1 only (the "Licence"), appearing in the file LICENCE.md *
+// European Union Public Licence - EUPL v.1.1 Usage                         *
+// Alternatively, this file may be used under the terms of the EUPL,        *
+// Version 1.1 only (the "Licence"), appearing in the file LICENCE.md       *
 // included in the packaging of this file. You may not use this work        *
 // except in compliance with the Licence. Unless required by applicable     *
 // law or agreed to in writing, software distributed under the Licence is   *
 // distributed on an "AS IS" basis, WITHOUT WARRANTIES OR CONDITIONS OF     *
 // ANY KIND, either express or implied. See the Licence for the specific    *
 // language governing permissions and limitations at                        *
-// https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
 // Author: Ricardo Martins                                                  *
@@ -67,6 +65,30 @@ namespace DUNE
       consume(const IMC::PowerChannelState* msg);
 
     protected:
+      //! Create an I/O handle given an URI.
+      //!
+      //! @param[in] uri URI.
+      //!
+      //! @return I/O handle.
+      IO::Handle*
+      openDeviceHandle(const std::string& uri);
+
+      //! Create an I/O handle given a serial port URI.
+      //!
+      //! @param[in] uri URI of the form: uart://DEVICE:BAUD
+      //!
+      //! @return I/O handle.
+      IO::Handle*
+      openUART(const std::string& uri);
+
+      //! Create an I/O handle given a TCP port URI.
+      //!
+      //! @param[in] uri URI of the form: tcp://HOST:PORT
+      //!
+      //! @return I/O handle.
+      IO::Handle*
+      openSocketTCP(const std::string& uri);
+
       //! Set the amount of time to wait before powering down the device.
       //! @param[in] value delay in second.
       void
@@ -101,6 +123,11 @@ namespace DUNE
         m_power_channels.insert(std::make_pair(name, false));
       }
 
+      virtual void
+      onIdle(void)
+      {
+      }
+
       virtual bool
       onConnect(void) = 0;
 
@@ -131,8 +158,24 @@ namespace DUNE
       virtual void
       onCloseLog(void);
 
+      FileSystem::Path
+      getUnusedLogPath(const FileSystem::Path& path, const std::string& extension);
+
       virtual void
       onInitializeDevice(void) = 0;
+
+      virtual void
+      onActivationFailed(void)
+      { }
+
+      //! Test if the estimated state message should be discarded.
+      //! @param[in] msg estimated state message.
+      //! @return true to discard message, false otherwise.
+      virtual bool
+      discardEstimatedState(const IMC::EstimatedState* msg)
+      {
+        return msg->getSource() != getSystemId();
+      }
 
       void
       clearFaultCount(void)
@@ -144,6 +187,19 @@ namespace DUNE
       clearTimeoutCount(void)
       {
         m_timeout_count = 0;
+      }
+
+      //! Suspend execution for a given amount of time while only consume
+      //! messages.
+      //!
+      //! @param[in] duration amount of time to wait in second.
+      void
+      wait(double duration);
+
+      void
+      setRestartDelay(double seconds)
+      {
+        m_restart_delay = seconds;
       }
 
     private:
@@ -179,7 +235,9 @@ namespace DUNE
         //! Wait for power to be turned off.
         SM_DEACT_POWER_WAIT,
         //! Deactivation sequence is complete.
-        SM_DEACT_DONE
+        SM_DEACT_DONE,
+        //! Wait for restart delay.
+        SM_RESTART_WAIT
       };
 
       //! Watchdog timer.
@@ -206,6 +264,12 @@ namespace DUNE
       unsigned m_fault_count;
       //! Timeout count.
       unsigned m_timeout_count;
+      //! True to restart activation when idle.
+      bool m_restart;
+      //! Restart delay in seconds.
+      double m_restart_delay;
+      //! Restart timer.
+      DUNE::Time::Counter<double> m_restart_timer;
 
       void
       onResourceRelease(void);
@@ -232,6 +296,12 @@ namespace DUNE
       //! @return dequeued finite state machine state.
       StateMachineStates
       dequeueState(void);
+
+      void
+      idle(void)
+      {
+        onIdle();
+      }
 
       void
       initializeDevice(void);
@@ -295,6 +365,9 @@ namespace DUNE
       //! Update state machine.
       void
       updateStateMachine(void);
+
+      void
+      step(void);
 
       void
       onMain(void);
