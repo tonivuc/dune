@@ -69,7 +69,7 @@ namespace Vision
     static const float c_time_to_update_cnt_info = 10.0;
     static const std::string c_log_path = "/opt/lsts/dune/log/";
     static const std::string c_camera_log_folder = "camera_log/";
-    static const float c_timeout_reading = 3.0;
+    static const float c_timeout_reading = 5.0;
 
     //! %Task arguments.
     struct Arguments
@@ -373,6 +373,8 @@ namespace Vision
           set_cpu_governor();
           init_gpio_driver();
           init_gpio_strobe();
+          m_back_path_image = m_log_dir.c_str();
+          m_back_path_main_log = m_log_dir.c_str();
 
           if(m_args.number_fs > 0 && m_args.number_fs <= c_number_max_fps)
           {
@@ -419,7 +421,7 @@ namespace Vision
           m_clean_cached_ram.setTop(c_time_to_release_cached_ram);
           m_update_cnt_frames.setTop(c_time_to_update_cnt_info);
 
-          setEntityState(IMC::EntityState::ESTA_NORMAL, "idle | " + to_string(getStorageUsageLogs()) + " G");
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
           m_isStartTask = true;
         }
       }
@@ -604,7 +606,7 @@ namespace Vision
           #endif
 
           moveLogFiles();
-          setEntityState(IMC::EntityState::ESTA_NORMAL, "idle | " + to_string(getStorageUsageLogs()) + " G");
+          setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_IDLE);
         }
         else
         {
@@ -620,79 +622,25 @@ namespace Vision
 
         std::string file_name_old = m_back_path_log + "/Output.txt ";
         std::string file_name_new = m_back_path_main_log + "/camera_log/camera_Output.txt";
-        system_comand = "mv " + file_name_old + file_name_new;
+        system_comand = "cp " + file_name_old + file_name_new;
         result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/Config.ini ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_Config.ini";
-        system_comand = "mv " + file_name_old + file_name_new;
+        system_comand = "cp " + file_name_old + file_name_new;
         result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/Data.lsf.gz ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_Data.lsf.gz";
-        system_comand = "mv " + file_name_old + file_name_new;
+        system_comand = "cp " + file_name_old + file_name_new;
         result = std::system(system_comand.c_str());
 
         file_name_old = m_back_path_log + "/IMC.xml.gz ";
         file_name_new = m_back_path_main_log + "/camera_log/camera_IMC.xml.gz";
-        system_comand = "mv " + file_name_old + file_name_new;
+        system_comand = "cp " + file_name_old + file_name_new;
         result = std::system(system_comand.c_str());
 
         return result;
-      }
-
-      float
-      getStorageUsageLogs(void)
-      {
-        m_timeout_reading.setTop(c_timeout_reading);
-        std::memset(&m_buffer, '\0', sizeof(m_buffer));
-        std::sprintf(m_buffer, "du -hs /opt/lsts/dune/log");
-        FILE* pipe = popen(m_buffer, "r");
-        if (!pipe)
-        {
-          war("timeout - erro reading storage usage");
-          m_storage = 0;
-        }
-        else
-        {
-          std::memset(&m_buffer, '\0', sizeof(m_buffer));
-          m_timeout_reading.reset();
-          try
-          {
-            while (!std::feof(pipe) && !m_timeout_reading.overflow())
-            {
-              #if defined(DUNE_CPU_ARMV7)
-              (void)std::fgets(m_buffer, sizeof(m_buffer), pipe);
-              #endif
-            }
-
-            if(m_timeout_reading.overflow())
-            {
-              pclose(pipe);
-              war("timeout - erro reading storage usage");
-              return 0;
-            }
-          }
-          catch (...)
-          {
-            pclose(pipe);
-            return 0;
-          }
-          pclose(pipe);
-          try
-          {
-            std::sscanf(m_buffer, "%fG	/opt/lsts/dune/log", &m_storage);
-          }
-          catch (...)
-          {
-            return 0;
-          }
-        }
-
-        if(m_storage != 0)
-          return m_storage;
-        else
-          return 0;
       }
 
       int
@@ -1242,7 +1190,7 @@ namespace Vision
             }
             else
             {
-              waitForMessages(1.0);
+              waitForMessages(0.5);
               setGpio(GPIO_LOW, m_args.gpio_strobe);
             }
           }
@@ -1252,13 +1200,13 @@ namespace Vision
 
             if(m_timeout_heartbeat_cam.overflow() && m_is_camera_active)
             {
-              err("cam system stop - internal error");
+              war("cam system stop - internal error (check logs)");
               m_internal_error = true;
               m_is_camera_active = false;
             }
 
             if(m_internal_error)
-              setEntityState(IMC::EntityState::ESTA_ERROR, "cam system stop - internal error");
+              setEntityState(IMC::EntityState::ESTA_NORMAL, "internal error cam");
             else if(isActive())
               setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
             else
