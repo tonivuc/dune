@@ -253,8 +253,8 @@ namespace Control
         // Initialize comms
         auto tcp_dataprocessor = [this](uint8_t buf[], int startIndex, int length) -> int
           {
-            return this->pioneerCommandRepliesParse(buf, startIndex, length);
-            // return this->pioneerMessagesParse(buf, startIndex, length);
+            // return this->pioneerCommandRepliesParse(buf, startIndex, length);
+            return this->pioneerMessagesParse(buf, startIndex, length);
           };
         auto udp_dataprocessor = [this](uint8_t buf[], int startIndex, int length) -> int
           {
@@ -557,7 +557,7 @@ namespace Control
       int
       sendCommand(MsgStruct* msg)
       {
-        if (m_args.listen_mode)
+        if (true || m_args.listen_mode)
         {
           return 0;
         }
