@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(Engine)
+    set(TASK_ENABLED TRUE)
+  else(Engine)
+    set(TASK_ENABLED FALSE)
+  endif(Engine)
+endif(LITE)

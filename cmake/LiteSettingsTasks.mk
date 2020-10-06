@@ -114,6 +114,13 @@ SET(General.GPSNavigation FALSE)
 SET(General.LBL FALSE)
 SET(General.ROV FALSE)
 
+##########################################################################
+#                         Plan                                           #
+##########################################################################
+SET(DB FALSE)
+SET(Engine FALSE)
+SET(Generator FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)

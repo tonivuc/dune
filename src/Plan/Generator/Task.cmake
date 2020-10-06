@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(Generator)
+    set(TASK_ENABLED TRUE)
+  else(Generator)
+    set(TASK_ENABLED FALSE)
+  endif(Generator)
+endif(LITE)
