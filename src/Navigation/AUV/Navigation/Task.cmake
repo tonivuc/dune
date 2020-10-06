@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.Navigation)
+    set(TASK_ENABLED TRUE)
+  else(AUV.Navigation)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.Navigation)
+endif(LITE)

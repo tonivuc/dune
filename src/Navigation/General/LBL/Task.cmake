@@ -1,1 +1,8 @@
 set(TASK_LICENSE "Proprietary")
+if(LITE)
+  if(General.LBL)
+    set(TASK_ENABLED TRUE)
+  else(General.LBL)
+    set(TASK_ENABLED FALSE)
+  endif(General.LBL)
+endif(LITE)

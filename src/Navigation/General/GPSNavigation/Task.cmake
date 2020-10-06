@@ -1,0 +1,7 @@
+if(LITE)
+  if(General.GPSNavigation)
+    set(TASK_ENABLED TRUE)
+  else(General.GPSNavigation)
+    set(TASK_ENABLED FALSE)
+  endif(General.GPSNavigation)
+endif(LITE)

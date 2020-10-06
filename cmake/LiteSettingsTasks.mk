@@ -105,6 +105,15 @@ SET(Medium FALSE)
 SET(OperationalLimits FALSE)
 SET(Servos FALSE)
 
+##########################################################################
+#                         Navigation                                     #
+##########################################################################
+SET(AUV.Navigation FALSE)
+SET(AUV.Ranger FALSE)
+SET(General.GPSNavigation FALSE)
+SET(General.LBL FALSE)
+SET(General.ROV FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)
