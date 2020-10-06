@@ -1,0 +1,7 @@
+if(LITE)
+  if(OnEvent)
+    set(TASK_ENABLED TRUE)
+  else(OnEvent)
+    set(TASK_ENABLED FALSE)
+  endif(OnEvent)
+endif(LITE)

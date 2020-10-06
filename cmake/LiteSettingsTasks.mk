@@ -10,6 +10,11 @@ SET(SCRTv4 FALSE)
 SET(SIMCT01 FALSE)
 SET(SingleSIMCT01 FALSE)
 
+##    Autonomy
+SET(OnEvent FALSE)
+SET(TextActions FALSE)
+SET(TREX FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)
