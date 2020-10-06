@@ -436,5 +436,5 @@ include(Dart)
 #                                Lite                                    #
 ##########################################################################
 if(LITE)
-  message(STATUS "${Red}Compiling DUNE in Lite mode${ColourReset}")
+  message(STATUS "${BoldRed}Compiling DUNE in Lite mode${ColourReset}")
 endif(LITE)

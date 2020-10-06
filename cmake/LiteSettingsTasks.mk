@@ -73,6 +73,26 @@ SET(UAV.LOS FALSE)
 SET(UAV.PX4 FALSE)
 SET(UAV.RemoteOperation FALSE)
 
+##########################################################################
+#                         Maneuver                                       #
+##########################################################################
+SET(CommsRelay FALSE)
+SET(CompassCalibration FALSE)
+SET(CoverArea FALSE)
+SET(FlyByCamera FALSE)
+SET(FollowReference.AUV FALSE)
+SET(FollowReference.UAV FALSE)
+SET(FollowSystem FALSE)
+SET(FollowTarget FALSE)
+SET(FollowTrajectory FALSE)
+SET(Multiplexer FALSE)
+SET(RowsCoverage FALSE)
+SET(Teleoperation FALSE)
+SET(VehicleFormation.Coordinator FALSE)
+SET(VehicleFormation.FormCollAvoid FALSE)
+SET(VehicleFormation.SMC FALSE)
+SET(VehicleFormation.Test FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)

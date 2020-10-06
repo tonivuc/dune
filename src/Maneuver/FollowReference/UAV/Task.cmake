@@ -1,0 +1,7 @@
+if(LITE)
+  if(FollowReference.UAV)
+    set(TASK_ENABLED TRUE)
+  else(FollowReference.UAV)
+    set(TASK_ENABLED FALSE)
+  endif(FollowReference.UAV)
+endif(LITE)

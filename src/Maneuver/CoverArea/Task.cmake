@@ -1,2 +1,11 @@
 # This task is not compatible with IMC v5.x
-set(TASK_ENABLED TRUE)
+if(LITE)
+  if(CoverArea)
+    set(TASK_ENABLED TRUE)
+    message(STATUS "${Yellow}Maneuver.CoverArea: This task is not compatible with IMC v5.x${ColourReset}")
+  else(CoverArea)
+    set(TASK_ENABLED FALSE)
+  endif(CoverArea)
+else(LITE)
+  set(TASK_ENABLED TRUE)
+endif(LITE)

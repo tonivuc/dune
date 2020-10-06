@@ -1,0 +1,7 @@
+if(LITE)
+  if(FollowReference.AUV)
+    set(TASK_ENABLED TRUE)
+  else(FollowReference.AUV)
+    set(TASK_ENABLED FALSE)
+  endif(FollowReference.AUV)
+endif(LITE)

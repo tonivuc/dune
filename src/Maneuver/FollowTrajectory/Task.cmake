@@ -1,0 +1,7 @@
+if(LITE)
+  if(FollowTrajectory)
+    set(TASK_ENABLED TRUE)
+  else(FollowTrajectory)
+    set(TASK_ENABLED FALSE)
+  endif(FollowTrajectory)
+endif(LITE)

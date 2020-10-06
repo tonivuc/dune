@@ -1,2 +1,11 @@
 # This task is not compatible with IMC v5.x
-set(TASK_ENABLED FALSE)
+if(LITE)
+  if(FlyByCamera)
+    set(TASK_ENABLED TRUE)
+    message(STATUS "${Yellow}Maneuver.FlyByCamera: This task is not compatible with IMC v5.x${ColourReset}")
+  else(FlyByCamera)
+    set(TASK_ENABLED FALSE)
+  endif(FlyByCamera)
+else(LITE)
+  set(TASK_ENABLED FALSE)
+endif(LITE)

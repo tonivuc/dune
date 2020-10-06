@@ -1,0 +1,7 @@
+if(LITE)
+  if(FollowSystem)
+    set(TASK_ENABLED TRUE)
+  else(FollowSystem)
+    set(TASK_ENABLED FALSE)
+  endif(FollowSystem)
+endif(LITE)

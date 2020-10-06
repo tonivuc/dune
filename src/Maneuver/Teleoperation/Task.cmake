@@ -1,0 +1,7 @@
+if(LITE)
+  if(Teleoperation)
+    set(TASK_ENABLED TRUE)
+  else(Teleoperation)
+    set(TASK_ENABLED FALSE)
+  endif(Teleoperation)
+endif(LITE)

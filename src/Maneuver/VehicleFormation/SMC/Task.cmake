@@ -1,0 +1,7 @@
+if(LITE)
+  if(VehicleFormation.SMC)
+    set(TASK_ENABLED TRUE)
+  else(TVehicleFormation.SMC)
+    set(TASK_ENABLED FALSE)
+  endif(VehicleFormation.SMC)
+endif(LITE)

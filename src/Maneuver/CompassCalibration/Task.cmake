@@ -1,0 +1,7 @@
+if(LITE)
+  if(CompassCalibration)
+    set(TASK_ENABLED TRUE)
+  else(CompassCalibration)
+    set(TASK_ENABLED FALSE)
+  endif(CompassCalibration)
+endif(LITE)

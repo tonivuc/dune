@@ -1,0 +1,7 @@
+if(LITE)
+  if(CommsRelay)
+    set(TASK_ENABLED TRUE)
+  else(CommsRelay)
+    set(TASK_ENABLED FALSE)
+  endif(CommsRelay)
+endif(LITE)
