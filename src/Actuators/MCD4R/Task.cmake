@@ -1,0 +1,7 @@
+if(LITE)
+  if(MCD4R)
+    set(TASK_ENABLED TRUE)
+  else(MCD4R)
+    set(TASK_ENABLED FALSE)
+  endif(MCD4R)
+endif(LITE)

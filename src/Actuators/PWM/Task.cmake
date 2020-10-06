@@ -1,4 +1,16 @@
-# This task is Linux specific.
-if(NOT DUNE_OS_LINUX)
-  set(TASK_ENABLED FALSE)
-endif(NOT DUNE_OS_LINUX)
+if(LITE)
+  if(PWM)
+    set(TASK_ENABLED TRUE)
+    # This task is Linux specific.
+    if(NOT DUNE_OS_LINUX)
+      set(TASK_ENABLED FALSE)
+    endif(NOT DUNE_OS_LINUX)
+  else(PWM)
+    set(TASK_ENABLED FALSE)
+  endif(PWM)
+else(LITE)
+  # This task is Linux specific.
+  if(NOT DUNE_OS_LINUX)
+    set(TASK_ENABLED FALSE)
+  endif(NOT DUNE_OS_LINUX)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(LED4R)
+    set(TASK_ENABLED TRUE)
+  else(LED4R)
+    set(TASK_ENABLED FALSE)
+  endif(LED4R)
+endif(LITE)

@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(SCRTv4)
+    set(TASK_ENABLED TRUE)
+  else(SCRTv4)
+    set(TASK_ENABLED FALSE)
+  endif(SCRTv4)
+endif(LITE)

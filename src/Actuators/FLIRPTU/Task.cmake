@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(FLIRPTU)
+    set(TASK_ENABLED TRUE)
+  else(FLIRPTU)
+    set(TASK_ENABLED FALSE)
+  endif(FLIRPTU)
+endif(LITE)

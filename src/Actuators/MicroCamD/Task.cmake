@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(MicroCamD)
+    set(TASK_ENABLED TRUE)
+  else(MicroCamD)
+    set(TASK_ENABLED FALSE)
+  endif(MicroCamD)
+endif(LITE)

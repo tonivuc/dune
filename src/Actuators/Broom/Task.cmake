@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(Broom)
+    set(TASK_ENABLED TRUE)
+  else(Broom)
+    set(TASK_ENABLED FALSE)
+  endif(Broom)
+endif(LITE)
