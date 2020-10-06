@@ -1,0 +1,7 @@
+if(LITE)
+  if(Servos)
+    set(TASK_ENABLED TRUE)
+  else(Servos)
+    set(TASK_ENABLED FALSE)
+  endif(Servos)
+endif(LITE)

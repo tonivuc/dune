@@ -1,0 +1,7 @@
+if(LITE)
+  if(Collisions)
+    set(TASK_ENABLED TRUE)
+  else(Collisions)
+    set(TASK_ENABLED FALSE)
+  endif(Collisions)
+endif(LITE)

@@ -93,6 +93,18 @@ SET(VehicleFormation.FormCollAvoid FALSE)
 SET(VehicleFormation.SMC FALSE)
 SET(VehicleFormation.Test FALSE)
 
+##########################################################################
+#                         Monitors                                       #
+##########################################################################
+SET(Clock FALSE)
+SET(Collisions FALSE)
+SET(Emergency FALSE)
+SET(Entities FALSE)
+SET(FuelLevel FALSE)
+SET(Medium FALSE)
+SET(OperationalLimits FALSE)
+SET(Servos FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(OperationalLimits)
+    set(TASK_ENABLED TRUE)
+  else(OperationalLimits)
+    set(TASK_ENABLED FALSE)
+  endif(OperationalLimits)
+endif(LITE)

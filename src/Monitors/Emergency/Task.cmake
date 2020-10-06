@@ -1,0 +1,7 @@
+if(LITE)
+  if(Emergency)
+    set(TASK_ENABLED TRUE)
+  else(Emergency)
+    set(TASK_ENABLED FALSE)
+  endif(Emergency)
+endif(LITE)

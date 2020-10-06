@@ -1,0 +1,7 @@
+if(LITE)
+  if(FuelLevel)
+    set(TASK_ENABLED TRUE)
+  else(FuelLevel)
+    set(TASK_ENABLED FALSE)
+  endif(FuelLevel)
+endif(LITE)
