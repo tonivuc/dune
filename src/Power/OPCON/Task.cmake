@@ -1,0 +1,7 @@
+if(LITE)
+  if(OPCON)
+    set(TASK_ENABLED TRUE)
+  else(OPCON)
+    set(TASK_ENABLED FALSE)
+  endif(OPCON)
+endif(LITE)

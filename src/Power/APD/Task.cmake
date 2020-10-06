@@ -1,0 +1,7 @@
+if(LITE)
+  if(APD)
+    set(TASK_ENABLED TRUE)
+  else(APD)
+    set(TASK_ENABLED FALSE)
+  endif(APD)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(CPMB)
+    set(TASK_ENABLED TRUE)
+  else(CPMB)
+    set(TASK_ENABLED FALSE)
+  endif(CPMB)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(BATMANv2)
+    set(TASK_ENABLED TRUE)
+  else(BATMANv2)
+    set(TASK_ENABLED FALSE)
+  endif(BATMANv2)
+endif(LITE)

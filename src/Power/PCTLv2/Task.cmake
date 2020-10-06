@@ -1,0 +1,7 @@
+if(LITE)
+  if(PCTLv2)
+    set(TASK_ENABLED TRUE)
+  else(PCTLv2)
+    set(TASK_ENABLED FALSE)
+  endif(PCTLv2)
+endif(LITE)

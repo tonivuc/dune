@@ -1,0 +1,7 @@
+if(LITE)
+  if(DOAMv1)
+    set(TASK_ENABLED TRUE)
+  else(DOAMv1)
+    set(TASK_ENABLED FALSE)
+  endif(DOAMv1)
+endif(LITE)

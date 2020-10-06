@@ -121,6 +121,21 @@ SET(DB FALSE)
 SET(Engine FALSE)
 SET(Generator FALSE)
 
+##########################################################################
+#                         Power                                          #
+##########################################################################
+SET(APD FALSE)
+SET(BATMANv2 FALSE)
+SET(CPMB FALSE)
+SET(CPMBv2 FALSE)
+SET(DOAMv1 FALSE)
+SET(DOAMv2 FALSE)
+SET(LUEMB FALSE)
+SET(MCBv2 FALSE)
+SET(OPCON FALSE)
+SET(PCTLv2 FALSE)
+SET(PSIMAR FALSE)
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)

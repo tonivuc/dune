@@ -1,0 +1,7 @@
+if(LITE)
+  if(PSIMAR)
+    set(TASK_ENABLED TRUE)
+  else(PSIMAR)
+    set(TASK_ENABLED FALSE)
+  endif(PSIMAR)
+endif(LITE)
