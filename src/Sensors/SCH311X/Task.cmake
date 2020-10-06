@@ -1,0 +1,7 @@
+if(LITE)
+  if(SCH311X)
+    set(TASK_ENABLED TRUE)
+  else(SCH311X)
+    set(TASK_ENABLED FALSE)
+  endif(SCH311X)
+endif(LITE)

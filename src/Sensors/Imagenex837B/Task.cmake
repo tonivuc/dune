@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(Imagenex837B)
+    set(TASK_ENABLED TRUE)
+  else(Imagenex837B)
+    set(TASK_ENABLED FALSE)
+  endif(Imagenex837B)
+endif(LITE)

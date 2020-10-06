@@ -1,0 +1,7 @@
+if(LITE)
+  if(MetrecX)
+    set(TASK_ENABLED TRUE)
+  else(MetrecX)
+    set(TASK_ENABLED FALSE)
+  endif(MetrecX)
+endif(LITE)

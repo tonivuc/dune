@@ -1,0 +1,7 @@
+if(LITE)
+  if(OS4000)
+    set(TASK_ENABLED TRUE)
+  else(OS4000)
+    set(TASK_ENABLED FALSE)
+  endif(OS4000)
+endif(LITE)

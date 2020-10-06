@@ -1,0 +1,7 @@
+if(LITE)
+  if(GPS)
+    set(TASK_ENABLED TRUE)
+  else(GPS)
+    set(TASK_ENABLED FALSE)
+  endif(GPS)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(OEMX)
+    set(TASK_ENABLED TRUE)
+  else(OEMX)
+    set(TASK_ENABLED FALSE)
+  endif(OEMX)
+endif(LITE)

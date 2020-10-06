@@ -1,0 +1,7 @@
+if(LITE)
+  if(Keller)
+    set(TASK_ENABLED TRUE)
+  else(Keller)
+    set(TASK_ENABLED FALSE)
+  endif(Keller)
+endif(LITE)

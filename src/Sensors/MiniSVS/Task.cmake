@@ -1,0 +1,7 @@
+if(LITE)
+  if(MiniSVS)
+    set(TASK_ENABLED TRUE)
+  else(MiniSVS)
+    set(TASK_ENABLED FALSE)
+  endif(MiniSVS)
+endif(LITE)

@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(MTi)
+    set(TASK_ENABLED TRUE)
+  else(MTi)
+    set(TASK_ENABLED FALSE)
+  endif(MTi)
+endif(LITE)

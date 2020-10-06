@@ -1,0 +1,7 @@
+if(LITE)
+  if(GillWindObserverII)
+    set(TASK_ENABLED TRUE)
+  else(GillWindObserverII)
+    set(TASK_ENABLED FALSE)
+  endif(GillWindObserverII)
+endif(LITE)

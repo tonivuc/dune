@@ -1,0 +1,7 @@
+if(LITE)
+  if(MLBLTracker)
+    set(TASK_ENABLED TRUE)
+  else(MLBLTracker)
+    set(TASK_ENABLED FALSE)
+  endif(MLBLTracker)
+endif(LITE)

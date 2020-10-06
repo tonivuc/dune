@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(AIM104MultiIO)
+    set(TASK_ENABLED TRUE)
+  else(AIM104MultiIO)
+    set(TASK_ENABLED FALSE)
+  endif(AIM104MultiIO)
+endif(LITE)

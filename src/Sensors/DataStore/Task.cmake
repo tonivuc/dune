@@ -1,0 +1,7 @@
+if(LITE)
+  if(DataStore)
+    set(TASK_ENABLED TRUE)
+  else(DataStore)
+    set(TASK_ENABLED FALSE)
+  endif(DataStore)
+endif(LITE)

@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(Genesys)
+    set(TASK_ENABLED TRUE)
+  else(Genesys)
+    set(TASK_ENABLED FALSE)
+  endif(Genesys)
+endif(LITE)

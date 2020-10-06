@@ -1,0 +1,7 @@
+if(LITE)
+  if(SonTekArgonaut)
+    set(TASK_ENABLED TRUE)
+  else(SonTekArgonaut)
+    set(TASK_ENABLED FALSE)
+  endif(SonTekArgonaut)
+endif(LITE)

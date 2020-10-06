@@ -1,0 +1,7 @@
+if(LITE)
+  if(ThermalZone)
+    set(TASK_ENABLED TRUE)
+  else(ThermalZone)
+    set(TASK_ENABLED FALSE)
+  endif(ThermalZone)
+endif(LITE)
