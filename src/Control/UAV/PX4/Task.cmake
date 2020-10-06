@@ -1,0 +1,7 @@
+if(LITE)
+  if(UAV.PX4)
+    set(TASK_ENABLED TRUE)
+  else(UAV.PX4)
+    set(TASK_ENABLED FALSE)
+  endif(UAV.PX4)
+endif(LITE)

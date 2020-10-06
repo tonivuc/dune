@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.RemoteOperation)
+    set(TASK_ENABLED TRUE)
+  else(AUV.RemoteOperation)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.RemoteOperation)
+endif(LITE)

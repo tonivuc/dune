@@ -1,0 +1,7 @@
+if(LITE)
+  if(UAV.Ardupilot)
+    set(TASK_ENABLED TRUE)
+  else(UAV.Ardupilot)
+    set(TASK_ENABLED FALSE)
+  endif(UAV.Ardupilot)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(Path.VectorField)
+    set(TASK_ENABLED TRUE)
+  else(Path.VectorField)
+    set(TASK_ENABLED FALSE)
+  endif(Path.VectorField)
+endif(LITE)

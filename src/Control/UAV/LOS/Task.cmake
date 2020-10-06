@@ -1,0 +1,7 @@
+if(LITE)
+  if(UAV.LOS)
+    set(TASK_ENABLED TRUE)
+  else(UAV.LOS)
+    set(TASK_ENABLED FALSE)
+  endif(UAV.LOS)
+endif(LITE)

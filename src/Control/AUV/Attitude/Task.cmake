@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.Attitude)
+    set(TASK_ENABLED TRUE)
+  else(AUV.Attitude)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.Attitude)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(ROV.RemoteOperation)
+    set(TASK_ENABLED TRUE)
+  else(ROV.RemoteOperation)
+    set(TASK_ENABLED FALSE)
+  endif(ROV.RemoteOperation)
+endif(LITE)

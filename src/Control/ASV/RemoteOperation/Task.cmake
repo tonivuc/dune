@@ -1,0 +1,7 @@
+if(LITE)
+  if(ASV.RemoteOperation)
+    set(TASK_ENABLED TRUE)
+  else(ASV.RemoteOperation)
+    set(TASK_ENABLED FALSE)
+  endif(ASV.RemoteOperation)
+endif(LITE)

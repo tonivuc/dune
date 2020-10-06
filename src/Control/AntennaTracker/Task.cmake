@@ -1,0 +1,7 @@
+if(LITE)
+  if(AntennaTracker)
+    set(TASK_ENABLED TRUE)
+  else(AntennaTracker)
+    set(TASK_ENABLED FALSE)
+  endif(AntennaTracker)
+endif(LITE)

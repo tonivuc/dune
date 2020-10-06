@@ -1,0 +1,7 @@
+if(LITE)
+  if(ROV.HorizontalPlane)
+    set(TASK_ENABLED TRUE)
+  else(ROV.HorizontalPlane)
+    set(TASK_ENABLED FALSE)
+  endif(ROV.HorizontalPlane)
+endif(LITE)

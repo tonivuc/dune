@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.Allocator)
+    set(TASK_ENABLED TRUE)
+  else(AUV.Allocator)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.Allocator)
+endif(LITE)

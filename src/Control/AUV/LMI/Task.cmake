@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.LMI)
+    set(TASK_ENABLED TRUE)
+  else(AUV.LMI)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.LMI)
+endif(LITE)

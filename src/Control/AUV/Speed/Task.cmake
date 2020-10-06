@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.Speed)
+    set(TASK_ENABLED TRUE)
+  else(AUV.Speed)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.Speed)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(Path.Height)
+    set(TASK_ENABLED TRUE)
+  else(Path.Height)
+    set(TASK_ENABLED FALSE)
+  endif(Path.Height)
+endif(LITE)

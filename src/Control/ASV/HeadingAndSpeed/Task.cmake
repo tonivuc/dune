@@ -1,1 +1,7 @@
-
+if(LITE)
+  if(ASV.HeadingAndSpeed)
+    set(TASK_ENABLED TRUE)
+  else(ASV.HeadingAndSpeed)
+    set(TASK_ENABLED FALSE)
+  endif(ASV.HeadingAndSpeed)
+endif(LITE)

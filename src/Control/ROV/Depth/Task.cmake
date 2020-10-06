@@ -1,0 +1,7 @@
+if(LITE)
+  if(ROV.Depth)
+    set(TASK_ENABLED TRUE)
+  else(ROV.Depth)
+    set(TASK_ENABLED FALSE)
+  endif(ROV.Depth)
+endif(LITE)

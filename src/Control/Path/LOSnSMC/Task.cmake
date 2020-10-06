@@ -1,0 +1,7 @@
+if(LITE)
+  if(Path.LOSnSMC)
+    set(TASK_ENABLED TRUE)
+  else(Path.LOSnSMC)
+    set(TASK_ENABLED FALSE)
+  endif(Path.LOSnSMC)
+endif(LITE)

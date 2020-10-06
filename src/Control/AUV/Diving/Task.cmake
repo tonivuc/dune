@@ -1,0 +1,7 @@
+if(LITE)
+  if(AUV.Diving)
+    set(TASK_ENABLED TRUE)
+  else(AUV.Diving)
+    set(TASK_ENABLED FALSE)
+  endif(AUV.Diving)
+endif(LITE)

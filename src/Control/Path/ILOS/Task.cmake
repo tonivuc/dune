@@ -1,0 +1,7 @@
+if(LITE)
+  if(Path.ILOS)
+    set(TASK_ENABLED TRUE)
+  else(Path.ILOS)
+    set(TASK_ENABLED FALSE)
+  endif(Path.ILOS)
+endif(LITE)

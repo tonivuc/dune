@@ -1,0 +1,7 @@
+if(LITE)
+  if(Path.PurePursuit)
+    set(TASK_ENABLED TRUE)
+  else(Path.PurePursuit)
+    set(TASK_ENABLED FALSE)
+  endif(Path.PurePursuit)
+endif(LITE)
