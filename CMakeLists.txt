@@ -40,6 +40,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(cmake/Toolchain.cmake)
+include(cmake/LiteSettingsTasks.mk)
 
 ##########################################################################
 #                         Project information                            #
@@ -97,6 +98,7 @@ dune_option(NO_RTTI "Disable support for RTTI")
 dune_option(UEYE "Enable support for IDS uEye cameras")
 dune_option(H5CPP "Enable support for hdf5 format i/o using the h5cpp library")
 dune_option(ELLIPSOIDAL "Enable ellipsoidal coordinates in (WGS84) displace")
+dune_option(LITE "Compile lite version of DUNE")
 
 # Internationalization.
 include(${PROJECT_SOURCE_DIR}/cmake/I18N.cmake)
@@ -429,3 +431,10 @@ endif(TESTS)
 #                                CDash                                   #
 ##########################################################################
 include(Dart)
+
+##########################################################################
+#                                Lite                                    #
+##########################################################################
+if(LITE)
+  message(STATUS "${Red}Compiling DUNE in Lite mode${ColourReset}")
+endif(LITE)
