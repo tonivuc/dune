@@ -200,6 +200,20 @@ SET(Simulators.UAVAutopilot FALSE)
 SET(Simulators.USBL FALSE)
 SET(Simulators.VSIM FALSE)
 
+##########################################################################
+#                         Supervisors                                    #
+##########################################################################
+SET(Supervisors.AUV.Assist FALSE)
+SET(Supervisors.AUV.LostComms FALSE)
+SET(Supervisors.Delegator FALSE)
+SET(Supervisors.Entities FALSE)
+SET(Supervisors.Power FALSE)
+SET(Supervisors.PowerManager FALSE)
+SET(Supervisors.Reporter FALSE)
+SET(Supervisors.SlaveCPU FALSE)
+SET(Supervisors.UAV.LostComms FALSE)
+SET(Supervisors.Vehicle FALSE)
+
 
 ## Color CMAKE Output
 if(NOT DUNE_OS_WINDOWS)
