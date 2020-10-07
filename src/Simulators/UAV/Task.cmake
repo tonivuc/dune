@@ -1,1 +1,7 @@
-#set(TASK_ENABLED FALSE)
+if(LITE)
+  if(Simulators.UAV)
+    set(TASK_ENABLED TRUE)
+  else(Simulators.UAV)
+    set(TASK_ENABLED FALSE)
+  endif(Simulators.UAV)
+endif(LITE)

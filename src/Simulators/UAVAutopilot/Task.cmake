@@ -1,1 +1,7 @@
-#set(TASK_ENABLED FALSE)
+if(LITE)
+  if(Simulators.UAVAutopilot)
+    set(TASK_ENABLED TRUE)
+  else(Simulators.UAVAutopilot)
+    set(TASK_ENABLED FALSE)
+  endif(Simulators.UAVAutopilot)
+endif(LITE)

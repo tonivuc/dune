@@ -174,6 +174,33 @@ SET(WifiRSSI FALSE)
 SET(XchangeSV FALSE)
 SET(XR620CTD FALSE)
 
+##########################################################################
+#                         Simulators                                     #
+##########################################################################
+SET(Simulators.AcousticModem FALSE)
+SET(Simulators.CDC3 FALSE)
+SET(Simulators.CTD FALSE)
+SET(Simulators.DepthSensor FALSE)
+SET(Simulators.Docking FALSE)
+SET(Simulators.DVL FALSE)
+SET(Simulators.Environment FALSE)
+SET(Simulators.Gaussian FALSE)
+SET(Simulators.GPS FALSE)
+SET(Simulators.IMU FALSE)
+SET(Simulators.Iridium FALSE)
+SET(Simulators.LBL FALSE)
+SET(Simulators.Leaks FALSE)
+SET(Simulators.Motor FALSE)
+SET(Simulators.Reporter FALSE)
+SET(Simulators.Servos FALSE)
+SET(Simulators.StreamVelocity FALSE)
+SET(Simulators.Target FALSE)
+SET(Simulators.UAV FALSE)
+SET(Simulators.UAVAutopilot FALSE)
+SET(Simulators.USBL FALSE)
+SET(Simulators.VSIM FALSE)
+
+
 ## Color CMAKE Output
 if(NOT WIN32)
   string(ASCII 27 Esc)

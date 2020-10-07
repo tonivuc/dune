@@ -1,0 +1,7 @@
+if(LITE)
+  if(Simulators.Target)
+    set(TASK_ENABLED TRUE)
+  else(Simulators.Target)
+    set(TASK_ENABLED FALSE)
+  endif(Simulators.Target)
+endif(LITE)

@@ -1,0 +1,7 @@
+if(LITE)
+  if(Simulators.Servos)
+    set(TASK_ENABLED TRUE)
+  else(Simulators.Servos)
+    set(TASK_ENABLED FALSE)
+  endif(Simulators.Servos)
+endif(LITE)
