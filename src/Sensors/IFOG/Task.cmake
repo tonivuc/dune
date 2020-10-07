@@ -1,13 +1,13 @@
 if(LITE)
-  if(IFOG)
+  if(Sensors.IFOG)
     set(TASK_ENABLED TRUE)
     # This task is for Linux only.
     if(NOT DUNE_OS_LINUX)
       set(TASK_ENABLED FALSE)
     endif(NOT DUNE_OS_LINUX)
-  else(IFOG)
+  else(Sensors.IFOG)
     set(TASK_ENABLED FALSE)
-  endif(IFOG)
+  endif(Sensors.IFOG)
 else(LITE)
   # This task is for Linux only.
   if(NOT DUNE_OS_LINUX)

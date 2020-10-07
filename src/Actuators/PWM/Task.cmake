@@ -1,13 +1,13 @@
 if(LITE)
-  if(PWM)
+  if(Actuatores.PWM)
     set(TASK_ENABLED TRUE)
     # This task is Linux specific.
     if(NOT DUNE_OS_LINUX)
       set(TASK_ENABLED FALSE)
     endif(NOT DUNE_OS_LINUX)
-  else(PWM)
+  else(Actuatores.PWM)
     set(TASK_ENABLED FALSE)
-  endif(PWM)
+  endif(Actuatores.PWM)
 else(LITE)
   # This task is Linux specific.
   if(NOT DUNE_OS_LINUX)
