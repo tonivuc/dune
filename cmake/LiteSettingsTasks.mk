@@ -252,6 +252,16 @@ SET(UserInterfaces.LCD FALSE)
 SET(UserInterfaces.LEDs FALSE)
 SET(UserInterfaces.MantaPanel FALSE)
 
+##########################################################################
+#                         Vision                                         #
+##########################################################################
+SET(Vision.DFK51BG02H FALSE)
+SET(Vision.FrameGrabber FALSE)
+SET(Vision.Lumenera FALSE)
+SET(Vision.PhotoTrigger FALSE)
+SET(Vision.UAVCamera FALSE)
+SET(Vision.UI2210MGL FALSE)
+
 
 ## Color CMAKE Output
 if(NOT DUNE_OS_WINDOWS)
