@@ -214,6 +214,36 @@ SET(Supervisors.SlaveCPU FALSE)
 SET(Supervisors.UAV.LostComms FALSE)
 SET(Supervisors.Vehicle FALSE)
 
+##########################################################################
+#                         Transports                                     #
+##########################################################################
+SET(Transports.Announce FALSE)
+SET(Transports.Cache FALSE)
+SET(Transports.CommManager FALSE)
+SET(Transports.DataStore FALSE)
+SET(Transports.Discovery FALSE)
+SET(Transports.Evologics FALSE)
+SET(Transports.Fragments FALSE)
+SET(Transports.FTP FALSE)
+SET(Transports.GSM FALSE)
+SET(Transports.HTTP FALSE)
+SET(Transports.Iridium FALSE)
+SET(Transports.IridiumSBD FALSE)
+SET(Transports.LogBook FALSE)
+SET(Transports.Logging FALSE)
+SET(Transports.LoggingDigest FALSE)
+SET(Transports.MobileInternet FALSE)
+SET(Transports.Radio FALSE)
+SET(Transports.Replay FALSE)
+SET(Transports.Seatrac FALSE)
+SET(Transports.Serial FALSE)
+SET(Transports.SerialOverTCP FALSE)
+SET(Transports.TCP.Client FALSE)
+SET(Transports.TCP.Server FALSE)
+SET(Transports.TCPOnDemand FALSE)
+SET(Transports.UAN FALSE)
+SET(Transports.UDP FALSE)
+
 
 ## Color CMAKE Output
 if(NOT DUNE_OS_WINDOWS)
