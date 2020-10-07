@@ -179,7 +179,7 @@ message(STATUS "")
 message(STATUS "Tasks enabled for build")
 list(SORT DUNE_TASKS_ENABLED)
 foreach(enabled_tasks ${DUNE_TASKS_ENABLED})
-  message(STATUS "${enabled_tasks}")
+  message(STATUS "  ${enabled_tasks}")
 endforeach(enabled_tasks ${DUNE_TASKS_ENABLED})
 
 if(DUNE_TASKS_DISABLED)
