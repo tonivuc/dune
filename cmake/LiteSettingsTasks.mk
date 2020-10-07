@@ -244,6 +244,14 @@ SET(Transports.TCPOnDemand FALSE)
 SET(Transports.UAN FALSE)
 SET(Transports.UDP FALSE)
 
+##########################################################################
+#                         UserInterfaces                                 #
+##########################################################################
+SET(UserInterfaces.Buttons FALSE)
+SET(UserInterfaces.LCD FALSE)
+SET(UserInterfaces.LEDs FALSE)
+SET(UserInterfaces.MantaPanel FALSE)
+
 
 ## Color CMAKE Output
 if(NOT DUNE_OS_WINDOWS)
