@@ -72,6 +72,7 @@ namespace Sensors
       Task(const std::string& name, Tasks::Context& ctx):
         Tasks::Task(name, ctx)
       {
+        bind<IMC::AlignmentState>(this);
         bind<IMC::EstimatedState>(this);
         bind<IMC::GpsFix>(this);
       }
@@ -111,6 +112,21 @@ namespace Sensors
         m_integrated = 0;
         m_distance.value = 0;
         m_intavg_dist.value = 0;
+      }
+
+      void
+      consume(const IMC::AlignmentState* msg)
+      {
+        if (msg->getSource() != getSystemId())
+          return;
+
+        if (msg->getSourceEntity() != m_nav_eid)
+          return;
+
+        if (msg->state == IMC::AlignmentState::AS_ALIGNED)
+          m_aligned = true;
+        else
+          m_aligned = false;
       }
 
       void
