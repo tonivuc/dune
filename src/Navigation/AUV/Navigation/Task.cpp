@@ -836,8 +836,11 @@ namespace Navigation
                                           m_kal.getInnovation(OUT_GPS_Y));
           m_navdata.custom_y = m_kal.getState(STATE_K);
 
-          double ang = m_estate.psi - Angles::normalizeRadian(getEuler(AXIS_Z));
-          m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(ang));
+          m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(m_heading));
+
+          IMC::Temperature psi_bias_cov;
+          psi_bias_cov.value = m_kal.getCovariance(STATE_PSI_BIAS);
+          dispatch(psi_bias_cov);
         }
       };
     }
