@@ -49,6 +49,7 @@ namespace Sensors
       IMC::EstimatedState m_last_state;
       Time::Delta m_delta;
       bool m_aligned;
+      Math::Derivative<double> m_psi_bias_c_deriv;
 
       /*************************/
       /* Euler message holders */
@@ -56,6 +57,7 @@ namespace Sensors
       IMC::Distance m_distance;
       IMC::Distance m_intavg_dist;
       IMC::Distance m_mavg_dist;
+      IMC::Temperature m_psi_bias_cov_deriv;
 
       /**************************/
       /*********Counters********/
@@ -75,6 +77,7 @@ namespace Sensors
         bind<IMC::AlignmentState>(this);
         bind<IMC::EstimatedState>(this);
         bind<IMC::GpsFix>(this);
+        bind<IMC::NavigationUncertainty>(this);
       }
 
       //! Reserve entity identifiers.
@@ -84,6 +87,7 @@ namespace Sensors
         m_distance.setSourceEntity(reserveEntity(String::str("%s.distance", getEntityLabel())));
         m_intavg_dist.setSourceEntity(reserveEntity(String::str("%s.integration", getEntityLabel())));
         m_mavg_dist.setSourceEntity(reserveEntity(String::str("%s.average", getEntityLabel())));
+        m_psi_bias_cov_deriv.setSourceEntity(reserveEntity(String::str("%s.psi_bias_cov_deriv", getEntityLabel())));
       }
 
       //! Resolve entity names.
@@ -127,6 +131,22 @@ namespace Sensors
           m_aligned = true;
         else
           m_aligned = false;
+      }
+
+      void
+      consume(const IMC::NavigationUncertainty* msg)
+      {
+        if (msg->getSource() != getSystemId())
+          return;
+
+        if (msg->getSourceEntity() != m_nav_eid)
+          return;
+
+        if (!m_aligned)
+          return;
+
+        m_psi_bias_cov_deriv.value = m_psi_bias_c_deriv.update(msg->bias_psi);
+        dispatch(m_psi_bias_cov_deriv);
       }
 
       void
