@@ -950,10 +950,8 @@ namespace Navigation
           m_navdata.bias_r = m_kal.getState(STATE_R_BIAS);
 
           // Navigation error.
-          m_navdata.custom_x = Math::norm(m_kal.getInnovation(OUT_GPS_X),
-                                          m_kal.getInnovation(OUT_GPS_Y));
-          m_navdata.custom_y = m_kal.getState(STATE_K);
-
+          m_navdata.custom_x = Angles::normalizeRadian(m_heading_imu);
+          m_navdata.custom_y = Angles::normalizeRadian(m_heading);
           m_navdata.custom_z = Angles::degrees(Angles::normalizeRadian(m_heading_imu));
         }
       };
