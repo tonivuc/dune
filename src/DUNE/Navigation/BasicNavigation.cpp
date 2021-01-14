@@ -225,6 +225,10 @@ namespace DUNE
       .defaultValue("0.0")
       .description("Time navigation waits before using IMU data, in seconds");
 
+      param("GPS disable wait time", m_gps_disable_wait_time)
+      .defaultValue("0.0")
+      .description("Time waited before using GPS is disabled, in seconds");
+
       // Do not use the declination offset when simulating.
       m_use_declination = !m_ctx.profiles.isSelected("Simulation");
       m_declination_defined = false;
@@ -290,6 +294,9 @@ namespace DUNE
       m_avg_heave = new Math::MovingAverage<double>(m_avg_heave_samples);
       m_avg_gps = new Math::MovingAverage<double>(m_avg_gps_samples);
       reset();
+          
+      if (m_gps_disable)
+        m_gps_disable_timer.setTop(m_gps_disable_wait_time);
     }
 
     void
