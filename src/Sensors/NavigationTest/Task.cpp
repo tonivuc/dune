@@ -72,10 +72,10 @@ namespace Sensors
       void
       onEntityReservation(void)
       {
-        m_distance.setSourceEntity(reserveEntity(String::str("%s.distance", getEntityLabel())));
-        m_psi_bias_cov.setSourceEntity(reserveEntity(String::str("%s.psi_bias_cov", getEntityLabel())));
-        m_psi_bias_cov_deriv.setSourceEntity(reserveEntity(String::str("%s.psi_bias_cov_deriv", getEntityLabel())));
-        m_imu_error.setSourceEntity(reserveEntity(String::str("%s.imu_error", getEntityLabel())));
+        m_distance.setSourceEntity(reserveEntity("distance_error"));
+        m_psi_bias_cov.setSourceEntity(reserveEntity("psi_bias_cov"));
+        m_psi_bias_cov_deriv.setSourceEntity(reserveEntity("psi_bias_cov_deriv"));
+        m_imu_error.setSourceEntity(reserveEntity("imu_error"));
       }
 
       //! Resolve entity names.
