@@ -37,9 +37,6 @@
 // Local Headers.
 #include "Parser.hpp"
 
-//! Max Number of Bottles Allowed by the Sampler
-#define MAX_NUMBER_OF_BOTTLES 5
-
 //! Sampling OK
 #define SAMPLING_OK "OK"
 //! Sampling Failed
@@ -88,6 +85,12 @@ namespace Actuators
 
     struct Arguments
     {
+      //! Master Name.
+      std::string master_name;
+      //! Slave Cam Name.
+      std::string slave_name;
+      //! Load task in mode master
+      bool is_master_mode;
       //! Serial port device.
       std::string uart_dev;
       //! Serial port baud rate.
@@ -165,42 +168,52 @@ namespace Actuators
         m_FULL_FL(false),
         m_sm_state(SM_STOP)
       {
+        param("Master Name", m_args.master_name)
+        .description("Master Name.");
+
+        param("Master Mode", m_args.is_master_mode)
+        .description("Load task in master mode.");
+
+        param("Slave Name", m_args.slave_name)
+        .description("Slave Name.");
+
         param("Serial Port - Device", m_args.uart_dev)
-            .defaultValue("/dev/ttyUSB0")
-            .description("Serial port used to communicate with the firmware");
+        .defaultValue("/dev/ttyUSB0")
+        .description("Serial port used to communicate with the firmware.");
 
         param("Serial Port - Baud Rate", m_args.uart_baud)
-            .defaultValue("115200")
-            .description("Serial port baudrate");
+        .defaultValue("115200")
+        .description("Serial port baudrate.");
 
         param("Watchdog Timeout", m_args.wdog_tout)
-            .units(Units::Second)
-            .defaultValue("2.0")
-            .minimumValue("1.0")
-            .description("Watchdog timeout");
+        .units(Units::Second)
+        .defaultValue("2.0")
+        .minimumValue("1.0")
+        .description("Watchdog timeout.");
 
         param("Sampler - Nr. of Bottles to Sample", m_args.nr_bottles_to_sample)
-            .visibility(Tasks::Parameter::VISIBILITY_USER)
-            .scope(Tasks::Parameter::SCOPE_MANEUVER)
-            .defaultValue("0")
-            .minimumValue("0")
-            .maximumValue("12")
-            .description("Number of bottles to sample in each spot");
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_MANEUVER)
+        .defaultValue("0")
+        .minimumValue("0")
+        .maximumValue("12")
+        .description("Number of bottles to sample in each spot.");
 
         param("Sampler - Type of Sample", m_args.type_of_sample)
-            .values(DTR_RT("None, Disc, Pump"))
-            .defaultValue("None")
-            .scope(Tasks::Parameter::SCOPE_MANEUVER)
-            .description(DTR("Type of the required samples"));
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .scope(Tasks::Parameter::SCOPE_MANEUVER)
+        .values(DTR_RT("None, Disc, Pump"))
+        .defaultValue("None")
+        .description(DTR("Type of the required samples."));
 
         param("Sampler - Max bottle capacity", m_args.max_bottles)
-            .defaultValue("")
-            .description(DTR("Max number of bottles that the sampler carries"));
+        .defaultValue("12")
+        .description(DTR("Max number of bottles that the sampler carries."));
 
         param("Serial Manual Command", m_args.cpu_cmd)
-            .defaultValue("A")
-            .visibility(Tasks::Parameter::VISIBILITY_USER)
-            .description("Parameter insert to manually test the firmware");
+        .defaultValue("A")
+        .visibility(Tasks::Parameter::VISIBILITY_USER)
+        .description("Parameter input to manually test the firmware.");
 
         bind<IMC::PathControlState>(this);
         bind<IMC::EstimatedState>(this);
@@ -214,27 +227,29 @@ namespace Actuators
       onUpdateParameters(void)
       {
         //m_wdog.setTop(m_args.wdog_tout);
+        
+        if(!m_args.is_master_mode){
+          if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
+          {
+            m_START_FL = true;
+          }
 
-        if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
-        {
-          m_START_FL = true;
-        }
+          /*if (paramChanged(m_args.cpu_cmd))
+          {
+            war("cpu cmd %s", m_args.cpu_cmd.c_str());
+          }*/
 
-        /*if (paramChanged(m_args.cpu_cmd))
-        {
-          war("cpu cmd %s", m_args.cpu_cmd.c_str());
-        }*/
+          //update nr of bottles to sample if changed
+          if (paramChanged(m_args.nr_bottles_to_sample))
+          {
+            m_nr_of_bottles_to_sample = m_args.nr_bottles_to_sample;
+          }
 
-        //update nr of bottles to sample if changed
-        if (paramChanged(m_args.nr_bottles_to_sample))
-        {
-          m_nr_of_bottles_to_sample = m_args.nr_bottles_to_sample;
-        }
-
-        //update type of sample if changed
-        if (paramChanged(m_args.type_of_sample))
-        {
-          m_type_of_sample = m_args.type_of_sample;
+          //update type of sample if changed
+          if (paramChanged(m_args.type_of_sample))
+          {
+            m_type_of_sample = m_args.type_of_sample;
+          }
         }
       }
 
@@ -254,9 +269,11 @@ namespace Actuators
       void
       onResourceAcquisition(void)
       {
-        //m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
-        //m_uart->setCanonicalInput(true);
-
+        if(!m_args.is_master_mode){
+          //m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
+          //m_uart->setCanonicalInput(true);
+          true;
+        }
         //m_wdog.reset();
       }
 
@@ -264,6 +281,8 @@ namespace Actuators
       void
       onResourceInitialization(void)
       {
+        if(!m_args.is_master_mode){
+        
         //m_uart->flushInput();
         //m_uart->flush();
 
@@ -273,6 +292,7 @@ namespace Actuators
         m_fail_uart = 0;
 
         //m_uart->writeString("$T*\r\n");
+        }
       }
 
       //! Release resources.
@@ -350,19 +370,24 @@ namespace Actuators
       void
       consume(const IMC::PathControlState *pcs)
       {
-        if (pcs->flags & IMC::PathControlState::FL_NEAR)
-        {
-          m_NEAR_FL = true;
+        if(m_args.is_master_mode){
+          if (pcs->flags & IMC::PathControlState::FL_NEAR)
+          {
+            m_NEAR_FL = true;
+          }
         }
       }
 
       void
       consume(const IMC::EstimatedState *msg)
       {
-        if (msg->getSource() != getSystemId())
-          return;
+        if (!m_args.is_master_mode)
+        {
+          if (msg->getSource() != getSystemId())
+            return;
 
-        m_estate = *msg;
+          m_estate = *msg;
+        }
       }
 
       //! Dispatch sample info
@@ -544,7 +569,7 @@ namespace Actuators
           {
             m_sm_state = SM_MANEUVER_DONE;
           }
-          if (m_total_nr_of_bottles > MAX_NUMBER_OF_BOTTLES)
+          if (m_total_nr_of_bottles > m_args.max_bottles)
           {
             m_sm_state = SM_FULL;
           }
@@ -554,7 +579,7 @@ namespace Actuators
           // update logBook with failed sample info
           dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_FAILED);
           // check what to do next
-          if (m_total_nr_of_bottles >= MAX_NUMBER_OF_BOTTLES)
+          if (m_total_nr_of_bottles >= m_args.max_bottles)
           {
             m_sm_state = SM_FULL;
           }
@@ -596,49 +621,52 @@ namespace Actuators
       onMain(void)
       {
         while (!stopping())
-        {
-          m_fail_uart = 0;
-
-          /*while (m_fail_uart < 4)
+        { 
+          if (!m_args.is_master_mode)
           {
-            //Check for serial commands
-            if (m_poll.poll(0.2))
+            m_fail_uart = 0;
+
+            /*while (m_fail_uart < 4)
             {
-              if (checkSerialPort())
+              //Check for serial commands
+              if (m_poll.poll(0.2))
               {
-                //war("%s", m_bfr);
-                if (m_parse->translate())
+                if (checkSerialPort())
                 {
-                  if (m_parse->m_dorisState.Bottles->newData == 1)
+                  //war("%s", m_bfr);
+                  if (m_parse->translate())
                   {
-                    war("I: %d, %d, %d, %.2f, %.2f, %.1f, %.1f, %.1f\nS: %d, %d, %d\nMessage: %s",
-                        m_parse->m_dorisState.Bottles->id,
-                        m_parse->m_dorisState.Bottles->waterIn,
-                        m_parse->m_dorisState.Bottles->bottleStatus,
-                        m_parse->m_dorisState.Bottles->lat,
-                        m_parse->m_dorisState.Bottles->lon,
-                        m_parse->m_dorisState.Bottles->temp,
-                        m_parse->m_dorisState.Bottles->windSpd,
-                        m_parse->m_dorisState.Bottles->windDir,
-                        m_parse->m_dorisState.states[0],
-                        m_parse->m_dorisState.states[1],
-                        m_parse->m_dorisState.states[2],
-                        m_parse->m_dorisState.debug_msg);
-                    m_parse->clear_flag();
+                    if (m_parse->m_dorisState.Bottles->newData == 1)
+                    {
+                      war("I: %d, %d, %d, %.2f, %.2f, %.1f, %.1f, %.1f\nS: %d, %d, %d\nMessage: %s",
+                          m_parse->m_dorisState.Bottles->id,
+                          m_parse->m_dorisState.Bottles->waterIn,
+                          m_parse->m_dorisState.Bottles->bottleStatus,
+                          m_parse->m_dorisState.Bottles->lat,
+                          m_parse->m_dorisState.Bottles->lon,
+                          m_parse->m_dorisState.Bottles->temp,
+                          m_parse->m_dorisState.Bottles->windSpd,
+                          m_parse->m_dorisState.Bottles->windDir,
+                          m_parse->m_dorisState.states[0],
+                          m_parse->m_dorisState.states[1],
+                          m_parse->m_dorisState.states[2],
+                          m_parse->m_dorisState.debug_msg);
+                      m_parse->clear_flag();
+                    }
                   }
                 }
               }
-            }
-            else
-            {
-              m_fail_uart++;
-            }*/
+              else
+              {
+                m_fail_uart++;
+              }*/
 
-          //updateCpuCommand();
+            //updateCpuCommand();
 
-          updateStateMachine();
-          //checkNewBottleData();
-
+            updateStateMachine();
+            //checkNewBottleData();
+          }
+          
           waitForMessages(1.0);
         }
       }
