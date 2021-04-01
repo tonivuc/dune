@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -932,7 +932,7 @@ namespace Transports
 
         while (it != m_transmission_requests.end())
         {
-          if (it->second->timeout <= 0.0)
+          if (it->second->getTimeStamp() + it->second->timeout <= Clock::getSinceEpoch())
           {
             sendAcousticStatus(it->second,IMC::AcousticStatus::STATUS_INPUT_FAILURE,"Transmission timed out.");
             Memory::clear(it->second);

@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -200,6 +200,10 @@ namespace DUNE
     template std::vector<long unsigned>
     HDF5Reader::getAttribute<long unsigned>(std::string const&,
                                             std::string const&) const;
+
+    template std::vector<long long unsigned>
+    HDF5Reader::getAttribute<long long unsigned>(std::string const&,
+                                                 std::string const&) const;
 
     template std::vector<float>
     HDF5Reader::getAttribute<float>(std::string const&,

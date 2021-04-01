@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: c49b27aa4bcdc6ad012fe602fbe29bb8                            *
+// IMC XML MD5: 5563261871977bdb0b45e3d1e53b575b                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -18027,6 +18027,45 @@ namespace DUNE
       IMC::toJSON(os__, "custom", custom, nindent__);
     }
 
+    ManeuverDone::ManeuverDone(void)
+    {
+      m_header.mgid = 497;
+      clear();
+    }
+
+    void
+    ManeuverDone::clear(void)
+    {
+    }
+
+    int
+    ManeuverDone::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    ManeuverDone::serializeFields(uint8_t* bfr__) const
+    {
+      return bfr__;
+    }
+
+    uint16_t
+    ManeuverDone::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      (void)bfr__;
+      (void)size__;
+      return 0;
+    }
+
+    uint16_t
+    ManeuverDone::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      (void)bfr__;
+      (void)size__;
+      return 0;
+    }
+
     Magnetometer::Magnetometer(void)
     {
       m_header.mgid = 499;
@@ -24421,6 +24460,74 @@ namespace DUNE
       IMC::toJSON(os__, "seq", seq, nindent__);
       IMC::toJSON(os__, "sys", sys, nindent__);
       IMC::toJSON(os__, "value", value, nindent__);
+    }
+
+    UamTxRange::UamTxRange(void)
+    {
+      m_header.mgid = 818;
+      clear();
+    }
+
+    void
+    UamTxRange::clear(void)
+    {
+      seq = 0;
+      sys_dst.clear();
+      timeout = 0;
+    }
+
+    bool
+    UamTxRange::fieldsEqual(const Message& msg__) const
+    {
+      const IMC::UamTxRange& other__ = static_cast<const UamTxRange&>(msg__);
+      if (seq != other__.seq) return false;
+      if (sys_dst != other__.sys_dst) return false;
+      if (timeout != other__.timeout) return false;
+      return true;
+    }
+
+    int
+    UamTxRange::validate(void) const
+    {
+      return true;
+    }
+
+    uint8_t*
+    UamTxRange::serializeFields(uint8_t* bfr__) const
+    {
+      uint8_t* ptr__ = bfr__;
+      ptr__ += IMC::serialize(seq, ptr__);
+      ptr__ += IMC::serialize(sys_dst, ptr__);
+      ptr__ += IMC::serialize(timeout, ptr__);
+      return ptr__;
+    }
+
+    uint16_t
+    UamTxRange::deserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::deserialize(seq, bfr__, size__);
+      bfr__ += IMC::deserialize(sys_dst, bfr__, size__);
+      bfr__ += IMC::deserialize(timeout, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    uint16_t
+    UamTxRange::reverseDeserializeFields(const uint8_t* bfr__, uint16_t size__)
+    {
+      const uint8_t* start__ = bfr__;
+      bfr__ += IMC::reverseDeserialize(seq, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(sys_dst, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(timeout, bfr__, size__);
+      return bfr__ - start__;
+    }
+
+    void
+    UamTxRange::fieldsToJSON(std::ostream& os__, unsigned nindent__) const
+    {
+      IMC::toJSON(os__, "seq", seq, nindent__);
+      IMC::toJSON(os__, "sys_dst", sys_dst, nindent__);
+      IMC::toJSON(os__, "timeout", timeout, nindent__);
     }
 
     FormCtrlParam::FormCtrlParam(void)

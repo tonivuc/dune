@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -198,10 +198,6 @@ namespace Transports
 
         AcousticRequest tx;
 
-        tx.timeout = msg->deadline - Time::Clock::getSinceEpoch();
-        if (tx.timeout < 0)
-          tx.timeout = 0;
-
         if (msg->destination == "")
           tx.destination = "broadcast";
         else
@@ -263,8 +259,12 @@ namespace Transports
         uint16_t newId = createInternalId();
         tx.req_id = newId;
         m_transmission_requests[newId] = msg->clone();
-        m_parent->dispatch(tx);
 
+        tx.timeout = msg->deadline - Time::Clock::getSinceEpoch();
+        if (tx.timeout < 0)
+          tx.timeout = 0;
+
+        m_parent->dispatch(tx);
       }
 
       void

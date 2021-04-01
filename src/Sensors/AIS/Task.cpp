@@ -1,5 +1,5 @@
 //***************************************************************************
-// Copyright 2007-2020 Universidade do Porto - Faculdade de Engenharia      *
+// Copyright 2007-2021 Universidade do Porto - Faculdade de Engenharia      *
 // Laboratório de Sistemas e Tecnologia Subaquática (LSTS)                  *
 //***************************************************************************
 // This file is part of DUNE: Unified Navigation Environment.               *
@@ -196,7 +196,10 @@ namespace Sensors
 
           // We are able to send a message with ship information.
           IMC::RemoteSensorInfo rsi;
-          rsi.id = static_cast<std::ostringstream*>(&(std::ostringstream() << msg.mmsi))->str();
+          std::ostringstream oss; 
+          oss << msg.mmsi;
+          
+          rsi.id = static_cast<std::ostringstream*>(&oss)->str();
 
           // Find ship type.
           std::map<int, std::string>::iterator itr = m_systems.find(msg.mmsi);
