@@ -85,9 +85,8 @@ namespace Actuators
         PS_CS
       };
 
-      Parser(DUNE::Tasks::Task* task): 
-        m_task(task),
-        m_parser_state(Parser::PS_PREAMBLE)
+      Parser(DUNE::Tasks::Task *task) : m_task(task),
+                                        m_parser_state(Parser::PS_PREAMBLE)
       {
       }
 
@@ -107,7 +106,7 @@ namespace Actuators
             m_parser_state = PS_DATA;
             m_cnt = 0;
             std::memset(&m_bfr, '\0', sizeof(m_bfr));
-            m_bfr[m_cnt++] = byte;
+            //m_bfr[m_cnt++] = byte;
           }
           break;
 
@@ -117,16 +116,20 @@ namespace Actuators
             m_bfr[m_cnt++] = byte;
           }
           else
+          {
+            m_bfr[m_cnt++] = byte;
             m_parser_state = PS_CS;
+          }
           break;
 
         case PS_CS:
           m_parser_state = PS_PREAMBLE;
-          m_task->war("text: %s", m_bfr);
-          m_csum = Algorithms::XORChecksum::compute((uint8_t *)m_bfr, strlen(m_bfr), 0);
+          //m_task->war("bufer before csum:%s", m_bfr);
+          m_csum = Algorithms::XORChecksum::compute((uint8_t *)m_bfr, strlen(m_bfr)-1, 0);
+          //m_task->war("byte: %c || csum: %c", byte, m_csum);
           if (m_csum == byte)
           {
-            m_task->war("csum ok");
+            //m_task->war("csum ok");
             return true;
           }
           else
@@ -147,34 +150,37 @@ namespace Actuators
       bool
       translate(void)
       {
+        //m_task->war("%s", m_bfr);
         if (m_bfr[0] == c_bottle)
         {
           std::sscanf(m_bfr, "%*c,%d,%f,%d%*s",
                       &m_dorisState.Bottles->sampleType,
                       &m_dorisState.Bottles->temp,
-                      &m_dorisState.Bottles->newData
-                      );
+                      &m_dorisState.Bottles->newData);
+
           return true;
         }
         else if (m_bfr[0] == c_sample_state)
         {
           std::sscanf(m_bfr, "%*c,%d%*s", &m_dorisState.sampleState);
+          m_task->war("FW: Sample State = %d", m_dorisState.sampleState);
           return true;
         }
         else if (m_bfr[0] == c_clean_state)
         {
           std::sscanf(m_bfr, "%*c,%d%*s", &m_dorisState.cleanState);
+          m_task->war("FW: Clean State = %d", m_dorisState.cleanState);
           return true;
-        }else if (m_bfr[0] == c_msg_receipt)
+        } /*else if (m_bfr[0] == c_msg_receipt)
         {
           std::sscanf(m_bfr, "%*c,%d%*s", &m_dorisState.msg_receipt);
           return true;
-        }
+        }*/
 
         return false;
       }
 
-      void 
+      void
       clear_flags(void)
       {
         m_dorisState.Bottles->newData = 0;
@@ -184,7 +190,7 @@ namespace Actuators
       DorisState m_dorisState;
 
     private:
-      DUNE::Tasks::Task* m_task;
+      DUNE::Tasks::Task *m_task;
       //! State machine state.
       ParserStates m_parser_state;
       //! Checksum.
@@ -208,7 +214,7 @@ namespace Actuators
       static const uint8_t c_clean_state = 'C';
       //! Message confirmationreceipt identifier
       static const uint8_t c_msg_receipt = 'M';
-    }; 
+    };
   } // namespace DorisSampler
 } // namespace Actuators
 #endif
