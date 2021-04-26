@@ -121,8 +121,9 @@ namespace Navigation
         SC_POSITION = 0,
         SC_ANGLES = 1,
         SC_SPEED = 2,
-        SC_BIASES = 3,
-        SC_RPM = 4
+        SC_PSI_BIAS = 3,
+        SC_R_BIAS = 4,
+        SC_RPM = 5
       };
 
       //! GPS accuracy indexes.
@@ -241,7 +242,7 @@ namespace Navigation
 
           param("State Covariance Initial State", m_state_cov)
           .defaultValue("")
-          .size(5)
+          .size(6)
           .description("Kalman Filter State Covariance initial values");
 
           param("Speed Moving Average Samples", m_args.navg_speed)
@@ -334,7 +335,8 @@ namespace Navigation
           m_kal.setProcessNoise(STATE_U, m_process_noise[PN_SPEED]);
           m_kal.setProcessNoise(STATE_V, m_process_noise[PN_SPEED]);
           m_kal.setProcessNoise(STATE_R_BIAS, m_process_noise[PN_YRATE_BIAS]);
-          m_kal.setProcessNoise(STATE_PSI_BIAS, 0.0);
+          // m_kal.setProcessNoise(STATE_PSI_BIAS, 0.0);
+          m_kal.setProcessNoise(STATE_PSI_BIAS, m_process_noise[PN_PSI_BIAS]);
 
           m_kal.setMeasurementNoise(OUT_U, m_measure_noise[MN_U]);
           m_kal.setMeasurementNoise(OUT_V, m_measure_noise[MN_V]);
@@ -431,7 +433,7 @@ namespace Navigation
 
           // Reinitialize state covariance matrix value.
           m_kal.resetCovariance(STATE_PSI_BIAS);
-          m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_BIASES]);
+          m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_PSI_BIAS]);
 
           // Position process noise covariance value if IMU is available.
           m_kal.setProcessNoise(STATE_X, m_args.pos_noise);
@@ -485,11 +487,12 @@ namespace Navigation
           m_kal.setCovariance(STATE_R, m_state_cov[SC_ANGLES]);
           m_kal.setCovariance(STATE_U, m_state_cov[SC_SPEED]);
           m_kal.setCovariance(STATE_V, m_state_cov[SC_SPEED]);
-          m_kal.setCovariance(STATE_R_BIAS, m_state_cov[SC_BIASES]);
+          m_kal.setCovariance(STATE_R_BIAS, m_state_cov[SC_R_BIAS]);
           m_kal.setCovariance(STATE_K, m_state_cov[SC_RPM]);
 
           // No heading bias estimation without IMU.
-          m_kal.setCovariance(STATE_PSI_BIAS, 0.0);
+          // m_kal.setCovariance(STATE_PSI_BIAS, 0.0);
+          m_kal.setCovariance(STATE_PSI_BIAS, m_state_cov[SC_PSI_BIAS]);
 
           return true;
         }
@@ -905,7 +908,8 @@ namespace Navigation
           m_kal.setObservation(OUT_PSI_AHRS, STATE_PSI, 1.0);
           m_kal.setObservation(OUT_PSI_AHRS, STATE_PSI_BIAS, 1.0);
           m_kal.setObservation(OUT_R_AHRS, STATE_R, 1.0);
-          m_kal.setObservation(OUT_R_AHRS, STATE_R_BIAS, 0.0);
+          // m_kal.setObservation(OUT_R_AHRS, STATE_R_BIAS, 0.0);
+          m_kal.setObservation(OUT_R_AHRS, STATE_R_BIAS, 1.0);
 
           m_kal.setObservation(OUT_PSI_IMU, STATE_PSI, 0.0);
           m_kal.setObservation(OUT_PSI_IMU, STATE_PSI_BIAS, 0.0);
@@ -940,6 +944,7 @@ namespace Navigation
           m_uncertainty.psi = m_kal.getCovariance(STATE_PSI);
           m_uncertainty.bias_psi = m_kal.getCovariance(STATE_PSI_BIAS);
           m_uncertainty.r = m_kal.getCovariance(STATE_R);
+          m_uncertainty.bias_r = m_kal.getCovariance(STATE_R_BIAS);
           m_uncertainty.u = m_kal.getCovariance(STATE_U);
           m_uncertainty.v = m_kal.getCovariance(STATE_V);
 
