@@ -54,11 +54,20 @@ namespace Power
         {
           //! Firmware version
           std::string firm_version;
+          //! Leak States
+          bool leak_states[4];
+          //! State of Switch
+          bool switch_on;
         };
 
         ParserOTPDIST(DUNE::Tasks::Task* task):
         m_task(task)
-        {}
+        {
+          for(int i = 0; i < 4; i++)
+            m_otpdistData.leak_states[i] = false;
+
+          m_otpdistData.switch_on = false;
+        }
 
         ~ParserOTPDIST(void){}
 
@@ -66,7 +75,7 @@ namespace Power
         decodeMessage(u_int8_t* data_in, u_int16_t data_in_size)
         {
           //spewArray(data_in, data_in_size);
-          if(data_in_size > 3)
+          if(data_in_size >= 3)
           {
             if(data_in[0] == OTP_PREAMBLE)
             {
@@ -79,7 +88,7 @@ namespace Power
                   firmware_version_decode << data_in[i];
                 }
                 m_otpdistData.firm_version = firmware_version_decode.str();
-                m_task->spew("Parser:Version: %s", m_otpdistData.firm_version.c_str());
+                m_task->debug("Parser:Version: %s", m_otpdistData.firm_version.c_str());
                 return true;
               }
               else if(data_in[1] == OTP_SET_PO_STATE)
@@ -89,16 +98,56 @@ namespace Power
                 else
                   return false;
               }
+              else if(data_in[1] == OTP_LEAK)
+              {
+                if(data_in[2] >= LEAK_1 && data_in[2] <= LEAK_4)
+                {
+                  m_otpdistData.leak_states[data_in[2] - 0x20] = true;
+                  return true;
+                }
+                else
+                  return false;
+              }
+              else if(data_in[1] == OTP_SWITCH_ON && !m_otpdistData.switch_on)
+              {
+                m_otpdistData.switch_on = true;
+                return true;
+              }
+              else if(data_in[1] == OTP_SWITCH_OFF && m_otpdistData.switch_on)
+              {
+                m_otpdistData.switch_on = false;
+                return true;
+              }
             }
           }
           return false;
+        }
+
+        uint8_t
+        leakDetected(uint8_t leak_id)
+        {
+          if(m_otpdistData.leak_states[leak_id])
+          {
+            m_otpdistData.leak_states[leak_id] = false;
+            return true;
+          }
+          else
+          {
+            return false;
+          }
+        }
+
+        bool
+        isSwitchOn(void)
+        {
+          return m_otpdistData.switch_on;
         }
 
         void
         spewArray(uint8_t* data, uint16_t data_size)
         {
           for(int i = 0; i < data_size; i++)
-            m_task->spew("%02x", data[i]);
+            m_task->spew("%02x | %c", data[i], data[i]);
         }
 
         std::string

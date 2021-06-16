@@ -51,6 +51,9 @@ enum DecodeData
   OTP_GET_PO_STATE      = 0x52,
   OTP_TURN_ON           = 0x1D,
   OTP_TURN_OFF          = 0x1E,
+  OTP_LEAK              = 0x1F,
+  OTP_SWITCH_ON         = 0x63,
+  OTP_SWITCH_OFF        = 0x64
 };
 
 //! Power channels
@@ -74,6 +77,15 @@ enum PowerChannels
   PO_CH16  = 0x3F,
   PO_CH17  = 0x40,
   PO_CH18  = 0x41
+};
+
+//! Leaks Identifiers
+enum LeaksIds
+{
+  LEAK_1   = 0x20,
+  LEAK_2   = 0x21,
+  LEAK_3   = 0x22,
+  LEAK_4   = 0x23
 };
 
 #endif /* POWER_OTPDIST_COMMANDS_HPP_INCLUDED_ */

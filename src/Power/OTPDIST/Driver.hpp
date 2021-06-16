@@ -61,7 +61,7 @@ namespace Power
       {
         m_uart = uart;
         m_poll = poll;
-        m_timeout_uart = 0.1f;
+        m_timeout_uart = 0.01f;
         m_parser = parser;
         resetStateNewData();
       }
@@ -83,7 +83,7 @@ namespace Power
         cmd_line[1] = OTP_VERSION;
         cmd_line[2] = OTP_TERMINATOR;
         cmd_line[3] = '\0';
-        m_task->spew("Driver:getFirmwareVersion: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        m_task->debug("Driver:getFirmwareVersion: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
         return sendCommand(cmd_line);
       }
 
@@ -95,7 +95,7 @@ namespace Power
         cmd_line[1] = OTP_RESET;
         cmd_line[2] = OTP_TERMINATOR;
         cmd_line[3] = '\0';
-        m_task->spew("Driver:reset: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        m_task->debug("Driver:reset: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
         sendCommand(cmd_line);
       }
 
@@ -143,7 +143,7 @@ namespace Power
         cmd_line[3] = state;
         cmd_line[4] = OTP_TERMINATOR;
         cmd_line[5] = '\0';
-        m_task->spew("Driver:setPowerChannelState: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
+        m_task->debug("Driver:setPowerChannelState: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
         return sendCommand(cmd_line);
       }
 
@@ -154,6 +154,34 @@ namespace Power
         u_int8_t final_message[256];
         m_uart->flush();
         m_uart->writeString((char*)data);
+        m_wdog_com.setTop(m_timeout_uart*10);
+        m_wdog_com.reset();
+        int rx_counter = 0;
+        int cnt_message_part = 0;
+        while (!m_wdog_com.overflow())
+        {
+          if (Poll::poll(*m_uart, m_timeout_uart))
+          {
+            int data_received = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
+            //m_task->spew("rec: %d", data_received);
+            //m_parser->spewArray(bfr_uart, data_received);
+            cnt_message_part = 0;
+            for (int i = rx_counter; i < data_received + rx_counter; i++)
+            {
+              final_message[i] = bfr_uart[cnt_message_part++];
+            }
+            rx_counter = rx_counter + data_received;
+            m_wdog_com.reset();
+          }
+        }
+        return m_parser->decodeMessage(final_message, rx_counter);
+      }
+
+      bool
+      haveNewData(void)
+      {
+        u_int8_t bfr_uart[128];
+        u_int8_t final_message[256];
         m_wdog_com.setTop(m_timeout_uart);
         m_wdog_com.reset();
         int rx_counter = 0;
@@ -172,27 +200,36 @@ namespace Power
             m_wdog_com.reset();
           }
         }
-        return m_parser->decodeMessage(final_message, rx_counter);;
+        return m_parser->decodeMessage(final_message, rx_counter);
+      }
+
+      void
+      sendPowerOffCommand(void)
+      {
+        u_int8_t cmd_line[16];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_SET_PO_STATE;
+        cmd_line[2] = 0x42;
+        cmd_line[3] = OTP_TURN_OFF;
+        cmd_line[4] = OTP_TERMINATOR;
+        cmd_line[5] = '\0';
+        m_task->debug("Driver:Turn off: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
+        sendCommand(cmd_line);
+      }
+
+      uint8_t
+      leakDetected(uint8_t leak_id)
+      {
+        if (m_parser->leakDetected(leak_id))
+          return true;
+        else
+          return false;
       }
 
       bool
-      haveNewData(void)
+      isSwitchOn(void)
       {
-        /*std::size_t rv = m_uart->readString(bfr, sizeof(bfr));
-
-        if (rv == 0)
-        {
-          m_task->err(DTR("I/O error"));
-          return false;
-        }
-
-        m_task->spew("driver test: %s", bfr);
-        bfr[strlen(bfr) - 3] = '\0';
-
-        bool result = true;
-
-        return result;*/
-        return true;
+        return m_parser->isSwitchOn();
       }
 
     private:

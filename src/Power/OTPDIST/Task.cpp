@@ -43,6 +43,7 @@ namespace Power
 
     static const float c_delay_startup = 4.0f;
     static const uint8_t c_max_channels = 18;
+    static const uint8_t c_max_leak_inputs = 4;
     static const uint8_t c_channel_offset_id = 0x30;
     static const std::string c_nc_channels = "NC/";
     static const std::string c_inv_channels = "INV/";
@@ -57,10 +58,16 @@ namespace Power
       double input_timeout;
       //! Number of attempts before error
       int number_attempts;
+      //! Delay in seconds before turn of the OTPDIST
+      int delay_turn_off;
       //! Channels names
       std::string channels_names[c_max_channels];
       //! Channels states
       bool channels_states[c_max_channels];
+      //! Leaks entity labels.
+      std::string leak_elabels[c_max_leak_inputs];
+      //! True if leak sensor is in fact a medium sensor.
+      bool leak_medium[c_max_leak_inputs];
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -75,12 +82,22 @@ namespace Power
       DriverOTPDIST* m_driver;
       //! Parser for messages received
       ParserOTPDIST* m_parser;
-      //! Watchdog.
-      Counter<double> m_wdog;
+      //! Power operation.
+      IMC::PowerOperation m_pwr_op;
+      //! Leak detection.
+      IMC::EntityState m_leaks[c_max_leak_inputs];
+      //! Watchdog for communication.
+      Counter<double> m_wdog_com;
+      //! Watchdog for turn off board.
+      Counter<double> m_wdog_off;
       //! Count for attempts
       int m_count_attempts;
       //! Flag to control reset of board
       bool m_is_first_reset;
+      //! Power down is in progress.
+      bool m_pwr_down;
+      //! Flag to control message PowerDown
+      bool m_send_power_down;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -88,7 +105,9 @@ namespace Power
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Tasks::Task(name, ctx),
         m_uart(NULL),
-        m_driver(0)
+        m_driver(0),
+        m_pwr_down(false),
+        m_send_power_down(false)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
@@ -104,6 +123,13 @@ namespace Power
         .maximumValue("4.0")
         .units(Units::Second)
         .description("Amount of seconds to wait for data before reporting an error");
+
+        param("Delay Before Turn Off", m_args.delay_turn_off)
+        .defaultValue("20")
+        .minimumValue("10")
+        .maximumValue("60")
+        .units(Units::Second)
+        .description("Amount of seconds to wait before turn off OTPDIST.");
 
         param("Number of attempts before error", m_args.number_attempts)
         .defaultValue("5")
@@ -126,6 +152,17 @@ namespace Power
           .description("Activate Channel");
         }
 
+        for (unsigned i = 0; i < c_max_leak_inputs; ++i)
+        {
+          option = String::str("Leak %u - Entity Label", i+1);
+          param(option, m_args.leak_elabels[i]);
+          option = String::str("Leak %u - Medium Sensor", i+1);
+          param(option, m_args.leak_medium[i])
+          .defaultValue("false");
+        }
+
+        m_pwr_op.setDestination(getSystemId());
+
         // Register handler routines.
         bind<IMC::QueryPowerChannelState>(this);
         bind<IMC::PowerChannelControl>(this);
@@ -147,6 +184,14 @@ namespace Power
         m_bat_volt.setSourceEntity(getEid("Batteries"));
         m_amp[1].setSourceEntity(getEid(m_args.rcap_elabel));
         m_amp[2].setSourceEntity(getEid(m_args.fcap_elabel));*/
+
+        // Initialize leak messages.
+        for (unsigned i = 0; i < c_max_leak_inputs; ++i)
+        {
+          m_leaks[i].state = IMC::EntityState::ESTA_NORMAL;
+          m_leaks[i].description = DTR(Status::getString(Status::CODE_ACTIVE));
+          m_leaks[i].setSourceEntity(reserveEntity(m_args.leak_elabels[i]));
+        }
       }
 
       //! Update parameters.
@@ -216,6 +261,16 @@ namespace Power
         }
       }
 
+      //! Report leak entities.
+      void
+      onReportEntityState(void)
+      {
+        dispatch(m_leaks[0]);
+        dispatch(m_leaks[1]);
+        dispatch(m_leaks[2]);
+        dispatch(m_leaks[3]);
+      }
+
       void
       consume(const IMC::QueryPowerChannelState* msg)
       {
@@ -226,9 +281,47 @@ namespace Power
       void
       consume(const IMC::PowerChannelControl* msg)
       {
-        spew("name: %s", msg->name.c_str());
+        // Handle requests to main power channel.
+        /*if (msg->name == m_args.pwr_main)
+        {
+          //if (msg->getDestination() != getSystemId())
+          //  return;
+
+          if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_OFF)
+          {
+            m_proto.sendCommand(CMD_PWR_HLT, 0, 0);
+            return;
+          }
+        }*/
+
+        for(int ch = 0; ch < c_max_channels; ch++)
+        {
+          if (m_args.channels_names[ch].find(msg->name) != std::string::npos)
+          {
+            uint8_t state_channel;
+            if(msg->op == IMC::PowerChannelState::PCS_ON)
+              state_channel = OTP_TURN_ON;
+            else
+              state_channel = OTP_TURN_OFF;
+
+            if (!m_driver->setPowerChannelState(ch + c_channel_offset_id, state_channel))
+            {
+              war("Fail setting power channel state : %d", ch + 1);
+            }
+            else
+            {
+              m_args.channels_states[ch] = msg->op;
+              IMC::PowerChannelState msgPo;
+              msgPo.name = m_args.channels_names[ch];
+              msgPo.state = msg->op;
+              dispatch(msgPo);
+            }
+          }
+        }
+
+        /*spew("name: %s", msg->name.c_str());
         spew("op %d", msg->op);
-        spew("time: %f", msg->sched_time);
+        spew("time: %f", msg->sched_time);*/
       }
 
       void
@@ -265,6 +358,7 @@ namespace Power
         {
           war(DTR("failed to get firmware version"));
           m_driver->resetBoard();
+          m_uart->flush();
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }
@@ -282,7 +376,7 @@ namespace Power
           {
             if(m_args.channels_states[i])
             {
-              spew("turn on %s", m_args.channels_names[i].c_str());
+              debug("turn on %s", m_args.channels_names[i].c_str());
               if(!m_driver->setPowerChannelState(i + c_channel_offset_id, OTP_TURN_ON))
               {
                 war("Fail setting power channel state : %d", i + 1);
@@ -298,7 +392,7 @@ namespace Power
             }
             else
             {
-              spew("turn off %s", m_args.channels_names[i].c_str());
+              debug("turn off %s", m_args.channels_names[i].c_str());
               if(!m_driver->setPowerChannelState(i + c_channel_offset_id, OTP_TURN_OFF))
               {
                 war("Fail setting power channel state : %d", i + 1);
@@ -315,8 +409,8 @@ namespace Power
           }
           else
           {
-            spew("jumping %s - %d", m_args.channels_names[i].c_str(), i+1);
-            spew("turn off %s", m_args.channels_names[i].c_str());
+            debug("jumping %s - %d", m_args.channels_names[i].c_str(), i+1);
+            debug("turn off %s", m_args.channels_names[i].c_str());
             if(!m_driver->setPowerChannelState(i + c_channel_offset_id, OTP_TURN_OFF))
             {
               war("Fail setting power channel state : %d", i + 1);
@@ -334,8 +428,40 @@ namespace Power
         }
 
         debug("Init and Start OK");
-        m_wdog.setTop(m_args.input_timeout);
-        m_wdog.reset();
+        m_wdog_com.setTop(m_args.input_timeout);
+        m_wdog_com.reset();
+      }
+
+      //! Set Leak status.
+      //! @param[in] idx leak index.
+      //! @param[in] leak leak status.
+      void
+      setLeakStatus(int idx, bool leak)
+      {
+        IMC::EntityState& es = m_leaks[idx];
+
+        if (m_args.leak_medium[idx])
+        {
+          es.description = leak ? DTR("water") : DTR("air");
+          dispatch(es);
+          return;
+        }
+
+        if (leak)
+        {
+          if (es.state == IMC::EntityState::ESTA_NORMAL)
+          {
+            es.state = IMC::EntityState::ESTA_FAILURE;
+            es.description = DTR("leak detected");
+            dispatch(es);
+          }
+        }
+        else if (es.state == IMC::EntityState::ESTA_FAILURE)
+        {
+          es.state = IMC::EntityState::ESTA_NORMAL;
+          es.description = DTR("no leak");
+          dispatch(es);
+        }
       }
 
       void
@@ -465,6 +591,47 @@ namespace Power
         }*/
       }
 
+      void
+      checkInternalSensors(void)
+      {
+        for (int le = 0; le < c_max_leak_inputs; le++)
+        {
+          if (m_driver->leakDetected(le))
+          {
+            err("Leak detectead: %d", le + 1);
+            setLeakStatus(le, true);
+          }
+          else
+          {
+            setLeakStatus(le, false);
+          }
+        }
+        if (m_driver->isSwitchOn() && !m_pwr_down)
+        {
+          m_pwr_down = true;
+        }
+        else if (!m_driver->isSwitchOn() && m_pwr_down)
+        {
+          m_pwr_down = false;
+        }
+        if (m_pwr_down && !m_send_power_down)
+        {
+          m_wdog_off.setTop(m_args.delay_turn_off);
+          m_wdog_off.reset();
+          m_send_power_down = true;
+          war("%s", DTR(Status::getString(Status::CODE_POWER_DOWN)));
+          m_pwr_op.op = IMC::PowerOperation::POP_PWR_DOWN_IP;
+          dispatch(m_pwr_op);
+        }
+        else if(!m_pwr_down && m_send_power_down)
+        {
+          m_send_power_down = false;
+          war(DTR("power down sequence aborted"));
+          m_pwr_op.op = IMC::PowerOperation::POP_PWR_DOWN_ABORTED;
+          dispatch(m_pwr_op);
+        }
+      }
+
       //! Main loop.
       void
       onMain(void)
@@ -473,7 +640,7 @@ namespace Power
         {
           waitForMessages(0.01);
 
-          if (m_wdog.overflow())
+          if (m_wdog_com.overflow())
           {
             if (m_count_attempts >= m_args.number_attempts)
             {
@@ -493,16 +660,23 @@ namespace Power
             initBoard(true);
           }
 
-          //if (!Poll::poll(*m_uart, m_args.input_timeout))
-          //  continue;
+          //TO remove
+          m_wdog_com.reset();
 
           if(m_driver->haveNewData())
           {
+            spew("aqui new data");
+            checkInternalSensors();
             //m_tstamp = Clock::getSinceEpoch();
             dispatchData();
             m_count_attempts = 0;
             m_is_first_reset = true;
-            m_wdog.reset();
+            m_wdog_com.reset();
+          }
+          if(m_pwr_down && m_wdog_off.overflow())
+          {
+            war("Switching off all power");
+            m_driver->sendPowerOffCommand();
           }
         }
         debug("Sending stop to OTPDIST");
