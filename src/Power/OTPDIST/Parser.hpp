@@ -67,6 +67,7 @@ namespace Power
             m_otpdistData.leak_states[i] = false;
 
           m_otpdistData.switch_on = false;
+          m_new_data_leak = false;
         }
 
         ~ParserOTPDIST(void){}
@@ -100,13 +101,15 @@ namespace Power
               }
               else if(data_in[1] == OTP_LEAK)
               {
-                if(data_in[2] >= LEAK_1 && data_in[2] <= LEAK_4)
+                for(uint8_t i = 2; i < (4 + 2); i++)
                 {
-                  m_otpdistData.leak_states[data_in[2] - 0x20] = true;
-                  return true;
+                  if(data_in[i] == LEAK_ON)
+                    m_otpdistData.leak_states[i - 2] = true;
+                  else
+                    m_otpdistData.leak_states[i - 2] = false;
                 }
-                else
-                  return false;
+                m_new_data_leak = true;
+                return true;
               }
               else if(data_in[1] == OTP_SWITCH_ON && !m_otpdistData.switch_on)
               {
@@ -131,10 +134,7 @@ namespace Power
             m_otpdistData.leak_states[leak_id] = false;
             return true;
           }
-          else
-          {
-            return false;
-          }
+          return false;
         }
 
         bool
@@ -156,11 +156,24 @@ namespace Power
           return m_otpdistData.firm_version;
         }
 
+        bool
+        newDataLeak(void)
+        {
+          if(m_new_data_leak)
+          {
+            m_new_data_leak = false;
+            return true;
+          }
+          return false;
+        }
+
         OTPDISTData m_otpdistData;
 
       private:
         //! Parent task.
         DUNE::Tasks::Task* m_task;
+        //! Flag to control new leak info
+        bool m_new_data_leak;
 
     };
   }

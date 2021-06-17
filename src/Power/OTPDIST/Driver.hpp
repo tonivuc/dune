@@ -223,21 +223,6 @@ namespace Power
         sendCommand(cmd_line);
       }
 
-      uint8_t
-      leakDetected(uint8_t leak_id)
-      {
-        if (m_parser->leakDetected(leak_id))
-          return true;
-        else
-          return false;
-      }
-
-      bool
-      isSwitchOn(void)
-      {
-        return m_parser->isSwitchOn();
-      }
-
     private:
       //! Parent task.
       DUNE::Tasks::Task *m_task;

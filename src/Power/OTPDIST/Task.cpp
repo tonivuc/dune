@@ -466,7 +466,7 @@ namespace Power
         else if (es.state == IMC::EntityState::ESTA_FAILURE)
         {
           es.state = IMC::EntityState::ESTA_NORMAL;
-          es.description = DTR("no leak");
+          es.description = DTR("active");
           dispatch(es);
         }
       }
@@ -601,23 +601,26 @@ namespace Power
       void
       checkInternalSensors(void)
       {
-        for (int le = 0; le < c_max_leak_inputs; le++)
+        if(m_parser->newDataLeak())
         {
-          if (m_driver->leakDetected(le))
+          for (int le = 0; le < c_max_leak_inputs; le++)
           {
-            err("Leak detectead: %d", le + 1);
-            setLeakStatus(le, true);
-          }
-          else
-          {
-            setLeakStatus(le, false);
+            if (m_parser->leakDetected(le))
+            {
+              err("Leak detectead: %d", le + 1);
+              setLeakStatus(le, true);
+            }
+            else
+            {
+              setLeakStatus(le, false);
+            }
           }
         }
-        if (m_driver->isSwitchOn() && !m_pwr_down)
+        if (m_parser->isSwitchOn() && !m_pwr_down)
         {
           m_pwr_down = true;
         }
-        else if (!m_driver->isSwitchOn() && m_pwr_down)
+        else if (!m_parser->isSwitchOn() && m_pwr_down)
         {
           m_pwr_down = false;
         }

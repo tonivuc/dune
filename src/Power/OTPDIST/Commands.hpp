@@ -90,4 +90,11 @@ enum LeaksIds
   LEAK_4   = 0x23
 };
 
+//! Leaks status
+enum LeakStatus
+{
+  LEAK_ON   = 0x53,
+  LEAK_OFF  = 0x54
+};
+
 #endif /* POWER_OTPDIST_COMMANDS_HPP_INCLUDED_ */
