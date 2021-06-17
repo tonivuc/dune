@@ -78,7 +78,7 @@ namespace Power
       bool
       getFirmwareVersion(void)
       {
-        u_int8_t cmd_line[16];
+        u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_VERSION;
         cmd_line[2] = OTP_TERMINATOR;
@@ -90,7 +90,7 @@ namespace Power
       void
       resetBoard(void)
       {
-        u_int8_t cmd_line[16];
+        u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_RESET;
         cmd_line[2] = OTP_TERMINATOR;
@@ -118,25 +118,31 @@ namespace Power
       bool
       startAcquisition(void)
       {
-        //if(sendCommand("@START,*", "$RSP,ACK,,*"))
-        //  return true;
-
-        return false;
+        u_int8_t cmd_line[8];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_START_ACQUISITION;
+        cmd_line[2] = OTP_TERMINATOR;
+        cmd_line[3] = '\0';
+        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        return sendCommand(cmd_line);
       }
 
       bool
       stopAcquisition(void)
       {
-        //if (sendCommand("@STOP,*", ""))
-        //  return true;
-
-        return false;
+        u_int8_t cmd_line[8];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_STOP_ACQUISITION;
+        cmd_line[2] = OTP_TERMINATOR;
+        cmd_line[3] = '\0';
+        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        return sendCommand(cmd_line);
       }
 
       bool
       setPowerChannelState(uint8_t channel, uint8_t state)
       {
-        u_int8_t cmd_line[16];
+        u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_SET_PO_STATE;
         cmd_line[2] = channel;

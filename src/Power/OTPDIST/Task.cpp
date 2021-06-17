@@ -60,6 +60,8 @@ namespace Power
       int number_attempts;
       //! Delay in seconds before turn of the OTPDIST
       int delay_turn_off;
+      //! Main power channel.
+      std::string pwr_main;
       //! Channels names
       std::string channels_names[c_max_channels];
       //! Channels states
@@ -92,8 +94,6 @@ namespace Power
       Counter<double> m_wdog_off;
       //! Count for attempts
       int m_count_attempts;
-      //! Flag to control reset of board
-      bool m_is_first_reset;
       //! Power down is in progress.
       bool m_pwr_down;
       //! Flag to control message PowerDown
@@ -136,6 +136,10 @@ namespace Power
         .minimumValue("1")
         .maximumValue("10")
         .description("Number of attempts before error.");
+
+        param("Channel Main Name", m_args.pwr_main)
+        .defaultValue("System")
+        .description("Name of the power channel that controls the system power");
 
         // Extract name and state of channels
         std::string option;
@@ -245,8 +249,7 @@ namespace Power
         m_driver->stopAcquisition();
         m_uart->flush();
         Delay::wait(c_delay_startup);
-        initBoard(false);
-        m_is_first_reset = true;
+        initBoard();
       }
 
       //! Release resources.
@@ -282,17 +285,19 @@ namespace Power
       consume(const IMC::PowerChannelControl* msg)
       {
         // Handle requests to main power channel.
-        /*if (msg->name == m_args.pwr_main)
+        if (msg->name == m_args.pwr_main)
         {
-          //if (msg->getDestination() != getSystemId())
-          //  return;
+          if (msg->getDestination() != getSystemId())
+            return;
 
           if (msg->op == IMC::PowerChannelControl::PCC_OP_TURN_OFF)
           {
-            m_proto.sendCommand(CMD_PWR_HLT, 0, 0);
+            war("Switching off all power - PowerChannelControl");
+            m_driver->sendPowerOffCommand();
+            m_pwr_down = false;
             return;
           }
-        }*/
+        }
 
         for(int ch = 0; ch < c_max_channels; ch++)
         {
@@ -319,9 +324,9 @@ namespace Power
           }
         }
 
-        /*spew("name: %s", msg->name.c_str());
+        spew("name: %s", msg->name.c_str());
         spew("op %d", msg->op);
-        spew("time: %f", msg->sched_time);*/
+        spew("time: %f", msg->sched_time);
       }
 
       void
@@ -351,7 +356,7 @@ namespace Power
       }
 
       void
-      initBoard(bool noRestart)
+      initBoard(void)
       {
         setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("trying connecting to board")));
         if (!m_driver->getFirmwareVersion())
@@ -430,6 +435,8 @@ namespace Power
         debug("Init and Start OK");
         m_wdog_com.setTop(m_args.input_timeout);
         m_wdog_com.reset();
+        debug("Sending start acquisition to OTPDIST");
+        m_driver->startAcquisition();
       }
 
       //! Set Leak status.
@@ -644,6 +651,8 @@ namespace Power
           {
             if (m_count_attempts >= m_args.number_attempts)
             {
+              m_driver->resetBoard();
+              m_uart->flush();
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
             }
@@ -651,35 +660,28 @@ namespace Power
             setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("trying connecting to board")));
             war(DTR("trying connecting to board"));
             m_count_attempts++;
-            if (m_is_first_reset)
-            {
-              //m_driver->sendCommandNoRsp("@RESET,*");
-              m_is_first_reset = false;
-            }
             m_uart->flush();
-            initBoard(true);
+            initBoard();
           }
 
-          //TO remove
+          //TO remove- only for test
           m_wdog_com.reset();
 
           if(m_driver->haveNewData())
           {
-            spew("aqui new data");
             checkInternalSensors();
             //m_tstamp = Clock::getSinceEpoch();
             dispatchData();
             m_count_attempts = 0;
-            m_is_first_reset = true;
             m_wdog_com.reset();
           }
           if(m_pwr_down && m_wdog_off.overflow())
           {
-            war("Switching off all power");
+            war("Switching off all power - Force");
             m_driver->sendPowerOffCommand();
           }
         }
-        debug("Sending stop to OTPDIST");
+        debug("Sending stop acquisition to OTPDIST");
         m_driver->stopAcquisition();
       }
     };

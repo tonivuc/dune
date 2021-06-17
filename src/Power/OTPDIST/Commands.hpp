@@ -53,7 +53,9 @@ enum DecodeData
   OTP_TURN_OFF          = 0x1E,
   OTP_LEAK              = 0x1F,
   OTP_SWITCH_ON         = 0x63,
-  OTP_SWITCH_OFF        = 0x64
+  OTP_SWITCH_OFF        = 0x64,
+  OTP_START_ACQUISITION = 0x65,
+  OTP_STOP_ACQUISITION  = 0x66
 };
 
 //! Power channels
