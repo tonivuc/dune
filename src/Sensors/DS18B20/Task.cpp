@@ -78,7 +78,7 @@ namespace Sensors
             .description("Task execution frequency.");
 
         param("File", m_args.filename)
-            .defaultValue("")
+            .defaultValue("~/../sys/devices/w1_bus_master1/28-031097940cb6/w1_slave")
             .description("Path to the file containg the 1-wire sensor's data.");
 
         //setFrequency(0.1);
@@ -133,8 +133,7 @@ namespace Sensors
         {
           if (m_execution_period.overflow())
           {
-            //m_file.open(m_args.filename, std::ios::in);
-            m_file.open("../../../../w1_slave", std::ios::in);
+            m_file.open(m_args.filename, std::ios::in);
 
             if (m_file.is_open())
             {
