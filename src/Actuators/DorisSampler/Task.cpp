@@ -242,14 +242,15 @@ namespace Actuators
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
-      Task(const std::string &name, Tasks::Context &ctx) : DUNE::Tasks::Task(name, ctx),
-                                                           m_uart(NULL),
-                                                           m_START_FL(false),
-                                                           m_FULL_FL(false),
-                                                           m_sm_state(SM_INIT),
-                                                           m_bi_state(BI_START),
-                                                           cmd_sent_count(0),
-                                                           m_RUN_FL(false)
+      Task(const std::string &name, Tasks::Context &ctx) : 
+        DUNE::Tasks::Task(name, ctx),
+        m_uart(NULL),
+        //update_cmd_FL(false),
+        m_FULL_FL(false),
+        m_sm_state(SM_STOP),
+        m_total_nr_of_bottles(0),
+        cmd_sent_count(0),
+        m_RUN_FL(false)
       {
         param("Master Name", m_args.master_name)
             .description("Master Name.");
