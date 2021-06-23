@@ -37,24 +37,35 @@
 // Local Headers.
 #include "Parser.hpp"
 
-//! Sampling OK
+//! Sampling OK string
 #define SAMPLING_OK "OK"
-//! Sampling Failed
-#define SAMPLING_FAILED "Failed"
+//! Sampling Failed string
+#define SAMPLING_FAIL "Failed"
 
-//! Clean Cmd char
-#define CMD_CLEAN 'C'
-//! Sample Cmd char
-#define CMD_SAMPLE 'S'
 //! Abort Cmd char
 #define CMD_ABORT 'A'
-//! Set nr. of total bottles Cmd char
-#define CMD_SET_BOT 'B'
-//! Reset nr. of total bottles Cdm char
-#define CMD_RESET_BOT 'R'
+//! Set nr. of total bottles in firmware Cmd char
+#define CMD_SET_FW_BOT 'B'
+//! Clean Cmd char
+#define CMD_CLEAN 'C'
+//! Get nr. of total bottles in firmware Cmd char
+#define CMD_GET_FW_BOT 'G'
+//! Ping firmware Cmd char
+#define CMD_PING 'P'
+//! Sample Cmd char
+#define CMD_SAMPLE 'S'
+//! Get firmware version Cmd char
+#define CMD_VERSION 'V'
 
 //! Cmd max send tries
 #define CMD_MAX_TRIES 5
+//! Cmd's answer max waiting time (s)
+#define ANSWER_DELAY 2
+
+//! Firmware's ping interval
+#define PING_INTERVAL 5
+//! Frmware's watchdog time
+#define WATCHDOG_TIME 30
 
 namespace Actuators
 {
@@ -68,14 +79,14 @@ namespace Actuators
     using DUNE_NAMESPACES;
 
     static const unsigned int c_max_csum = 2;
-    static const unsigned int c_max_buffer = 32;
+    static const unsigned int c_max_buffer = 64;
 
     //! Navigation states.
     enum StateMachineStates
     {
-      //! Sampling State.
+      //! Stopped State.
       SM_STOP = 0,
-      //! Moving to a GoTo Destination
+      //! Moving to a GoTo Destination.
       SM_MOVING = 1,
       //! Asking Fw to initiate the Cleaning Maneuver.
       SM_CLEAN = 2,
@@ -85,16 +96,36 @@ namespace Actuators
       SM_CLEANING_DONE = 4,
       //! Asking Fw to initiate the Samping Maneuver.
       SM_SAMPLE = 5,
-      //! Sampling State
+      //! Sampling State.
       SM_SAMPLING = 6,
-      //! Sampling Done
+      //! Sampling Done.
       SM_SAMPLING_DONE = 7,
-      //! Sampling Failed
+      //! Sampling Failed.
       SM_SAMPLING_FAILED = 8,
-      //! Maneuver Done
+      //! Maneuver Done.
       SM_MANEUVER_DONE = 9,
-      //! Sampler is full
+      //! Sampler is full.
       SM_FULL = 10,
+      //! Initialization state.
+      SM_INIT = 99
+    };
+
+    enum BoardInitStates
+    {
+      //! Board Init Starting Point
+      BI_START,
+      //! Ask FW's version
+      BI_ASK_VERSION,
+      //! Get for FW's version state
+      BI_GET_VERSION,
+      //! Ask total num of bottles in FW
+      BI_ASK_BOT_NUM,
+      //! Get FW's total num of bottles
+      BI_GET_BOT_NUM,
+      //! Init done state
+      BI_DONE,
+      //! No response from FW error/stopped state
+      BI_ERROR
     };
 
     enum FwCleaningStateOptions
@@ -114,6 +145,9 @@ namespace Actuators
     enum FwSamplingStateOptions
     {
       SAMPLING_STOP,
+      SAMPLING_DONE,
+      SAMPLING_FAILED,
+      SAMPLING_FULLY_LOADED,
       SAMPLING_INPUTSELECT,
       SAMPLING_DISC,
       SAMPLING_PUMP,
@@ -123,10 +157,7 @@ namespace Actuators
       SAMPLING_SAVED,
       SAMPLING_CLEANING,
       SAMPLING_CLEAN,
-      SAMPLING_CLEAN_FAILED,
-      SAMPLING_DONE,
-      SAMPLING_FAIL,
-      SAMPLING_FULLY_LOADED
+      SAMPLING_CLEAN_FAILED
     };
 
     struct Arguments
@@ -145,8 +176,6 @@ namespace Actuators
       uint8_t nr_bottles_to_sample;
       //! Type of sample.
       std::string type_of_sample;
-      //! Watchdog timeout.
-      double wdog_tout;
       //! CPU Serial Command
       std::string cpu_cmd;
       //! Max number of bottles in the sampler
@@ -173,12 +202,10 @@ namespace Actuators
       char m_cmd[c_max_buffer];
       //! I/O Multiplexer.
       Poll m_poll;
-      //! Watchdog.
-      Counter<double> m_wdog;
       //! Serial loop timer
       uint8_t serial_timer;
       //! Send new cmd flag
-      bool update_cmd_FL;
+      //bool m_update_cmd_FL;
       //! PathController coordinate flag
       bool m_NEAR_FL;
       //! PathController coordinate flag
@@ -187,6 +214,8 @@ namespace Actuators
       bool m_FULL_FL;
       //! Current state machine's state
       StateMachineStates m_sm_state;
+      //! Board Init state
+      BoardInitStates m_bi_state;
       //! Bottle count of the sampling procedure
       uint8_t m_bottle_count;
       //! Number of bottles to sample in that maneuver
@@ -205,6 +234,8 @@ namespace Actuators
       Time::Counter<double> m_cmd_timer;
       //! Estimated state.
       IMC::EstimatedState m_estate;
+      //! WASAB's Pinger.
+      Time::Counter<double> m_pinger;
       //! Task arguments
       Arguments m_args;
 
@@ -213,10 +244,10 @@ namespace Actuators
       //! @param[in] ctx context.
       Task(const std::string &name, Tasks::Context &ctx) : DUNE::Tasks::Task(name, ctx),
                                                            m_uart(NULL),
-                                                           //update_cmd_FL(false),
+                                                           m_START_FL(false),
                                                            m_FULL_FL(false),
-                                                           m_sm_state(SM_STOP),
-                                                           m_total_nr_of_bottles(0),
+                                                           m_sm_state(SM_INIT),
+                                                           m_bi_state(BI_START),
                                                            cmd_sent_count(0),
                                                            m_RUN_FL(false)
       {
@@ -236,12 +267,6 @@ namespace Actuators
         param("Serial Port - Baud Rate", m_args.uart_baud)
             .defaultValue("115200")
             .description("Serial port baudrate.");
-
-        param("Watchdog Timeout", m_args.wdog_tout)
-            .units(Units::Second)
-            .defaultValue("2.0")
-            .minimumValue("1.0")
-            .description("Watchdog timeout.");
 
         param("Sampler - Nr. of Bottles to Sample", m_args.nr_bottles_to_sample)
             .visibility(Tasks::Parameter::VISIBILITY_USER)
@@ -271,17 +296,12 @@ namespace Actuators
         bind<IMC::EstimatedState>(this);
         bind<IMC::VehicleState>(this);
         //bind<IMC::LogBookEntry>(this);
-
-        m_cmd_timer.setTop(12);
       }
 
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
-        //m_wdog.setTop(m_args.wdog_tout);
-        //war("updateParameters. TYPE: %s", m_args.type_of_sample.c_str());
-
         if (!m_args.is_master_mode)
         {
           if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
@@ -289,10 +309,11 @@ namespace Actuators
             m_START_FL = true;
           }
 
-          if (paramChanged(m_args.cpu_cmd))
+          /*if (paramChanged(m_args.cpu_cmd))
           {
+            m_update_cmd_FL = true;
             war("cpu cmd %s", m_args.cpu_cmd.c_str());
-          }
+          }*/
 
           //update nr of bottles to sample if changed
           if (paramChanged(m_args.nr_bottles_to_sample))
@@ -326,30 +347,36 @@ namespace Actuators
       {
         if (!m_args.is_master_mode)
         {
-          m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
-          m_uart->setCanonicalInput(true);
+          setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+          try
+          {
+            m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
+            m_uart->setCanonicalInput(true);
+            m_uart->flush();
+            m_fail_uart = 0;
+            m_poll.add(*m_uart);
+          }
+          catch (std::runtime_error &e)
+          {
+            throw RestartNeeded(e.what(), 10);
+          }
         }
-        //m_wdog.reset();
       }
 
       //! Initialize resources.
       void
       onResourceInitialization(void)
       {
-
         if (!m_args.is_master_mode)
         {
-
-          m_START_FL = false;
-
           m_uart->flushInput();
           m_uart->flush();
 
           m_parse = new Parser(this);
-          m_poll.add(*m_uart);
 
-          m_fail_uart = 0;
-          //m_uart->writeString("$T*\r\n");
+          m_parse->set_wdog(WATCHDOG_TIME);
+          m_pinger.setTop(PING_INTERVAL);
+          m_cmd_timer.setTop(ANSWER_DELAY);
         }
       }
 
@@ -359,38 +386,32 @@ namespace Actuators
       {
         if (m_uart != NULL)
         {
-          //war("m_uart != NULL");
           m_poll.remove(*m_uart);
           Memory::clear(m_uart);
         }
-
-        /*if(m_parse != NULL)
-        {
-          Memory::clear(m_parse);
-        }*/
       }
 
-      //! Send updated command if available.
-      void
+      //! Send manual command if available in neptus.
+      /*void
       updateCpuCommand(void)
       {
-        if (update_cmd_FL)
+        if (m_update_cmd_FL)
         {
           std::memset(&m_msg, '\0', sizeof(m_msg));
-          std::sprintf(m_msg, "$%s,*", (char *)m_args.cpu_cmd.c_str());
+          std::sprintf(m_msg, "$%s*", (char *)m_args.cpu_cmd.c_str());
           m_csum[0] = Algorithms::XORChecksum::compute((uint8_t *)m_msg, strlen(m_msg) - 1, 0);
-          war("%s | 0x%02x", m_msg, m_csum[0]);
-          char test[128];
-          sprintf(test, "%s%c\r\n", m_msg, m_csum[0]);
-          m_uart->writeString(test);
+          //war("%s | 0x%02x", m_msg, m_csum[0]);
+          char fw_cmd[128];
+          sprintf(fw_cmd, "%s%c\r\n", m_msg, m_csum[0]);
+          m_uart->writeString(fw_cmd);
 
-          update_cmd_FL = false;
+          m_update_cmd_FL = false;
         }
-      }
+      }*/
 
       //! Read data sent by Doris Sampler.
       bool
-      checkSerialPort(void)
+      hasNewData(void)
       {
         if (m_poll.wasTriggered(*m_uart))
         {
@@ -433,7 +454,6 @@ namespace Actuators
           if (pcs->flags & IMC::PathControlState::FL_NEAR)
           {
             m_NEAR_FL = true;
-            war("near");
           }
         }
       }
@@ -443,7 +463,7 @@ namespace Actuators
       {
         if (!m_args.is_master_mode)
         {
-          if (msg->getSource() != getSystemId())
+          if (m_args.master_name.compare(resolveSystemId(msg->getSource())) != 0)
             return;
 
           m_estate = *msg;
@@ -455,13 +475,13 @@ namespace Actuators
       {
         if (!m_args.is_master_mode)
         {
-          if (msg->op_mode != (IMC::VehicleState::VS_MANEUVER) && m_sm_state != SM_STOP)
+          if (msg->op_mode != IMC::VehicleState::VS_MANEUVER && m_sm_state != SM_STOP && m_sm_state != SM_INIT)
           {
             if (!m_RUN_FL)
             {
               m_RUN_FL = true;
               m_sm_state = SM_STOP;
-              war("maneuver stopped\nsend abort command");
+              //war("Maneuver stopped\nSend abort command");
             }
           }
         }
@@ -474,6 +494,7 @@ namespace Actuators
         //Get coordinates in degrees from the estimated estate
         double lat = Angles::degrees(m_estate.lat);
         double lon = Angles::degrees(m_estate.lon);
+        war("lat: %f | lon: %f", lat, lon);
 
         IMC::LogBookEntry log_entry;
         // log book entry's type
@@ -482,26 +503,26 @@ namespace Actuators
         log_entry.htime = Time::Clock::getSinceEpoch();
         // log book entry's context
         std::ostringstream log_context;
-        log_context << "Bottle " << bottleNum << "info.";
+        log_context << "Bottle " << bottleNum << " info.";
         log_entry.context = log_context.str();
 
-        //Turn waterinput (type of sample) info into readable content !!!!!THIS IS REDUNDANT, NOT SURE IF NECESSARY!!!!!
+        //Turn waterinput (type of sample) info into readable content !!THIS IS REDUNDANT, NOT SURE IF NECESSARY!!
         std::ostringstream log_sampleType;
-        if (m_parse->m_dorisState.Bottles->sampleType > 0)
+        if (m_parse->m_dorisState.bottles->sampleType > 0)
         {
           log_sampleType << "Surface";
         }
-        else if (m_parse->m_dorisState.Bottles->sampleType <= 0)
+        else if (m_parse->m_dorisState.bottles->sampleType <= 0)
         {
           log_sampleType << "Deep";
         }
 
         // log book entry's text
         std::ostringstream log_text;
-        log_text << "Status: " << log_bottleStatus << "\nType of Sample: " << log_sampleType.str() << "\nLatitude: " << lat << "\nLongitude: " << lon << "\nWater Temperature: " << m_parse->m_dorisState.Bottles->temp << "\nWindSpeed Consumed Davis: " << 12.3 << "\nWindDir Consumed Davis: " << 45.6;
+        log_text << "Status: " << log_bottleStatus << "\n Type of Sample: " << log_sampleType.str() << "\n Latitude: " << lat << "\n Longitude: " << lon << "\n Water Temperature: " << m_parse->m_dorisState.bottles->temp << "\n Wind Speed: " << 12.3 << "\n Wind Direction: " << 45.6;
         log_entry.text = log_text.str();
 
-        //war("Bottle: %d | Lat: %f | Lon: %f", bottleNum, lat, lon);
+        // war("%s", log_entry.text);
 
         Delay::wait(0.2);
 
@@ -515,15 +536,23 @@ namespace Actuators
         std::memset(&m_msg, '\0', sizeof(m_msg));
         switch (cmd)
         {
-        case CMD_CLEAN: // || cmd == CMD_ABORT)
-
-          //write cleaning command on the message
+        case CMD_ABORT:
+          std::sprintf(m_msg, "%c", cmd);
+          break;
+        case CMD_SET_FW_BOT:
+          std::sprintf(m_msg, "%c,%d", cmd, m_total_nr_of_bottles);
+          break;
+        case CMD_CLEAN:
+          std::sprintf(m_msg, "%c", cmd);
+          break;
+        case CMD_GET_FW_BOT:
+          std::sprintf(m_msg, "%c", cmd);
+          break;
+        case CMD_PING:
           std::sprintf(m_msg, "%c", cmd);
           break;
         case CMD_SAMPLE:
-
           int type_aux;
-          //check wich type of sample the user wants
           if (std::strcmp(m_args.type_of_sample.c_str(), "Disc") == 0)
           {
             type_aux = 0;
@@ -536,27 +565,107 @@ namespace Actuators
           {
             type_aux = 0;
           }
-          //write sampling command on the message
-          //std::sprintf(m_msg, "%c,%d,%d", cmd, type_aux, m_args.nr_bottles_to_sample);
           std::sprintf(m_msg, "%c,%d", cmd, type_aux);
           break;
-        case CMD_ABORT:
-          std::sprintf(m_msg, "%c", cmd);
-          break;
-        case CMD_SET_BOT:
-          std::sprintf(m_msg, "%c,%d", cmd, m_total_nr_of_bottles);
-          break;
-        case CMD_RESET_BOT:
+        case CMD_VERSION:
           std::sprintf(m_msg, "%c", cmd);
           break;
         }
 
         std::sprintf(m_msg, "%s*", m_msg);
         m_csum[0] = Algorithms::XORChecksum::compute((uint8_t *)m_msg, strlen(m_msg) - 1, 0);
-        war(">> %s | 0x%02x", m_msg, m_csum[0]);
         sprintf(m_cmd, "$%s%c\r\n", m_msg, m_csum[0]);
+        m_parse->m_msg_receipt = 0;
         m_uart->writeString(m_cmd);
-        //war("%s", m_cmd);
+      }
+
+      bool
+      initBoard()
+      {
+        switch (m_bi_state)
+        {
+        case BI_START:
+          setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_SYNCING);
+          m_bi_state = BI_ASK_VERSION;
+          break;
+
+        case BI_ASK_VERSION:
+          sendCommand(CMD_VERSION);
+          m_cmd_timer.reset();
+          m_parse->m_msg_receipt = 0;
+          cmd_sent_count++;
+          m_bi_state = BI_GET_VERSION;
+          break;
+
+        case BI_GET_VERSION:
+          //if msg with fw's version received
+          if (m_parse->m_msg_receipt == 1 && m_parse->m_dorisState.fwVersion != 0.0)
+          {
+            //reset vars, dispatch fw, move state
+            m_parse->m_msg_receipt = 0;
+            cmd_sent_count = 0;
+            inf("WASAB fw v%.1f", m_parse->m_dorisState.fwVersion);
+            m_bi_state = BI_ASK_BOT_NUM;
+          }
+          else if (m_cmd_timer.overflow()) //check if time to answer passed
+          {
+            war("WASAB not answered DUNE's command.");
+            //if less than 5 tries
+            if (cmd_sent_count < 5)
+            {
+              //resend command
+              m_bi_state = BI_ASK_VERSION;
+            }
+            else //if tried 5 times give error and go to error state
+            {
+              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+              //m_bi_state = BI_ERROR;
+              return true;
+            }
+          }
+          break;
+        case BI_ASK_BOT_NUM:
+          sendCommand(CMD_GET_FW_BOT);
+          m_cmd_timer.reset();
+          m_parse->m_msg_receipt = 0;
+          cmd_sent_count++;
+          m_bi_state = BI_GET_BOT_NUM;
+          break;
+        case BI_GET_BOT_NUM:
+          //if msg received
+          if (m_parse->m_msg_receipt == 1)
+          {
+            m_parse->m_msg_receipt = 0;
+            cmd_sent_count = 0;
+            m_total_nr_of_bottles = m_parse->m_dorisState.totalNumberOfBottles;
+            war("FW's nr of bottles = %d", m_parse->m_dorisState.totalNumberOfBottles);
+            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_SYNCHED);
+            m_bi_state = BI_DONE;
+          }
+          else if (m_cmd_timer.overflow()) //check if time to answer passed
+          {
+            war("WASAB not returned number of bottles.");
+            //if less than 5 tries
+            if (cmd_sent_count < 5)
+            {
+              //resend command
+              m_bi_state = BI_ASK_BOT_NUM;
+            }
+            else //if tried 5 times give error and go to error state
+            {
+              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+              m_bi_state = BI_ERROR;
+              return true;
+            }
+            break;
+          case BI_DONE:
+            m_sm_state = SM_STOP;
+            break;
+          }
+        }
+        return false;
       }
 
       //! Main state machine
@@ -565,8 +674,14 @@ namespace Actuators
       {
         switch (m_sm_state)
         {
+        case SM_INIT:
+          if (m_bi_state == BI_DONE)
+          {
+            m_sm_state = SM_STOP;
+          }
+          break;
         case SM_STOP:
-          if (m_START_FL) // && !m_FULL_FL) check if it still goes to the next point or stops completely...
+          if (m_START_FL)
           {
             m_sm_state = SM_MOVING;
             war("SM: Moving");
@@ -602,7 +717,7 @@ namespace Actuators
             m_args.cpu_cmd = "";
             m_sm_state = SM_CLEANING;
             cmd_sent_count = 0;
-            m_parse->m_dorisState.msg_receipt = 0;
+            //m_parse->m_dorisState.msg_receipt = 0;
           }
           else if (/*m_parse->m_dorisState.msg_receipt == 0 &&*/ m_cmd_timer.overflow())
           {
@@ -623,7 +738,6 @@ namespace Actuators
 
         case SM_CLEANING:
           if (m_parse->m_dorisState.cleanState == CLEANING_DONE)
-          //if (strcmp(m_args.cpu_cmd.c_str(), "CLEANED") == 0)
           {
             war("SM: Cleaning done.");
             //temporary
@@ -643,16 +757,15 @@ namespace Actuators
 
         case SM_SAMPLE:
           if (m_parse->m_dorisState.sampleState == SAMPLING_PUMP || m_parse->m_dorisState.sampleState == SAMPLING_DISC)
-          //if (strcmp(m_args.cpu_cmd.c_str(), "SAMPLING") == 0)
           {
             //temporary
             m_args.cpu_cmd = "";
             war("sampling");
             m_sm_state = SM_SAMPLING;
             cmd_sent_count = 0;
-            m_parse->m_dorisState.msg_receipt = 0;
+            //m_parse->m_dorisState.msg_receipt = 0;
           }
-          else if (/*m_parse->m_dorisState.msg_receipt == 0 &&*/ m_cmd_timer.overflow())
+          else if (m_cmd_timer.overflow())
           {
             if (cmd_sent_count < 5)
             {
@@ -671,7 +784,6 @@ namespace Actuators
 
         case SM_SAMPLING:
           if (m_parse->m_dorisState.sampleState == SAMPLING_DONE)
-          //if (strcmp(m_args.cpu_cmd.c_str(), "SAMPLED") == 0)
           {
             war("SM: Sample done");
             //temporary
@@ -681,7 +793,7 @@ namespace Actuators
             m_bottle_count++;
             m_total_nr_of_bottles++;
           }
-          else if (m_parse->m_dorisState.sampleState == SAMPLING_FAIL) /*if (strcmp(m_args.cpu_cmd.c_str(), "SAMPLE FAILED") == 0) */
+          else if (m_parse->m_dorisState.sampleState == SAMPLING_FAILED)
           {
             war("SM: Sample failed");
             //temporary
@@ -692,28 +804,28 @@ namespace Actuators
           break;
 
         case SM_SAMPLING_DONE:
-          // update logBook with sampled bottle info
-          //dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_OK);
+          //update logBook with sampled bottle info
+          dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_OK);
           war("bottle_count: %d | nr_bottles_to_sample: %d\ntotal_nr_of_bottles: %d | max_bottles: %d", m_bottle_count, m_args.nr_bottles_to_sample, m_total_nr_of_bottles, m_args.max_bottles);
           // check what to do next
+          if (m_total_nr_of_bottles > m_args.max_bottles)
+          {
+            m_sm_state = SM_FULL;
+          }
           if (m_bottle_count < m_args.nr_bottles_to_sample)
           {
             m_sm_state = SM_SAMPLE;
-            war("SM: Sampl another bottle");
+            war("SM: Sample another bottle");
           }
           else if (m_bottle_count >= m_args.nr_bottles_to_sample)
           {
             m_sm_state = SM_MANEUVER_DONE;
           }
-          if (m_total_nr_of_bottles > m_args.max_bottles)
-          {
-            m_sm_state = SM_FULL;
-          }
           break;
 
         case SM_SAMPLING_FAILED:
           // update logBook with failed sample info
-          dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_FAILED);
+          dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_FAIL);
           // check what to do next
           if (m_total_nr_of_bottles >= m_args.max_bottles)
           {
@@ -746,7 +858,7 @@ namespace Actuators
       void
       checkNewBottleData(void)
       {
-        if (m_parse->m_dorisState.Bottles->newData)
+        if (m_parse->m_dorisState.bottles->newData)
         {
           dispatchBottleInfo(m_total_nr_of_bottles, "OK");
           m_parse->clear_flags();
@@ -761,46 +873,42 @@ namespace Actuators
         {
           if (!m_args.is_master_mode)
           {
-            //m_fail_uart = 0;
-
-            //while (m_fail_uart < 4)
-            //{
-            //Check for serial commands
-            if (m_poll.poll(0.2))
+            if (m_sm_state == SM_INIT)
             {
-              if (checkSerialPort())
+              if (initBoard())
               {
-                if (m_parse->translate())
-                {
-                  /*if (m_parse->m_dorisState.Bottles->newData == 1)
-                    {
-                      war("I: %d, %d, %d, %.2f, %.2f, %.1f, %.1f, %.1f\nS: %d, %d, %d\nMessage: %s",
-                          m_parse->m_dorisState.Bottles->id,
-                          m_parse->m_dorisState.Bottles->waterIn,
-                          m_parse->m_dorisState.Bottles->bottleStatus,
-                          m_parse->m_dorisState.Bottles->lat,
-                          m_parse->m_dorisState.Bottles->lon,
-                          m_parse->m_dorisState.Bottles->temp,
-                          m_parse->m_dorisState.Bottles->windSpd,
-                          m_parse->m_dorisState.Bottles->windDir,
-                          m_parse->m_dorisState.states[0],
-                          m_parse->m_dorisState.states[1],
-                          m_parse->m_dorisState.states[2],
-                          m_parse->m_dorisState.debug_msg);
-                      m_parse->clear_flag();
-                    }*/
-                }
+                m_bi_state = BI_START;
+                setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+                throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
               }
             }
-            //else
-            //{
-            //  m_fail_uart++;
-            //}
 
-            updateCpuCommand();
+            //Check for serial commands and parse them.
+            if (m_poll.poll(0.2))
+            {
+              if (hasNewData())
+              {
+                m_parse->translate();
+              }
+            }
 
-            updateStateMachine();
-            checkNewBottleData();
+            //Check if firmware pinged back.
+            if (m_parse->m_fw_wdog.overflow())
+            {
+              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+            }
+            else if (m_pinger.overflow())
+            {
+              sendCommand(CMD_PING);
+              m_pinger.reset();
+            }
+
+            //Check if new manual command is available.
+            //updateCpuCommand();
+
+            //Update state machines.
+            //updateStateMachine();
           }
 
           waitForMessages(1.0);
