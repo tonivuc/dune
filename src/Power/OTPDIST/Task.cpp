@@ -43,10 +43,12 @@ namespace Power
 
     static const float c_delay_startup = 4.0f;
     static const uint8_t c_max_channels = 18;
+    static const uint8_t c_max_power_info = 18;
     static const uint8_t c_max_leak_inputs = 4;
     static const uint8_t c_channel_offset_id = 0x30;
     static const std::string c_nc_channels = "NC/";
     static const std::string c_inv_channels = "INV/";
+    static const float c_delay_single_frame_read = 1.0f;
 
     struct Arguments
     {
@@ -100,6 +102,10 @@ namespace Power
       bool m_pwr_down;
       //! Flag to control message PowerDown
       bool m_send_power_down;
+      //! Voltage messages
+      IMC::Voltage m_volt[c_max_power_info];
+      //! Current messages
+      IMC::Current m_amp[c_max_power_info];
 
       //! Constructor.
       //! @param[in] name task name.
@@ -317,7 +323,8 @@ namespace Power
             }
             else
             {
-              m_args.channels_states[ch] = msg->op;
+              debug("Setting state of %s | %d | %d", m_args.channels_names[ch].c_str(), ch, m_args.channels_states[ch]);
+              m_args.channels_states[ch] = (bool)msg->op;
               IMC::PowerChannelState msgPo;
               msgPo.name = m_args.channels_names[ch];
               msgPo.state = msg->op;
@@ -675,7 +682,10 @@ namespace Power
           }
 
           //TO remove- only for test
-          m_wdog_com.reset();
+          //m_wdog_com.reset();
+
+          //if (!Poll::poll(*m_uart, 0.001))
+          //  continue;
 
           if(m_driver->haveNewData())
           {

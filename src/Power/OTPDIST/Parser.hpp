@@ -78,19 +78,33 @@ namespace Power
           //spewArray(data_in, data_in_size);
           if(data_in_size >= 3)
           {
+            //m_task->spew("data in: %d", data_in_size);
+            //spewArray(data_in, data_in_size);
             if(data_in[0] == OTP_PREAMBLE)
             {
               if(data_in[1] == OTP_VERSION)
               {
                 int data_payload_size = data_in[2];
+                char byte_data_version[64];
                 std::ostringstream firmware_version_decode;
                 for(u_int8_t i = 3; i < data_payload_size + 3; i++)
                 {
                   firmware_version_decode << data_in[i];
+                  byte_data_version[i-3] = data_in[i];
                 }
-                m_otpdistData.firm_version = firmware_version_decode.str();
-                m_task->debug("Parser:Version: %s", m_otpdistData.firm_version.c_str());
-                return true;
+                uint8_t csum_rec = data_in[data_payload_size + 3];
+                uint8_t csum_calc = calcCRC8(byte_data_version, data_payload_size);
+                if(csum_calc == csum_rec)
+                {
+                  m_otpdistData.firm_version = firmware_version_decode.str();
+                  m_task->debug("Parser:Version: %s", m_otpdistData.firm_version.c_str());
+                  return true;
+                }
+                else
+                {
+                  m_task->war("Parser:Version:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
+                  return false;
+                }
               }
               else if(data_in[1] == OTP_SET_PO_STATE)
               {
@@ -123,15 +137,70 @@ namespace Power
               }
               else if(data_in[1] == OTP_POWER_DATA)
               {
-                uint8_t channel = data_in[2];
-                uint8_t b_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
-                uint8_t b_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
-                float v, c;
-                std::memcpy(&v, &b_v, sizeof(v));
-                std::memcpy(&c, &b_c, sizeof(c));
-                m_task->spew("POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30, v, c);
-                return true;
+                if(data_in[2] != PO_CH8)
+                {
+                  uint8_t csum_rec = data_in[11];
+                  uint8_t csum_calc = calcCRC8((char*)data_in, 11);
+                  if(csum_rec == csum_calc)
+                  {
+                    uint8_t channel = data_in[2];
+                    uint8_t b_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
+                    uint8_t b_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
+                    float v, c;
+                    std::memcpy(&v, &b_v, sizeof(v));
+                    std::memcpy(&c, &b_c, sizeof(c));
+                    m_task->spew("POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30, v, c);
+                    return true;
+                  }
+                  else
+                  {
+                    m_task->debug("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
+                    return false;
+                  }
+                }
+                else
+                {
+                  //TODO verificar valores enviados
+                  uint8_t csum_rec = data_in[35];
+                  uint8_t csum_calc = calcCRC8((char*)data_in, 35);
+                  if(csum_rec == csum_calc)
+                  {
+                    uint8_t s1_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
+                    uint8_t s1_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
+                    uint8_t s2_v[] = {data_in[11], data_in[12], data_in[13], data_in[14]};
+                    uint8_t s2_c[] = {data_in[15], data_in[16], data_in[17], data_in[18]};
+                    uint8_t s3_v[] = {data_in[19], data_in[20], data_in[21], data_in[22]};
+                    uint8_t s3_c[] = {data_in[23], data_in[24], data_in[25], data_in[26]};
+                    uint8_t s4_v[] = {data_in[27], data_in[28], data_in[29], data_in[30]};
+                    uint8_t s4_c[] = {data_in[31], data_in[32], data_in[33], data_in[34]};
+                    float v1, c1, v2, c2, v3, c3, v4, c4;
+                    std::memcpy(&v1, &s1_v, sizeof(v1));
+                    std::memcpy(&c1, &s1_c, sizeof(c1));
+                    std::memcpy(&v2, &s2_v, sizeof(v2));
+                    std::memcpy(&c2, &s2_c, sizeof(c2));
+                    std::memcpy(&v3, &s3_v, sizeof(v3));
+                    std::memcpy(&c3, &s3_c, sizeof(c3));
+                    std::memcpy(&v4, &s4_v, sizeof(v4));
+                    std::memcpy(&c4, &s4_c, sizeof(c4));
+                    m_task->spew("POWER: channel: %d : SERVO 1, %f (v) | %f (mA)", PO_CH8 - 0x30, v1, c1);
+                    m_task->spew("POWER: channel: %d : SERVO 2, %f (v) | %f (mA)", PO_CH8 - 0x30, v2, c2);
+                    m_task->spew("POWER: channel: %d : SERVO 3, %f (v) | %f (mA)", PO_CH8 - 0x30, v3, c3);
+                    m_task->spew("POWER: channel: %d : SERVO 4, %f (v) | %f (mA)", PO_CH8 - 0x30, v4, c4);
+                    return true;
+                  }
+                  else
+                  {
+                    m_task->debug("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
+                    return false;
+                  }
+                }
               }
+              /*else
+              {
+                m_task->spew("data in: %d", data_in_size);
+                spewArray(data_in, data_in_size);
+                return false;
+              }*/
             }
           }
           return false;
@@ -176,6 +245,19 @@ namespace Power
             return true;
           }
           return false;
+        }
+
+        uint8_t
+        calcCRC8(char *data_in, uint8_t data_size)
+        {
+          uint8_t csum = 0x00;
+          uint8_t t = 0;
+          while(t < data_size)
+          {
+            csum ^= data_in[t];
+            t++;
+          }
+          return (csum | 0x80);
         }
 
         OTPDISTData m_otpdistData;

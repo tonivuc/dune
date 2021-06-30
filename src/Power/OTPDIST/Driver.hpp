@@ -147,7 +147,7 @@ namespace Power
         cmd_line[1] = OTP_STOP_ACQUISITION;
         cmd_line[2] = OTP_TERMINATOR;
         cmd_line[3] = '\0';
-        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        m_task->debug("Driver:stopAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
         return sendCommand(cmd_line);
       }
 
@@ -172,7 +172,7 @@ namespace Power
         u_int8_t final_message[256];
         m_uart->flush();
         m_uart->writeString((char*)data);
-        m_wdog_com.setTop(m_timeout_uart*5);
+        m_wdog_com.setTop(m_timeout_uart*2);
         m_wdog_com.reset();
         int rx_counter = 0;
         int cnt_message_part = 0;
