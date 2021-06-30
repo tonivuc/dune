@@ -92,6 +92,8 @@ namespace Power
       Counter<double> m_wdog_com;
       //! Watchdog for turn off board.
       Counter<double> m_wdog_off;
+      //! Watchdog for getting single read frame.
+      Counter<double> m_wdog_single_read;
       //! Count for attempts
       int m_count_attempts;
       //! Power down is in progress.
@@ -435,8 +437,8 @@ namespace Power
         debug("Init and Start OK");
         m_wdog_com.setTop(m_args.input_timeout);
         m_wdog_com.reset();
-        debug("Sending start acquisition to OTPDIST");
-        m_driver->startAcquisition();
+        m_wdog_single_read.setTop(c_delay_single_frame_read);
+        m_wdog_single_read.reset();
       }
 
       //! Set Leak status.
@@ -648,8 +650,13 @@ namespace Power
       {
         while (!stopping())
         {
-          waitForMessages(0.01);
-
+          waitForMessages(0.001);
+          if(m_wdog_single_read.overflow())
+          {
+            debug("Getting single acquisition of OTPDIST");
+            m_driver->getSingleAcquisition();
+            m_wdog_single_read.reset();
+          }
           if (m_wdog_com.overflow())
           {
             if (m_count_attempts >= m_args.number_attempts)

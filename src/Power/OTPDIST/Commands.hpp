@@ -41,60 +41,62 @@
 //! Bytes Decode
 enum DecodeData
 {
-  OTP_PREAMBLE          = 0x2C,
-  OTP_TERMINATOR        = 0x0A,
-  OTP_RESET             = 0x60,
-  OTP_ACK               = 0x61,
-  OTP_NACK              = 0x62,
-  OTP_VERSION           = 0x50,
-  OTP_SET_PO_STATE      = 0x51,
-  OTP_GET_PO_STATE      = 0x52,
-  OTP_TURN_ON           = 0x1D,
-  OTP_TURN_OFF          = 0x1E,
-  OTP_LEAK              = 0x1F,
-  OTP_SWITCH_ON         = 0x63,
-  OTP_SWITCH_OFF        = 0x64,
-  OTP_START_ACQUISITION = 0x65,
-  OTP_STOP_ACQUISITION  = 0x66
+  OTP_PREAMBLE            = 0x2C,
+  OTP_TERMINATOR          = 0x0A,
+  OTP_RESET               = 0x60,
+  OTP_ACK                 = 0x61,
+  OTP_NACK                = 0x62,
+  OTP_VERSION             = 0x50,
+  OTP_SET_PO_STATE        = 0x51,
+  OTP_GET_PO_STATE        = 0x52,
+  OTP_TURN_ON             = 0x1D,
+  OTP_TURN_OFF            = 0x1E,
+  OTP_LEAK                = 0x1F,
+  OTP_SWITCH_ON           = 0x63,
+  OTP_SWITCH_OFF          = 0x64,
+  OTP_START_ACQUISITION   = 0x65,
+  OTP_STOP_ACQUISITION    = 0x66,
+  OTP_POWER_DATA          = 0x67,
+  OTP_SINGLE_ACQUISITION  = 0x68
 };
 
 //! Power channels
 enum PowerChannels
 {
-  PO_CH1   = 0x30,
-  PO_CH2   = 0x31,
-  PO_CH3   = 0x32,
-  PO_CH4   = 0x33,
-  PO_CH5   = 0x34,
-  PO_CH6   = 0x35,
-  PO_CH7   = 0x36,
-  PO_CH8   = 0x37,
-  PO_CH9   = 0x38,
-  PO_CH10  = 0x39,
-  PO_CH11  = 0x3A,
-  PO_CH12  = 0x3B,
-  PO_CH13  = 0x3C,
-  PO_CH14  = 0x3D,
-  PO_CH15  = 0x3E,
-  PO_CH16  = 0x3F,
-  PO_CH17  = 0x40,
-  PO_CH18  = 0x41
+  PO_CH1                = 0x30,
+  PO_CH2                = 0x31,
+  PO_CH3                = 0x32,
+  PO_CH4                = 0x33,
+  PO_CH5                = 0x34,
+  PO_CH6                = 0x35,
+  PO_CH7                = 0x36,
+  PO_CH8                = 0x37,
+  PO_CH9                = 0x38,
+  PO_CH10               = 0x39,
+  PO_CH11               = 0x3A,
+  PO_CH12               = 0x3B,
+  PO_CH13               = 0x3C,
+  PO_CH14               = 0x3D,
+  PO_CH15               = 0x3E,
+  PO_CH16               = 0x3F,
+  PO_CH17               = 0x40,
+  PO_CH18               = 0x41
 };
 
 //! Leaks Identifiers
 enum LeaksIds
 {
-  LEAK_1   = 0x20,
-  LEAK_2   = 0x21,
-  LEAK_3   = 0x22,
-  LEAK_4   = 0x23
+  LEAK_1                = 0x20,
+  LEAK_2                = 0x21,
+  LEAK_3                = 0x22,
+  LEAK_4                = 0x23
 };
 
 //! Leaks status
 enum LeakStatus
 {
-  LEAK_ON   = 0x53,
-  LEAK_OFF  = 0x54
+  LEAK_ON               = 0x53,
+  LEAK_OFF              = 0x54
 };
 
 #endif /* POWER_OTPDIST_COMMANDS_HPP_INCLUDED_ */

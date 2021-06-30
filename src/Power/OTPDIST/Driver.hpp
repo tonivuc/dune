@@ -128,6 +128,18 @@ namespace Power
       }
 
       bool
+      getSingleAcquisition(void)
+      {
+        u_int8_t cmd_line[8];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_SINGLE_ACQUISITION;
+        cmd_line[2] = OTP_TERMINATOR;
+        cmd_line[3] = '\0';
+        m_task->debug("Driver:getSingleAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        return sendCommand(cmd_line);
+      }
+
+      bool
       stopAcquisition(void)
       {
         u_int8_t cmd_line[8];
@@ -160,7 +172,7 @@ namespace Power
         u_int8_t final_message[256];
         m_uart->flush();
         m_uart->writeString((char*)data);
-        m_wdog_com.setTop(m_timeout_uart*10);
+        m_wdog_com.setTop(m_timeout_uart*5);
         m_wdog_com.reset();
         int rx_counter = 0;
         int cnt_message_part = 0;
@@ -194,7 +206,7 @@ namespace Power
         int cnt_message_part = 0;
         while (!m_wdog_com.overflow())
         {
-          if (Poll::poll(*m_uart, m_timeout_uart))
+          if (Poll::poll(*m_uart, 0.001))
           {
             int data_received = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
             cnt_message_part = 0;

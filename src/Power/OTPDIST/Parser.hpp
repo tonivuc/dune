@@ -121,6 +121,17 @@ namespace Power
                 m_otpdistData.switch_on = false;
                 return true;
               }
+              else if(data_in[1] == OTP_POWER_DATA)
+              {
+                uint8_t channel = data_in[2];
+                uint8_t b_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
+                uint8_t b_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
+                float v, c;
+                std::memcpy(&v, &b_v, sizeof(v));
+                std::memcpy(&c, &b_c, sizeof(c));
+                m_task->spew("POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30, v, c);
+                return true;
+              }
             }
           }
           return false;
