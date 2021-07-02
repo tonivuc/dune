@@ -50,6 +50,15 @@ namespace Power
     class ParserOTPDIST
     {
       public:
+        struct OTPDISTPowerData
+        {
+          //! Voltage
+          float voltage;
+          //! Current
+          float current;
+          //! New data input
+          bool new_data;
+        };
         struct OTPDISTData
         {
           //! Firmware version
@@ -58,6 +67,8 @@ namespace Power
           bool leak_states[4];
           //! State of Switch
           bool switch_on;
+          //! Storage for power data received
+          struct OTPDISTPowerData power_data[18];
         };
 
         ParserOTPDIST(DUNE::Tasks::Task* task):
@@ -150,6 +161,9 @@ namespace Power
                     std::memcpy(&v, &b_v, sizeof(v));
                     std::memcpy(&c, &b_c, sizeof(c));
                     m_task->spew("POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30, v, c);
+                    m_otpdistData.power_data[(channel - 0x30)].voltage = v;
+                    m_otpdistData.power_data[(channel - 0x30)].current = c;
+                    m_otpdistData.power_data[(channel - 0x30)].new_data = true;
                     return true;
                   }
                   else
@@ -160,7 +174,6 @@ namespace Power
                 }
                 else
                 {
-                  //TODO verificar valores enviados
                   uint8_t csum_rec = data_in[35];
                   uint8_t csum_calc = calcCRC8((char*)data_in, 35);
                   if(csum_rec == csum_calc)
@@ -245,6 +258,19 @@ namespace Power
             return true;
           }
           return false;
+        }
+
+        bool
+        newPowerInfo(uint8_t channel)
+        {
+          return m_otpdistData.power_data[channel].new_data;
+        }
+
+        void
+        getDataPower(uint8_t channel, float* voltage, float* current)
+        {
+          voltage[0] = m_otpdistData.power_data[channel].voltage;
+          current[0] = m_otpdistData.power_data[channel].current;
         }
 
         uint8_t

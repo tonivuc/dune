@@ -106,6 +106,8 @@ namespace Power
       IMC::Voltage m_volt[c_max_power_info];
       //! Current messages
       IMC::Current m_amp[c_max_power_info];
+      //! Read timestamp.
+      double m_tstamp;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -115,14 +117,17 @@ namespace Power
         m_uart(NULL),
         m_driver(0),
         m_pwr_down(false),
-        m_send_power_down(false)
+        m_send_power_down(false),
+        m_tstamp(0)
       {
         param("Serial Port - Device", m_args.uart_dev)
         .defaultValue("")
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Serial port device used to communicate with the sensor");
 
         param("Serial Port - Baud Rate", m_args.uart_baud)
         .defaultValue("38400")
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Serial port baud rate");
 
         param("Input Timeout", m_args.input_timeout)
@@ -130,6 +135,7 @@ namespace Power
         .minimumValue("2.0")
         .maximumValue("4.0")
         .units(Units::Second)
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Amount of seconds to wait for data before reporting an error");
 
         param("Delay Before Turn Off", m_args.delay_turn_off)
@@ -137,16 +143,19 @@ namespace Power
         .minimumValue("10")
         .maximumValue("60")
         .units(Units::Second)
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Amount of seconds to wait before turn off OTPDIST.");
 
         param("Number of attempts before error", m_args.number_attempts)
         .defaultValue("5")
         .minimumValue("1")
         .maximumValue("10")
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Number of attempts before error.");
 
         param("Channel Main Name", m_args.pwr_main)
         .defaultValue("System")
+        .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Name of the power channel that controls the system power");
 
         // Extract name and state of channels
@@ -184,19 +193,14 @@ namespace Power
       void
       onEntityReservation(void)
       {
-        /*for (uint8_t i = 0; i < m_args.number_cell; ++i)
+        for (uint8_t i = 0; i < c_max_power_info; ++i)
         {
-
-          if (m_args.cell_elabels[i].empty())
+          if (m_args.channels_names[i].empty())
             continue;
 
-          m_volt[i + 1].setSourceEntity(getEid(m_args.cell_elabels[i]));
+          m_volt[i].setSourceEntity(getEid(m_args.channels_names[i]));
+          m_amp[i].setSourceEntity(getEid(m_args.channels_names[i]));
         }
-
-        m_bat_volt.setSourceEntity(getEid("Batteries"));
-        m_amp[1].setSourceEntity(getEid(m_args.rcap_elabel));
-        m_amp[2].setSourceEntity(getEid(m_args.fcap_elabel));*/
-
         // Initialize leak messages.
         for (unsigned i = 0; i < c_max_leak_inputs; ++i)
         {
@@ -210,6 +214,25 @@ namespace Power
       void
       onUpdateParameters(void)
       {
+        if(m_driver == NULL)
+          return;
+
+        for(int i = 0; i < c_max_channels; i++)
+        {
+          if(paramChanged(m_args.channels_states[i]))
+          {
+            war("Power state id %d change to %d", i, m_args.channels_states[i]);
+            uint8_t state_channel;
+            if(m_args.channels_states[i])
+              state_channel = OTP_TURN_ON;
+            else
+              state_channel = OTP_TURN_OFF;
+            if (!m_driver->setPowerChannelState(i + c_channel_offset_id, state_channel))
+            {
+              war("Fail setting power channel state : %d", i + 1);
+            }
+          }
+        }
       }
 
       unsigned
@@ -483,6 +506,20 @@ namespace Power
       void
       dispatchData(void)
       {
+        float voltage, current;
+        for(uint8_t i = 0; i < c_max_power_info; i++)
+        {
+          if(m_parser->newPowerInfo(i))
+          {
+            m_parser->getDataPower(i, &voltage, &current);
+            m_volt[i].setTimeStamp(m_tstamp);
+            m_volt[i].value = voltage;
+            dispatch(m_volt[i], DF_KEEP_TIME);
+            m_amp[i].setTimeStamp(m_tstamp);
+            m_amp[i].value = current/1000.0f;
+            dispatch(m_amp[i], DF_KEEP_TIME);
+          }
+        }
         /*m_driver->resetStateNewData();
 
         m_volt[0].setTimeStamp(m_tstamp);
@@ -658,6 +695,7 @@ namespace Power
         while (!stopping())
         {
           waitForMessages(0.001);
+          dispatchData();
           if(m_wdog_single_read.overflow())
           {
             debug("Getting single acquisition of OTPDIST");
@@ -689,9 +727,8 @@ namespace Power
 
           if(m_driver->haveNewData())
           {
+            m_tstamp = Clock::getSinceEpoch();
             checkInternalSensors();
-            //m_tstamp = Clock::getSinceEpoch();
-            dispatchData();
             m_count_attempts = 0;
             m_wdog_com.reset();
           }
