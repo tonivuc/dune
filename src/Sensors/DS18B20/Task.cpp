@@ -78,7 +78,7 @@ namespace Sensors
             .description("Task execution frequency.");
 
         param("File", m_args.filename)
-            .defaultValue("~/../sys/devices/w1_bus_master1/28-031097940cb6/w1_slave")
+            .defaultValue("/sys/bus/w1/devices/28-031097940cb6/w1_slave")
             .description("Path to the file containg the 1-wire sensor's data.");
 
         //setFrequency(0.1);
@@ -153,6 +153,10 @@ namespace Sensors
                 war("temperature:%.2f*", m_temp.value);
                 dispatch(m_temp, DF_LOOP_BACK);
               }
+            }
+            else
+            {
+              throw RestartNeeded("Error opening w1 file.", 10);
             }
 
             m_file.close();
