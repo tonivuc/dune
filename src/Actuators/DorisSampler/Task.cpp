@@ -236,6 +236,8 @@ namespace Actuators
       IMC::EstimatedState m_estate;
       //! WASAB's Pinger.
       Time::Counter<double> m_pinger;
+      //! Samples Storage Box Internal Temperature
+      uint8_t m_box_in_temp;
       //! Task arguments
       Arguments m_args;
 
@@ -296,6 +298,7 @@ namespace Actuators
         bind<IMC::PathControlState>(this);
         bind<IMC::EstimatedState>(this);
         bind<IMC::VehicleState>(this);
+        bind<IMC::Temperature>(this);
         //bind<IMC::LogBookEntry>(this);
       }
 
@@ -447,6 +450,8 @@ namespace Actuators
         return false;
       }
 
+
+
       void
       consume(const IMC::PathControlState *pcs)
       {
@@ -485,6 +490,16 @@ namespace Actuators
               //war("Maneuver stopped\nSend abort command");
             }
           }
+        }
+      }
+
+      void
+      consume(const IMC::Temperature *msg)
+      {
+        if (!m_args.is_master_mode)
+        {
+          if (msg->value >= 30)
+            err("Temperature too high! Previous samples are invalid.")
         }
       }
 
