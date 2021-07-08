@@ -37,7 +37,7 @@
 //! IMC version string.
 #define DUNE_IMC_CONST_VERSION "5.4.11"
 //! Git repository information.
-#define DUNE_IMC_CONST_GIT_INFO "2020-12-18 6704886  (HEAD -> feature/pointcam, origin/feature/pointcam)"
+#define DUNE_IMC_CONST_GIT_INFO "2021-05-06 8a5b888  (HEAD -> master, origin/master, origin/HEAD)"
 //! MD5 sum of XML specification file.
 #define DUNE_IMC_CONST_MD5 "5563261871977bdb0b45e3d1e53b575b"
 //! Synchronization number.
