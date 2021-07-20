@@ -760,6 +760,7 @@ namespace DUNE
     void
     BasicNavigation::consume(const IMC::UsblFixExtended* msg)
     {
+      inf("Got fix from %s", msg->target.c_str());
       if (msg->target != getSystemName())
         return;
 
