@@ -162,12 +162,10 @@ namespace Actuators
 
     struct Arguments
     {
-      //! Master Name.
-      std::string master_name;
-      //! Slave Cam Name.
-      std::string slave_name;
-      //! Load task in mode master
-      bool is_master_mode;
+      //! Entity that provides Storage Box's Internal Temperature
+      std::string in_temp_eid;
+      //! Entity that provides Outside Temperature
+      std::string out_temp_eid;
       //! Serial port device.
       std::string uart_dev;
       //! Serial port baud rate.
@@ -184,6 +182,8 @@ namespace Actuators
 
     struct Task : public DUNE::Tasks::Task
     {
+      //! Master name
+      std::string m_master_name;
       //! Serial port handle.
       SerialPort *m_uart;
       //! count for fail rx uartm_args.cpu_cmd
@@ -237,31 +237,40 @@ namespace Actuators
       //! WASAB's Pinger.
       Time::Counter<double> m_pinger;
       //! Samples Storage Box Internal Temperature
-      uint8_t m_box_in_temp;
+      uint8_t m_in_box_temp;
+      //! Air Temperature
+      uint8_t m_air_temp;
+      //! Air Humidity
+      uint8_t m_air_humidity;
+      //! Outside Temperature Entity eid
+      int m_out_temp_eid;
+      //! Inside Temperature Entity eid
+      int m_in_temp_eid;
+      //! Wind Speed
+      uint8_t m_wind_spd;
+      //! Wind Direction
+      uint16_t m_wind_dir;
       //! Task arguments
       Arguments m_args;
 
       //! Constructor.
       //! @param[in] name task name.
       //! @param[in] ctx context.
-      Task(const std::string &name, Tasks::Context &ctx) : 
-        DUNE::Tasks::Task(name, ctx),
-        m_uart(NULL),
-        //update_cmd_FL(false),
-        m_FULL_FL(false),
-        m_sm_state(SM_STOP),
-        m_total_nr_of_bottles(0),
-        cmd_sent_count(0),
-        m_RUN_FL(false)
+      Task(const std::string &name, Tasks::Context &ctx) : DUNE::Tasks::Task(name, ctx),
+                                                           m_master_name("otter"),
+                                                           m_uart(NULL),
+                                                           //update_cmd_FL(false),
+                                                           m_FULL_FL(false),
+                                                           m_sm_state(SM_STOP),
+                                                           m_total_nr_of_bottles(0),
+                                                           cmd_sent_count(0),
+                                                           m_RUN_FL(false)
       {
-        param("Master Name", m_args.master_name)
-            .description("Master Name.");
+        param("Entity Label - Outside Temperature", m_args.out_temp_eid)
+            .description("Entity label of 'Outside Temperature' messages");
 
-        param("Master Mode", m_args.is_master_mode)
-            .description("Load task in master mode.");
-
-        param("Slave Name", m_args.slave_name)
-            .description("Slave Name.");
+        param("Entity Label - Inside Temperature", m_args.in_temp_eid)
+            .description("Entity label of 'Storage Box Internal Temperature' messages");
 
         param("Serial Port - Device", m_args.uart_dev)
             .defaultValue("/dev/ttyUSB0")
@@ -299,6 +308,8 @@ namespace Actuators
         bind<IMC::EstimatedState>(this);
         bind<IMC::VehicleState>(this);
         bind<IMC::Temperature>(this);
+        bind<IMC::RelativeHumidity>(this);
+        bind<IMC::WindSpeed>(this);
         //bind<IMC::LogBookEntry>(this);
       }
 
@@ -306,30 +317,27 @@ namespace Actuators
       void
       onUpdateParameters(void)
       {
-        if (!m_args.is_master_mode)
+        if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
         {
-          if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
-          {
-            m_START_FL = true;
-          }
+          m_START_FL = true;
+        }
 
-          /*if (paramChanged(m_args.cpu_cmd))
-          {
-            m_update_cmd_FL = true;
-            war("cpu cmd %s", m_args.cpu_cmd.c_str());
-          }*/
+        /*if (paramChanged(m_args.cpu_cmd))
+        {
+          m_update_cmd_FL = true;
+          war("cpu cmd %s", m_args.cpu_cmd.c_str());
+        }*/
 
-          //update nr of bottles to sample if changed
-          if (paramChanged(m_args.nr_bottles_to_sample))
-          {
-            m_nr_of_bottles_to_sample = m_args.nr_bottles_to_sample;
-          }
+        //update nr of bottles to sample if changed
+        if (paramChanged(m_args.nr_bottles_to_sample))
+        {
+          m_nr_of_bottles_to_sample = m_args.nr_bottles_to_sample;
+        }
 
-          //update type of sample if changed
-          if (paramChanged(m_args.type_of_sample))
-          {
-            m_type_of_sample = m_args.type_of_sample;
-          }
+        //update type of sample if changed
+        if (paramChanged(m_args.type_of_sample))
+        {
+          m_type_of_sample = m_args.type_of_sample;
         }
       }
 
@@ -343,27 +351,41 @@ namespace Actuators
       void
       onEntityResolution(void)
       {
+        try
+        {
+          m_in_temp_eid = resolveEntity(m_args.in_temp_eid);
+        }
+        catch (...)
+        {
+          m_in_temp_eid = 0;
+        }
+
+        try
+        {
+          m_out_temp_eid = resolveEntity(m_args.out_temp_eid);
+        }
+        catch (...)
+        {
+          m_out_temp_eid = 0;
+        }
       }
 
       //! Acquire resources.
       void
       onResourceAcquisition(void)
       {
-        if (!m_args.is_master_mode)
+        setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
+        try
         {
-          setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_INIT);
-          try
-          {
-            m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
-            m_uart->setCanonicalInput(true);
-            m_uart->flush();
-            m_fail_uart = 0;
-            m_poll.add(*m_uart);
-          }
-          catch (std::runtime_error &e)
-          {
-            throw RestartNeeded(e.what(), 10);
-          }
+          m_uart = new SerialPort(m_args.uart_dev, m_args.uart_baud);
+          m_uart->setCanonicalInput(true);
+          m_uart->flush();
+          m_fail_uart = 0;
+          m_poll.add(*m_uart);
+        }
+        catch (std::runtime_error &e)
+        {
+          throw RestartNeeded(e.what(), 10);
         }
       }
 
@@ -371,17 +393,14 @@ namespace Actuators
       void
       onResourceInitialization(void)
       {
-        if (!m_args.is_master_mode)
-        {
-          m_uart->flushInput();
-          m_uart->flush();
+        m_uart->flushInput();
+        m_uart->flush();
 
-          m_parse = new Parser(this);
+        m_parse = new Parser(this);
 
-          m_parse->set_wdog(WATCHDOG_TIME);
-          m_pinger.setTop(PING_INTERVAL);
-          m_cmd_timer.setTop(ANSWER_DELAY);
-        }
+        m_parse->set_wdog(WATCHDOG_TIME);
+        m_pinger.setTop(PING_INTERVAL);
+        m_cmd_timer.setTop(ANSWER_DELAY);
       }
 
       //! Release resources.
@@ -450,45 +469,34 @@ namespace Actuators
         return false;
       }
 
-
-
       void
       consume(const IMC::PathControlState *pcs)
       {
-        if (!m_args.is_master_mode)
+        if (pcs->flags & IMC::PathControlState::FL_NEAR)
         {
-          if (pcs->flags & IMC::PathControlState::FL_NEAR)
-          {
-            m_NEAR_FL = true;
-          }
+          m_NEAR_FL = true;
         }
       }
 
       void
       consume(const IMC::EstimatedState *msg)
       {
-        if (!m_args.is_master_mode)
-        {
-          if (m_args.master_name.compare(resolveSystemId(msg->getSource())) != 0)
-            return;
+        if (m_master_name.compare(resolveSystemId(msg->getSource())) != 0)
+          return;
 
-          m_estate = *msg;
-        }
+        m_estate = *msg;
       }
 
       void
       consume(const IMC::VehicleState *msg)
       {
-        if (!m_args.is_master_mode)
+        if (msg->op_mode != IMC::VehicleState::VS_MANEUVER && m_sm_state != SM_STOP && m_sm_state != SM_INIT)
         {
-          if (msg->op_mode != IMC::VehicleState::VS_MANEUVER && m_sm_state != SM_STOP && m_sm_state != SM_INIT)
+          if (!m_RUN_FL)
           {
-            if (!m_RUN_FL)
-            {
-              m_RUN_FL = true;
-              m_sm_state = SM_STOP;
-              //war("Maneuver stopped\nSend abort command");
-            }
+            m_RUN_FL = true;
+            m_sm_state = SM_STOP;
+            //war("Maneuver stopped\nSend abort command");
           }
         }
       }
@@ -496,53 +504,68 @@ namespace Actuators
       void
       consume(const IMC::Temperature *msg)
       {
-        if (!m_args.is_master_mode)
+        if (msg->getSourceEntity() == m_in_temp_eid)
         {
+          m_in_box_temp = msg->value;
           if (msg->value >= 30)
-            err("Temperature too high! Previous samples are invalid.")
+            err("Temperature too high! Previous samples are invalid.");
+        }
+
+        if (msg->getSourceEntity() == m_out_temp_eid)
+        {
+          m_air_temp = msg->value;
+        }
+      }
+
+      void
+      consume(const IMC::WindSpeed *msg)
+      {
+        if (msg->getSourceEntity() == m_out_temp_eid)
+        {
+          m_wind_dir = msg->direction;
+          m_wind_spd = msg->speed;
+        }
+      }
+
+      void
+      consume(const IMC::RelativeHumidity *msg)
+      {
+        if (msg->getSourceEntity() == m_out_temp_eid)
+        {
+          m_air_humidity = msg->value;
         }
       }
 
       //! Dispatch sample info
       void
-      dispatchBottleInfo(int bottleNum, std::string log_bottleStatus)
+      dispatchBottleInfo(int bottleNum, std::string bottleStatus)
       {
         //Get coordinates in degrees from the estimated estate
         double lat = Angles::degrees(m_estate.lat);
         double lon = Angles::degrees(m_estate.lon);
         war("lat: %f | lon: %f", lat, lon);
 
-        IMC::LogBookEntry log_entry;
-        // log book entry's type
-        log_entry.type = IMC::LogBookEntry::LBET_INFO;
-        // log book entry's htime
-        log_entry.htime = Time::Clock::getSinceEpoch();
-        // log book entry's context
-        std::ostringstream log_context;
-        log_context << "Bottle " << bottleNum << " info.";
-        log_entry.context = log_context.str();
+        uint32_t timestamp = Time::Clock::getSinceEpoch();
 
-        //Turn waterinput (type of sample) info into readable content !!THIS IS REDUNDANT, NOT SURE IF NECESSARY!!
-        std::ostringstream log_sampleType;
+        std::ostringstream sampleType;
         if (m_parse->m_dorisState.bottles->sampleType > 0)
         {
-          log_sampleType << "Surface";
+          sampleType << "Surface";
         }
         else if (m_parse->m_dorisState.bottles->sampleType <= 0)
         {
-          log_sampleType << "Deep";
+          sampleType << "Deep";
         }
 
-        // log book entry's text
-        std::ostringstream log_text;
-        log_text << "Status: " << log_bottleStatus << "\n Type of Sample: " << log_sampleType.str() << "\n Latitude: " << lat << "\n Longitude: " << lon << "\n Water Temperature: " << m_parse->m_dorisState.bottles->temp << "\n Wind Speed: " << 12.3 << "\n Wind Direction: " << 45.6;
-        log_entry.text = log_text.str();
+        std::ostringstream msg;
+        msg << "DORIS: Bottle " << bottleNum << ".\nStatus " << bottleStatus << "\nTimestamp " << timestamp << "\nType of Sample " << sampleType.str() << "\nLatitude " << lat << "\nLongitude " << lon << "\nWind Speed " << m_wind_spd << "\nWind Direction " << m_wind_dir << "\nAir Temperature " << m_air_temp << "\nAir Humidity " << m_air_humidity << "\n";
 
-        // war("%s", log_entry.text);
+        IMC::DevDataText bot_data_entry;
+        bot_data_entry.value = msg.str();
 
         Delay::wait(0.2);
 
-        dispatch(log_entry, DF_LOOP_BACK);
+        dispatch(bot_data_entry, DF_LOOP_BACK);
       }
 
       void
@@ -887,45 +910,42 @@ namespace Actuators
       {
         while (!stopping())
         {
-          if (!m_args.is_master_mode)
+          if (m_sm_state == SM_INIT)
           {
-            if (m_sm_state == SM_INIT)
+            if (initBoard())
             {
-              if (initBoard())
-              {
-                m_bi_state = BI_START;
-                setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-                throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
-              }
-            }
-
-            //Check for serial commands and parse them.
-            if (m_poll.poll(0.2))
-            {
-              if (hasNewData())
-              {
-                m_parse->translate();
-              }
-            }
-
-            //Check if firmware pinged back.
-            if (m_parse->m_fw_wdog.overflow())
-            {
+              m_bi_state = BI_START;
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
             }
-            else if (m_pinger.overflow())
-            {
-              sendCommand(CMD_PING);
-              m_pinger.reset();
-            }
-
-            //Check if new manual command is available.
-            //updateCpuCommand();
-
-            //Update state machines.
-            //updateStateMachine();
           }
+
+          //Check for serial commands and parse them.
+          if (m_poll.poll(0.2))
+          {
+            if (hasNewData())
+            {
+              m_parse->translate();
+            }
+          }
+
+          //Check if firmware pinged back.
+          if (m_parse->m_fw_wdog.overflow())
+          {
+            setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+            throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+          }
+          else if (m_pinger.overflow())
+          {
+            sendCommand(CMD_PING);
+            m_pinger.reset();
+          }
+
+          //Check if new manual command is available.
+          //updateCpuCommand();
+
+          //Update state machines.
+          //updateStateMachine();
 
           waitForMessages(1.0);
         }
