@@ -322,11 +322,11 @@ namespace Actuators
           m_START_FL = true;
         }
 
-        /*if (paramChanged(m_args.cpu_cmd))
+        if (paramChanged(m_args.cpu_cmd))
         {
           m_update_cmd_FL = true;
           war("cpu cmd %s", m_args.cpu_cmd.c_str());
-        }*/
+        }
 
         //update nr of bottles to sample if changed
         if (paramChanged(m_args.nr_bottles_to_sample))
@@ -415,7 +415,7 @@ namespace Actuators
       }
 
       //! Send manual command if available in neptus.
-      /*void
+      void
       updateCpuCommand(void)
       {
         if (m_update_cmd_FL)
@@ -430,7 +430,7 @@ namespace Actuators
 
           m_update_cmd_FL = false;
         }
-      }*/
+      }
 
       //! Read data sent by Doris Sampler.
       bool
