@@ -57,17 +57,6 @@ namespace Actuators
       //! WASAB's message receive confirmation
       uint8_t m_msg_receipt;
 
-      //! Bottles' data to be delivered after mission
-      struct bottleInfo
-      {
-        //! Water Sample Input Type
-        int sampleType;
-        //! Sampling Temperature
-        float temp;
-        //! New data available from sampler flag
-        int newData;
-      };
-
       //! Doris' Water Sampler data.
       struct DorisState
       {
@@ -75,12 +64,10 @@ namespace Actuators
         int cleanState;
         //! Sampling State Machine's State
         int sampleState;
-        //! Sampler Bottles Info
-        bottleInfo bottles[12];
         //! Firmware Version
         float fwVersion = 0;
         //! Total Number of Bottles Sampled
-        int totalNumberOfBottles = 0;
+        int totalNumberOfBottles = -1;
       };
 
       //! State machine states.
@@ -134,14 +121,15 @@ namespace Actuators
         case PS_CS:
           m_parser_state = PS_PREAMBLE;
           m_csum = Algorithms::XORChecksum::compute((uint8_t *)m_bfr, strlen(m_bfr) - 1, 0);
-          //m_task->war("byte: %c || csum: %c", byte, m_csum);
+          //m_task->spew("csum received: %c || csum calculated: %c", byte, m_csum);
           if (m_csum == byte)
           {
+            m_task->spew("csum ok");
             return true;
           }
           else
           {
-            m_task->war("csum fail");
+            m_task->spew("csum fail");
           }
           break;
 
@@ -157,15 +145,7 @@ namespace Actuators
       bool
       translate(void)
       {
-        if (m_bfr[0] == c_bottle_info)
-        {
-          std::sscanf(m_bfr, "%*c,%d,%f,%d%*s",
-                      &m_dorisState.bottles->sampleType,
-                      &m_dorisState.bottles->temp,
-                      &m_dorisState.bottles->newData);
-          return true;
-        }
-        else if (m_bfr[0] == c_clean_state)
+        if (m_bfr[0] == c_clean_state)
         {
           std::sscanf(m_bfr, "%*c,%d%*s", &m_dorisState.cleanState);
           return true;
@@ -196,12 +176,6 @@ namespace Actuators
           return true;
         }
         return false;
-      }
-
-      void
-      clear_flags(void)
-      {
-        m_dorisState.bottles->newData = 0;
       }
 
       void
