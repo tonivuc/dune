@@ -50,7 +50,6 @@ namespace Actuators
     class Parser
     {
     public:
-
       //! WASAB's watchdog.
       Time::Counter<double> m_fw_wdog;
 
@@ -60,14 +59,14 @@ namespace Actuators
       //! Doris' Water Sampler data.
       struct DorisState
       {
-        //! Cleaning State Machine's State
-        int cleanState;
-        //! Sampling State Machine's State
-        int sampleState;
         //! Firmware Version
         float fwVersion = 0;
         //! Total Number of Bottles Sampled
         int totalNumberOfBottles = -1;
+        //! Cleaning State Machine's State
+        int cleanState;
+        //! Sampling State Machine's State
+        int sampleState;
       };
 
       //! State machine states.
@@ -81,8 +80,7 @@ namespace Actuators
         PS_CS
       };
 
-      Parser(DUNE::Tasks::Task *task) : 
-                                        m_task(task),
+      Parser(DUNE::Tasks::Task *task) : m_task(task),
                                         m_parser_state(Parser::PS_PREAMBLE)
       {
       }
@@ -183,7 +181,7 @@ namespace Actuators
       {
         m_fw_wdog.setTop(val);
       }
-      
+
       //! Sampling system state.
       DorisState m_dorisState;
 

@@ -50,6 +50,8 @@
 #define CMD_CLEAN 'C'
 //! Get nr. of total bottles in firmware Cmd char
 #define CMD_GET_FW_BOT 'G'
+//! Send parameter's manual command
+#define CMD_MANUAL 'M'
 //! Ping firmware Cmd char
 #define CMD_PING 'P'
 //! Sample Cmd char
@@ -118,16 +120,14 @@ namespace Actuators
       BI_START,
       //! Ask FW's version
       BI_ASK_VERSION,
-      //! Get for FW's version state
+      //! Wait for/Get FW's version state
       BI_GET_VERSION,
       //! Ask total num of bottles in FW
       BI_ASK_BOT_NUM,
-      //! Get FW's total num of bottles
+      //! Wait for/Get FW's total num of bottles
       BI_GET_BOT_NUM,
       //! Init done state
-      BI_DONE,
-      //! No response from FW error/stopped state
-      BI_ERROR
+      BI_DONE
     };
 
     enum FwCleaningStateOptions
@@ -174,6 +174,8 @@ namespace Actuators
       unsigned uart_baud;
       //! Number of bottles to sample.
       uint8_t nr_bottles_to_sample;
+      //! Total bottle count
+      uint8_t total_nr_of_bottles;
       //! Type of sample.
       std::string type_of_sample;
       //! CPU Serial Command
@@ -206,8 +208,10 @@ namespace Actuators
       Poll m_poll;
       //! Serial loop timer
       uint8_t serial_timer;
-      //! Send new cmd flag
-      bool m_update_cmd_FL;
+      //! New manual cmd flag
+      bool m_manual_cmd_FL;
+      //! Set fw's total bottle number flag
+      bool m_set_bot_cmd_FL;
       //! PathController coordinate flag
       bool m_NEAR_FL;
       //! PathController coordinate flag
@@ -222,8 +226,6 @@ namespace Actuators
       uint8_t m_bottle_count;
       //! Number of bottles to sample in that maneuver
       uint8_t m_nr_of_bottles_to_sample;
-      //! Total bottle count
-      uint8_t m_total_nr_of_bottles;
       //! Type of sample
       std::string m_type_of_sample;
       //! Command send count
@@ -264,9 +266,8 @@ namespace Actuators
                                                            m_FULL_FL(false),
                                                            m_sm_state(SM_INIT),
                                                            m_bi_state(BI_START),
-                                                           m_total_nr_of_bottles(0),
                                                            cmd_sent_count(0),
-                                                           m_RUN_FL(false),
+                                                           m_RUN_FL(true),
                                                            m_in_box_temp(0),
                                                            m_air_temp(0),
                                                            m_air_humidity(0),
@@ -302,14 +303,20 @@ namespace Actuators
             .defaultValue("None")
             .description(DTR("Type of the required samples."));
 
-        param("Sampler - Max bottle capacity", m_args.max_bottles)
+        param("Sampler - Number of Bottles Used", m_args.total_nr_of_bottles)
+            .visibility(Tasks::Parameter::VISIBILITY_USER)
+            .scope(Tasks::Parameter::SCOPE_MANEUVER)
+            .defaultValue("0")
+            .description(DTR("Number of bottles already used by the sampler."));
+
+        param("Sampler - Max Capacity", m_args.max_bottles)
             .defaultValue("12")
             .description(DTR("Max number of bottles that the sampler carries."));
 
         param("Serial Manual Command", m_args.cpu_cmd)
-            .defaultValue("A")
+            .defaultValue("")
             .visibility(Tasks::Parameter::VISIBILITY_USER)
-            .description("Parameter input to manually test the firmware.");
+            .description("Parameter input to send manual commands to the firmware.");
 
         bind<IMC::PathControlState>(this);
         bind<IMC::EstimatedState>(this);
@@ -317,31 +324,38 @@ namespace Actuators
         bind<IMC::Temperature>(this);
         bind<IMC::RelativeHumidity>(this);
         bind<IMC::WindSpeed>(this);
-        //bind<IMC::LogBookEntry>(this);
+        bind<IMC::StopManeuver>(this);
       }
 
       //! Update internal state with new parameter values.
       void
       onUpdateParameters(void)
       {
-        if (m_sm_state == SM_STOP) //To make sure params don't change mid flight
+        // make sure that parameter don't change mid flight
+        if (m_sm_state == SM_STOP)
         {
           m_START_FL = true;
         }
 
+        // update command to be sent manually to WASAB
         if (paramChanged(m_args.cpu_cmd))
         {
-          m_update_cmd_FL = true;
-          war("cpu cmd %s", m_args.cpu_cmd.c_str());
+          m_manual_cmd_FL = true;
         }
 
-        //update nr of bottles to sample if changed
+        // set fw's total number of bottles
+        if (paramChanged(m_args.total_nr_of_bottles))
+        {
+          m_set_bot_cmd_FL = true;
+        }
+
+        // update nr of bottles to sample if changed
         if (paramChanged(m_args.nr_bottles_to_sample))
         {
           m_nr_of_bottles_to_sample = m_args.nr_bottles_to_sample;
         }
 
-        //update type of sample if changed
+        // update type of sample if changed
         if (paramChanged(m_args.type_of_sample))
         {
           m_type_of_sample = m_args.type_of_sample;
@@ -423,19 +437,18 @@ namespace Actuators
 
       //! Send manual command if available in neptus.
       void
-      updateCpuCommand(void)
+      updateCpuCommands(void)
       {
-        if (m_update_cmd_FL)
+        if (m_manual_cmd_FL)
         {
-          std::memset(&m_msg, '\0', sizeof(m_msg));
-          std::sprintf(m_msg, "$%s*", (char *)m_args.cpu_cmd.c_str());
-          m_csum[0] = Algorithms::XORChecksum::compute((uint8_t *)m_msg, strlen(m_msg) - 1, 0);
-          char fw_cmd[128];
-          sprintf(fw_cmd, "%s%c\r\n", m_msg, m_csum[0]);
-          m_uart->writeString(fw_cmd);
-          spew("Manual command sent >> %s", fw_cmd);
+          sendCommand(CMD_MANUAL);
+          m_manual_cmd_FL = false;
+        }
 
-          m_update_cmd_FL = false;
+        if (m_set_bot_cmd_FL)
+        {
+          sendCommand(CMD_SET_FW_BOT);
+          m_set_bot_cmd_FL = false;
         }
       }
 
@@ -497,13 +510,16 @@ namespace Actuators
       void
       consume(const IMC::VehicleState *msg)
       {
+        // if operation mode isn't MANEUVER and the vehicle is moving, stop it!
         if (msg->op_mode != IMC::VehicleState::VS_MANEUVER && m_sm_state != SM_STOP && m_sm_state != SM_INIT)
         {
-          if (!m_RUN_FL)
+          if (m_RUN_FL)
           {
-            m_RUN_FL = true;
+            m_RUN_FL = false;
             m_sm_state = SM_STOP;
-            //war("Maneuver stopped\nSend abort command");
+            debug("Vehicle left MANEUVER mode.");
+            debug("Stoping state machine.");
+            sendCommand(CMD_ABORT);
           }
         }
       }
@@ -543,7 +559,14 @@ namespace Actuators
         }
       }
 
-      //! Dispatch sample info
+      void
+      consume(const IMC::StopManeuver *msg)
+      {
+        (void)msg;
+        err("MANEUVER STOPPED!");
+      }
+
+      //! Dispatch Sample Information
       void
       dispatchBottleInfo(int bottleNum, std::string bottleStatus)
       {
@@ -568,108 +591,102 @@ namespace Actuators
       void
       sendCommand(char cmd)
       {
-        // prepare message string
         std::memset(&m_msg, '\0', sizeof(m_msg));
         switch (cmd)
         {
         case CMD_ABORT:
           std::sprintf(m_msg, "%c", cmd);
-          spew("ABORT cmd sent to WASAB.");
+          spew("ABORT sent to WASAB.");
           break;
         case CMD_SET_FW_BOT:
-          std::sprintf(m_msg, "%c,%d", cmd, m_total_nr_of_bottles);
-          spew("SET_FW_BOT cmd sent to WASAB.");
+          std::sprintf(m_msg, "%c,%d", cmd, m_args.total_nr_of_bottles);
+          spew("SET_FW_BOT (%d) sent to WASAB.", m_args.total_nr_of_bottles);
           break;
         case CMD_CLEAN:
           std::sprintf(m_msg, "%c", cmd);
-          spew("CLEAN cmd sent to WASAB.");
+          spew("CLEAN sent to WASAB.");
           break;
         case CMD_GET_FW_BOT:
           std::sprintf(m_msg, "%c", cmd);
-          spew("GET_FW_BOT cmd sent to WASAB.");
+          spew("GET_FW_BOT sent to WASAB.");
           break;
         case CMD_PING:
           std::sprintf(m_msg, "%c", cmd);
-          spew("PING cmd sent to WASAB.");
+          spew("PING sent to WASAB.");
           break;
         case CMD_SAMPLE:
-          int type_aux;
           if (std::strcmp(m_type_of_sample.c_str(), "Disc") == 0)
           {
-            type_aux = 0;
-            err("DISK");
-            spew("SAMPLE DISC cmd sent to WASAB.");
+            std::sprintf(m_msg, "%c,%d", cmd, 0);
+            spew("SAMPLE DISC sent to WASAB.");
           }
           else if (std::strcmp(m_type_of_sample.c_str(), "Pump") == 0)
           {
-            type_aux = 1;
-            err("PUMP");
-            spew("SAMPLE PUMP cmd sent to WASAB.");
+            std::sprintf(m_msg, "%c,%d", cmd, 1);
+            spew("SAMPLE PUMP sent to WASAB.");
           }
-          else
-          {
-            type_aux = 0;
-            err("ELSE");
-            spew("SAMPLE DISC cmd sent to WASAB.");
-          }
-          std::sprintf(m_msg, "%c,%d", cmd, type_aux);
           break;
         case CMD_VERSION:
           std::sprintf(m_msg, "%c", cmd);
-          spew("VERSION cmd sent to WASAB.");
+          spew("VERSION sent to WASAB.");
+          break;
+        case CMD_MANUAL:
+          std::sprintf(m_msg, "$%s*", (char *)m_args.cpu_cmd.c_str());
+          spew("%s (M) sent ro WASAB.", m_msg);
           break;
         }
-
         std::sprintf(m_msg, "%s*", m_msg);
         m_csum[0] = Algorithms::XORChecksum::compute((uint8_t *)m_msg, strlen(m_msg) - 1, 0);
         sprintf(m_cmd, "$%s%c\r\n", m_msg, m_csum[0]);
         m_parse->m_msg_receipt = 0;
         m_uart->writeString(m_cmd);
-        spew("Command sent >>>>> %s", m_cmd);
       }
 
+      //! Board Initiation State Machine
       bool
       initBoard()
       {
         switch (m_bi_state)
         {
+        // Initiation starting point
         case BI_START:
           setEntityState(IMC::EntityState::ESTA_BOOT, Status::CODE_SYNCING);
           m_bi_state = BI_ASK_VERSION;
-          trace("Board Init State = ASKING VERSION");
+          trace("BI State = ASKING VERSION");
           break;
 
+        // Ask WASAB's firmware version
         case BI_ASK_VERSION:
           sendCommand(CMD_VERSION);
           m_cmd_timer.reset();
           m_parse->m_dorisState.cleanState = 0;
           cmd_sent_count++;
           m_bi_state = BI_GET_VERSION;
-          trace("Board Init State = WAITING VERSION");
+          trace("BI State = WAITING VERSION");
           break;
 
+        // Wait until get WASAB's fw version
         case BI_GET_VERSION:
-          //if msg with fw's version received
+          //if msg with fw's version is received
           if (m_parse->m_msg_receipt == 1 && m_parse->m_dorisState.fwVersion != 0.0)
           {
             //reset vars, dispatch fw, move state
             m_parse->m_msg_receipt = 0;
             cmd_sent_count = 0;
-            trace("Board Init State = GOT VERSION");
+            trace("BI State = GOT VERSION");
             inf("WASAB fw v%.1f", m_parse->m_dorisState.fwVersion);
             m_bi_state = BI_ASK_BOT_NUM;
-            trace("Board Init State = ASKING BOTTLE NUMBER");
+            trace("BI State = ASKING BOTTLE NUMBER");
           }
           else if (m_cmd_timer.overflow()) //check if time to answer passed
           {
-            if (cmd_sent_count < 5)
+            if (cmd_sent_count < CMD_MAX_TRIES)
             {
               war("WASAB not answered version command: %d.", cmd_sent_count);
-              //resend command
               m_bi_state = BI_ASK_VERSION;
-              trace("Board Init State = ASKING VERSION");
+              trace("BI State = ASKING VERSION");
             }
-            else //if failed 5 times, give error and restart task
+            else
             {
               err("WASAB not answered %d DUNE commands.", CMD_MAX_TRIES);
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
@@ -678,45 +695,47 @@ namespace Actuators
             }
           }
           break;
+        // Ask WASAB's number of bottles used
         case BI_ASK_BOT_NUM:
           sendCommand(CMD_GET_FW_BOT);
           m_cmd_timer.reset();
           m_parse->m_msg_receipt = 0;
           cmd_sent_count++;
           m_bi_state = BI_GET_BOT_NUM;
-          trace("Board Init State = WAITING BOTTLE NUMBER");
+          trace("BI State = WAITING BOTTLE NUMBER");
           break;
+        // Wait until get WASAB's number of bottles used
         case BI_GET_BOT_NUM:
-          //if msg received
+          //if msg with total number of bottles is received
           if (m_parse->m_msg_receipt == 1 && m_parse->m_dorisState.totalNumberOfBottles != -1)
           {
             m_parse->m_msg_receipt = 0;
             cmd_sent_count = 0;
-            m_total_nr_of_bottles = m_parse->m_dorisState.totalNumberOfBottles;
+            m_args.total_nr_of_bottles = m_parse->m_dorisState.totalNumberOfBottles;
             inf("FW's nr of bottles = %d", m_parse->m_dorisState.totalNumberOfBottles);
             setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_SYNCHED);
             m_bi_state = BI_DONE;
-            trace("Board Init State = DONE");
+            trace("BI State = DONE");
           }
           else if (m_cmd_timer.overflow()) //check if time to answer passed
           {
-            if (cmd_sent_count < 5)
+            if (cmd_sent_count < CMD_MAX_TRIES)
             {
               war("WASAB not returned number of bottles: %d.", cmd_sent_count);
               //resend command
               m_bi_state = BI_ASK_BOT_NUM;
-              trace("Board Init State = ASKING BOTTLE NUMBER");
+              trace("BI State = ASKING BOTTLE NUMBER");
             }
-            else //if tried 5 times give error and go to error state
+            else //if tried x times give error and go to error state
             {
-              err("WASAB not answered 5 DUNE commands.");
+              err("WASAB not answered %d DUNE commands.", CMD_MAX_TRIES);
               setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
               throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
               return true;
             }
             break;
+          // Board Initialized. State machine is now, ready to operate.
           case BI_DONE:
-            m_sm_state = SM_STOP;
             break;
           }
         }
@@ -729,6 +748,7 @@ namespace Actuators
       {
         switch (m_sm_state)
         {
+        // Waits for Board Initialization
         case SM_INIT:
           if (m_bi_state == BI_DONE)
           {
@@ -736,13 +756,14 @@ namespace Actuators
             trace("SM State = READY");
           }
           break;
+        // Ready to operate, waiting a
         case SM_STOP:
           if (m_START_FL)
           {
             m_sm_state = SM_MOVING;
             trace("SM State = VEHICLE IN MOVEMENT");
             m_START_FL = false;
-            m_RUN_FL = false;
+            m_RUN_FL = true;
             m_bottle_count = 0;
           }
           break;
@@ -859,7 +880,7 @@ namespace Actuators
             debug("Sampling maneuver done.");
             trace("SM State = SAMPLING DONE");
             m_bottle_count++;
-            m_total_nr_of_bottles++;
+            m_args.total_nr_of_bottles++;
           }
           else if (m_parse->m_dorisState.sampleState == SAMPLING_FAILED)
           {
@@ -867,17 +888,17 @@ namespace Actuators
             m_sm_state = SM_SAMPLING_FAILED;
             err("Sampling Maneuver Failed!");
             trace("SM State = SAMPLING FAILED");
-            m_total_nr_of_bottles++;
+            m_args.total_nr_of_bottles++;
           }
           break;
 
         case SM_SAMPLING_DONE:
           //update logBook with sampled bottle info
-          dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_OK);
-          inf("maneuver bot cnt: %d  |  nr bot to sample: %d  |  total nr of bot: %d", m_bottle_count, m_args.nr_bottles_to_sample, m_total_nr_of_bottles);
+          dispatchBottleInfo(m_args.total_nr_of_bottles, SAMPLING_OK);
+          inf("maneuver bot cnt: %d  |  nr bot to sample: %d  |  total nr of bot: %d", m_bottle_count, m_args.nr_bottles_to_sample, m_args.total_nr_of_bottles);
 
           // check what to do next
-          if (m_total_nr_of_bottles > m_args.max_bottles)
+          if (m_args.total_nr_of_bottles > m_args.max_bottles)
           {
             m_sm_state = SM_FULL;
             war("DORIS' sampler is full.");
@@ -902,10 +923,10 @@ namespace Actuators
 
         case SM_SAMPLING_FAILED:
           // update logBook with failed sample info
-          dispatchBottleInfo(m_total_nr_of_bottles, SAMPLING_FAIL);
-          inf("maneuver bot cnt: %d  |  nr bot to sample: %d  |  total nr of bot: %d", m_bottle_count, m_args.nr_bottles_to_sample, m_total_nr_of_bottles);
+          dispatchBottleInfo(m_args.total_nr_of_bottles, SAMPLING_FAIL);
+          inf("maneuver bot cnt: %d  |  nr bot to sample: %d  |  total nr of bot: %d", m_bottle_count, m_args.nr_bottles_to_sample, m_args.total_nr_of_bottles);
           // check what to do next
-          if (m_total_nr_of_bottles >= m_args.max_bottles)
+          if (m_args.total_nr_of_bottles >= m_args.max_bottles)
           {
             m_sm_state = SM_FULL;
             war("DORIS' sampler is full.");
@@ -977,8 +998,8 @@ namespace Actuators
             m_pinger.reset();
           }
 
-          //Check if new manual command is available.
-          updateCpuCommand();
+          //Check if there's any command to be sent.
+          updateCpuCommands();
 
           //Update state machines.
           updateStateMachine();
