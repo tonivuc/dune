@@ -143,6 +143,8 @@ namespace Actuators
       bool
       translate(void)
       {
+        m_task->spew("Input <<<<< %s", m_bfr);
+        
         if (m_bfr[0] == c_clean_state)
         {
           std::sscanf(m_bfr, "%*c,%d%*s", &m_dorisState.cleanState);
