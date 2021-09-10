@@ -43,8 +43,9 @@ namespace Power
 
     static const float c_delay_startup = 4.0f;
     static const uint8_t c_max_channels = 18;
-    static const uint8_t c_max_power_info = 18;
+    static const uint8_t c_max_power_info = 22;  //18 + 4
     static const uint8_t c_max_leak_inputs = 4;
+    static const uint8_t c_max_servo_inputs = 4;
     static const uint8_t c_channel_offset_id = 0x30;
     static const std::string c_nc_channels = "NC/";
     static const std::string c_inv_channels = "INV/";
@@ -70,6 +71,8 @@ namespace Power
       bool channels_states[c_max_channels];
       //! Leaks entity labels.
       std::string leak_elabels[c_max_leak_inputs];
+      //! Servor entity labels.
+      std::string servo_elabels[c_max_servo_inputs];
       //! True if leak sensor is in fact a medium sensor.
       bool leak_medium[c_max_leak_inputs];
     };
@@ -182,6 +185,12 @@ namespace Power
           .defaultValue("false");
         }
 
+        for (unsigned i = 0; i < c_max_servo_inputs; ++i)
+        {
+          option = String::str("Servo %u - Entity Label", i+1);
+          param(option, m_args.servo_elabels[i]);
+        }
+
         m_pwr_op.setDestination(getSystemId());
 
         // Register handler routines.
@@ -193,14 +202,34 @@ namespace Power
       void
       onEntityReservation(void)
       {
-        for (uint8_t i = 0; i < c_max_power_info; ++i)
+        for (uint8_t i = 0; i < c_max_channels; ++i)
         {
           if (m_args.channels_names[i].empty())
             continue;
 
-          m_volt[i].setSourceEntity(getEid(m_args.channels_names[i]));
-          m_amp[i].setSourceEntity(getEid(m_args.channels_names[i]));
+          if (m_args.channels_names[i].find(c_inv_channels) != std::string::npos || m_args.channels_names[i].find(c_nc_channels) != std::string::npos)
+          {
+            char label[32];
+            std::sprintf(label, "%s", m_args.channels_names[i].c_str());
+            char *ptr = strtok(label, "/");
+            ptr = strtok (NULL, "/");
+            m_volt[i].setSourceEntity(getEid(ptr));
+            m_amp[i].setSourceEntity(getEid(ptr));
+          }
+          else
+          {
+            m_volt[i].setSourceEntity(getEid(m_args.channels_names[i]));
+            m_amp[i].setSourceEntity(getEid(m_args.channels_names[i]));
+          }
         }
+
+        // Initialize sensor messages.
+        for (unsigned i = 0; i < c_max_servo_inputs; ++i)
+        {
+          m_volt[c_max_channels + i].setSourceEntity(getEid(m_args.servo_elabels[i]));
+          m_amp[c_max_channels + i].setSourceEntity(getEid(m_args.servo_elabels[i]));
+        }
+
         // Initialize leak messages.
         for (unsigned i = 0; i < c_max_leak_inputs; ++i)
         {
@@ -507,9 +536,26 @@ namespace Power
       dispatchData(void)
       {
         float voltage, current;
-        for(uint8_t i = 0; i < c_max_power_info; i++)
+        for(uint8_t i = 0; i < c_max_channels; i++)
         {
-          if(m_parser->newPowerInfo(i))
+          if(i == (PO_CH8 - c_channel_offset_id))
+          {
+            for(uint8_t t = 0; t < c_max_servo_inputs; t++)
+            {
+              if(m_parser->newPowerInfoServo(t))
+              {
+                m_parser->getDataPowerServo(t, &voltage, &current);
+                m_volt[c_max_channels + t].setTimeStamp(m_tstamp);
+                m_volt[c_max_channels + t].value = voltage;
+                dispatch(m_volt[c_max_channels + t], DF_KEEP_TIME);
+                m_amp[c_max_channels + t].setTimeStamp(m_tstamp);
+                m_amp[c_max_channels + t].value = current/1000.0f;
+                dispatch(m_amp[c_max_channels + t], DF_KEEP_TIME);
+                m_parser->clearNewDataServo(t);
+              }
+            }
+          }
+          else if(m_parser->newPowerInfo(i))
           {
             m_parser->getDataPower(i, &voltage, &current);
             m_volt[i].setTimeStamp(m_tstamp);
@@ -518,6 +564,7 @@ namespace Power
             m_amp[i].setTimeStamp(m_tstamp);
             m_amp[i].value = current/1000.0f;
             dispatch(m_amp[i], DF_KEEP_TIME);
+            m_parser->clearNewData(i);
           }
         }
         /*m_driver->resetStateNewData();
@@ -698,7 +745,6 @@ namespace Power
           dispatchData();
           if(m_wdog_single_read.overflow())
           {
-            debug("Getting single acquisition of OTPDIST");
             m_driver->getSingleAcquisition();
             m_wdog_single_read.reset();
           }

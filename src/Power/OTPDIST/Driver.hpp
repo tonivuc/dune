@@ -206,7 +206,7 @@ namespace Power
         int cnt_message_part = 0;
         while (!m_wdog_com.overflow())
         {
-          if (Poll::poll(*m_uart, 0.001))
+          if (Poll::poll(*m_uart, 0.0001))
           {
             int data_received = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
             cnt_message_part = 0;

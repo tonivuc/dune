@@ -50,6 +50,15 @@ namespace Power
     class ParserOTPDIST
     {
       public:
+        struct OTPDISTServorData
+        {
+          //! Voltage
+          float voltage;
+          //! Current
+          float current;
+          //! New data input
+          bool new_data;
+        };
         struct OTPDISTPowerData
         {
           //! Voltage
@@ -58,6 +67,8 @@ namespace Power
           float current;
           //! New data input
           bool new_data;
+          //! Struct for servos
+          struct OTPDISTServorData servo_power_data[4];
         };
         struct OTPDISTData
         {
@@ -160,7 +171,7 @@ namespace Power
                     float v, c;
                     std::memcpy(&v, &b_v, sizeof(v));
                     std::memcpy(&c, &b_c, sizeof(c));
-                    m_task->spew("POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30, v, c);
+                    m_task->debug("Parser:POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30 + 1, v, c);
                     m_otpdistData.power_data[(channel - 0x30)].voltage = v;
                     m_otpdistData.power_data[(channel - 0x30)].current = c;
                     m_otpdistData.power_data[(channel - 0x30)].new_data = true;
@@ -195,10 +206,22 @@ namespace Power
                     std::memcpy(&c3, &s3_c, sizeof(c3));
                     std::memcpy(&v4, &s4_v, sizeof(v4));
                     std::memcpy(&c4, &s4_c, sizeof(c4));
-                    m_task->spew("POWER: channel: %d : SERVO 1, %f (v) | %f (mA)", PO_CH8 - 0x30, v1, c1);
-                    m_task->spew("POWER: channel: %d : SERVO 2, %f (v) | %f (mA)", PO_CH8 - 0x30, v2, c2);
-                    m_task->spew("POWER: channel: %d : SERVO 3, %f (v) | %f (mA)", PO_CH8 - 0x30, v3, c3);
-                    m_task->spew("POWER: channel: %d : SERVO 4, %f (v) | %f (mA)", PO_CH8 - 0x30, v4, c4);
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].voltage = v1;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].current = c1;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].new_data = true;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].voltage = v2;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].current = c2;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].new_data = true;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].voltage = v3;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].current = c3;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].new_data = true;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].voltage = v4;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].current = c4;
+                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].new_data = true;
+                    m_task->debug("Parser:POWER: channel: %d : SERVO 1, %f (v) | %f (mA)", PO_CH8 - 0x30, v1, c1);
+                    m_task->debug("Parser:POWER: channel: %d : SERVO 2, %f (v) | %f (mA)", PO_CH8 - 0x30, v2, c2);
+                    m_task->debug("Parser:POWER: channel: %d : SERVO 3, %f (v) | %f (mA)", PO_CH8 - 0x30, v3, c3);
+                    m_task->debug("Parser:POWER: channel: %d : SERVO 4, %f (v) | %f (mA)", PO_CH8 - 0x30, v4, c4);
                     return true;
                   }
                   else
@@ -260,10 +283,28 @@ namespace Power
           return false;
         }
 
+        void
+        clearNewData(uint8_t channel)
+        {
+          m_otpdistData.power_data[channel].new_data = false;
+        }
+
+        void
+        clearNewDataServo(uint8_t servo)
+        {
+          m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo].new_data = false;
+        }
+
         bool
         newPowerInfo(uint8_t channel)
         {
           return m_otpdistData.power_data[channel].new_data;
+        }
+
+        bool
+        newPowerInfoServo(uint8_t servo)
+        {
+          return m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo].new_data;
         }
 
         void
@@ -271,6 +312,13 @@ namespace Power
         {
           voltage[0] = m_otpdistData.power_data[channel].voltage;
           current[0] = m_otpdistData.power_data[channel].current;
+        }
+
+        void
+        getDataPowerServo(uint8_t servo, float* voltage, float* current)
+        {
+          voltage[0] = m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo].voltage;
+          current[0] = m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo].current;
         }
 
         uint8_t
