@@ -631,7 +631,8 @@ namespace Maneuver
             inf(DTR("Loiter radius reference changed to %f"), desired_path.lradius);
           }
 
-          bool send_desired_path = changedSpeed || changedRadius || changedLoc || !m_path_sent;
+          //bool send_desired_path = changedSpeed || changedRadius || changedLoc || !m_path_sent;
+          bool send_desired_path = true; // TEMP: Always send DesiredPath
 
           // dispatch new desired path
           switch (m_fref_state.state)
