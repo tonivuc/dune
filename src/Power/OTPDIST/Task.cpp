@@ -493,7 +493,7 @@ namespace Power
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }
 
-        debug("Init and Start OK");
+        inf("Init and Start OK");
         m_wdog_com.setTop(m_args.input_timeout);
         m_wdog_com.reset();
         m_wdog_single_read.setTop(c_delay_single_frame_read);
@@ -741,7 +741,7 @@ namespace Power
       {
         while (!stopping())
         {
-          waitForMessages(0.001);
+          waitForMessages(0.01);
           dispatchData();
           if(m_wdog_single_read.overflow())
           {

@@ -61,7 +61,6 @@ namespace Power
       {
         m_uart = uart;
         m_poll = poll;
-        m_timeout_uart = 0.01f;
         m_parser = parser;
         resetStateNewData();
       }
@@ -71,8 +70,8 @@ namespace Power
       void
       resetStateNewData(void)
       {
-        //for(uint8_t t = 0; t < 8; t++)
-        //  m_otpdistData.state_new_data[t] = false;
+        m_counter_data_rx = 0;
+        std::memset(&m_bfr_data_rx, '\0', sizeof(m_bfr_data_rx));
       }
 
       bool
@@ -168,57 +167,45 @@ namespace Power
       bool
       sendCommand(const u_int8_t* data)
       {
-        u_int8_t bfr_uart[128];
-        u_int8_t final_message[256];
         m_uart->flush();
         m_uart->writeString((char*)data);
-        m_wdog_com.setTop(m_timeout_uart*2);
-        m_wdog_com.reset();
-        int rx_counter = 0;
-        int cnt_message_part = 0;
-        while (!m_wdog_com.overflow())
+        m_wdog_com.setTop(0.5);
+        bool cmd_ok = false;
+        while (!m_wdog_com.overflow() && !cmd_ok)
         {
-          if (Poll::poll(*m_uart, m_timeout_uart))
-          {
-            int data_received = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
-            //m_task->spew("rec: %d", data_received);
-            //m_parser->spewArray(bfr_uart, data_received);
-            cnt_message_part = 0;
-            for (int i = rx_counter; i < data_received + rx_counter; i++)
-            {
-              final_message[i] = bfr_uart[cnt_message_part++];
-            }
-            rx_counter = rx_counter + data_received;
-            m_wdog_com.reset();
-          }
+          cmd_ok = haveNewData();
         }
-        return m_parser->decodeMessage(final_message, rx_counter);
+        if(cmd_ok)
+          return true;
+        else
+          return false;
       }
 
       bool
       haveNewData(void)
       {
-        u_int8_t bfr_uart[128];
-        u_int8_t final_message[256];
-        m_wdog_com.setTop(m_timeout_uart);
-        m_wdog_com.reset();
-        int rx_counter = 0;
-        int cnt_message_part = 0;
-        while (!m_wdog_com.overflow())
+        uint8_t bfr_uart[64];
+        if (Poll::poll(*m_uart, 0.001))
         {
-          if (Poll::poll(*m_uart, 0.0001))
+          int data_received_size = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
+          if(data_received_size > 0)
           {
-            int data_received = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
-            cnt_message_part = 0;
-            for (int i = rx_counter; i < data_received + rx_counter; i++)
+            for(int i = 0; i < data_received_size; i++)
             {
-              final_message[i] = bfr_uart[cnt_message_part++];
+              m_bfr_data_rx[m_counter_data_rx++] = bfr_uart[i];
             }
-            rx_counter = rx_counter + data_received;
-            m_wdog_com.reset();
           }
         }
-        return m_parser->decodeMessage(final_message, rx_counter);
+        else
+        {
+          if(m_counter_data_rx > 0)
+          {
+            bool state_parser = m_parser->decodeMessage(m_bfr_data_rx, m_counter_data_rx);
+            resetStateNewData();
+            return state_parser;
+          }
+        }
+        return false;
       }
 
       void
@@ -238,10 +225,10 @@ namespace Power
     private:
       //! Parent task.
       DUNE::Tasks::Task *m_task;
-      //! Timeout for new data in uart
-      float m_timeout_uart;
-      //! Buffer of uart
-      char bfr[64];
+      //! Buffer of data rx of uart
+      uint8_t m_bfr_data_rx[1024];
+      //! Counter of data inside of m_bfr_data_rx
+      uint16_t m_counter_data_rx;
       //! Watchdog for serial com
       Counter<double> m_wdog_com;
       //! Parser for messages received

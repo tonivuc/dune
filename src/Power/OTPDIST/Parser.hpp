@@ -95,7 +95,7 @@ namespace Power
         ~ParserOTPDIST(void){}
 
         bool
-        decodeMessage(u_int8_t* data_in, u_int16_t data_in_size)
+        decodeMessage(uint8_t* data_in, u_int16_t data_in_size)
         {
           //spewArray(data_in, data_in_size);
           if(data_in_size >= 3)
