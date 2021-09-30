@@ -608,25 +608,25 @@ namespace Actuators
           // If otter is doing something
           // if (m_sm_state != SM_STOPPED)
           // {
-            // In the sampling plan
-            if (m_IS_PLAN_FL)
-            {
-              spew("VehicleState: IS_PLAN_FL then m_STOP_FL = true;");
-              sendCommand(CMD_STOP);
-              spew("STOP sent to WASAB.");
-              m_STOP_FL = true;
-            }
-            // in another plan
-            else if (m_IS_NOT_PLAN_FL)
-            {
-              spew("VehicleState: IS_NOT_PLAN then m_sm_state = SM_STOPPED");
-              m_sm_state = SM_STOPPED;
-              trace(">>>>> SM State = READY");
-              m_NEAR_FL = false;
-            }
-            spew("VehicleState: IS_*_PLAN = false");
-            m_IS_PLAN_FL = false;
-            m_IS_NOT_PLAN_FL = false;
+          // In the sampling plan
+          if (m_IS_PLAN_FL)
+          {
+            spew("VehicleState: IS_PLAN_FL then m_STOP_FL = true;");
+            sendCommand(CMD_STOP);
+            spew("STOP sent to WASAB.");
+            m_STOP_FL = true;
+          }
+          // in another plan
+          else if (m_IS_NOT_PLAN_FL)
+          {
+            spew("VehicleState: IS_NOT_PLAN then m_sm_state = SM_STOPPED");
+            m_sm_state = SM_STOPPED;
+            trace(">>>>> SM State = READY");
+            m_NEAR_FL = false;
+          }
+          spew("VehicleState: IS_*_PLAN = false");
+          m_IS_PLAN_FL = false;
+          m_IS_NOT_PLAN_FL = false;
           // }
           // else
           // {
@@ -758,18 +758,20 @@ namespace Actuators
         double lat = Angles::degrees(m_estate.lat);
         double lon = Angles::degrees(m_estate.lon);
 
-        uint32_t timestamp = Time::Clock::getSinceEpoch();
+        IMC::LogBookEntry log_entry;
+        log_entry.type = IMC::LogBookEntry::LBET_INFO;
 
-        std::ostringstream msg;
-        msg << "DORIS REPORT\n Bottle: " << bottleNum << ".\nStatus: " << bottleStatus << "\nTimestamp: " << timestamp << "\nType of Sample: " << m_type_of_sample.c_str() << "\nLatitude: " << lat << "\nLongitude: " << lon << "\nWind Speed: " << m_wind_spd << "\nWind Direction: " << m_wind_dir << "\nAir Temperature: " << m_air_temp << "\nAir Humidity: " << m_air_humidity << "\n";
-        inf("%s", msg.str().c_str());
+        std::ostringstream context;
+        context << "Bottle: " << bottleNum << " info.";
+        log_entry.context = context.str();
 
-        IMC::DevDataText bot_data_entry;
-        bot_data_entry.value = msg.str();
+        std::ostringstream text;
+        text << "Status: " << bottleStatus << "\n" << "\nType of Sample: " << m_type_of_sample.c_str() << "\nLatitude: " << lat << "\nLongitude: " << lon << "\nWind Speed: " << m_wind_spd << "\nWind Direction: " << m_wind_dir << "\nAir Temperature: " << m_air_temp << "\nAir Humidity: " << m_air_humidity << "\n";
+        log_entry.text = text.str();
 
         Delay::wait(0.2);
 
-        dispatch(bot_data_entry, DF_LOOP_BACK);
+        dispatch(log_entry, DF_LOOP_BACK);
       }
 
       //! Send Commands to Serial Port
