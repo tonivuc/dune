@@ -50,6 +50,8 @@ namespace Power
     static const std::string c_nc_channels = "NC/";
     static const std::string c_inv_channels = "INV/";
     static const float c_delay_single_frame_read = 1.0f;
+    static const uint8_t c_max_values_voltage = 16;
+    static const uint8_t c_max_values_current = 3;
 
     struct Arguments
     {
@@ -75,6 +77,24 @@ namespace Power
       std::string servo_elabels[c_max_servo_inputs];
       //! True if leak sensor is in fact a medium sensor.
       bool leak_medium[c_max_leak_inputs];
+      //! Input number cell
+      unsigned int number_cell;
+      //! Scale conversion for A/Ah
+      float scale_factor;
+      //! Cell entity labels
+      std::string cell_elabels[c_max_values_voltage - 1];
+      //! Remaining Capacity entity label
+      std::string rcap_elabel;
+      //! Full Capacity entity label
+      std::string fcap_elabel;
+      //! State to dispatch Feul level
+      bool dispatch_fuel_level;
+      //! Level of battery below which a warning will be thrown.
+      float war_lvl;
+      //! Level of battery below which an error will be thrown.
+      float err_lvl;
+      //! Level of battery (VOltage) below which an error will be thrown.
+      float err_volt_lvl;
     };
 
     struct Task: public DUNE::Tasks::Task
@@ -109,6 +129,16 @@ namespace Power
       IMC::Voltage m_volt[c_max_power_info];
       //! Current messages
       IMC::Current m_amp[c_max_power_info];
+      //! Temperature message from batman
+      IMC::Temperature m_tmp;
+      //! Voltage message  from batman
+      IMC::Voltage m_volt_batman[c_max_values_voltage];
+      //! Voltage of batteries message  from batman
+      IMC::Voltage m_bat_volt_batman;
+      //! Current message  from batman
+      IMC::Current m_amp_batman[c_max_values_current];
+      //! Fuel Level message from batman
+      IMC::FuelLevel m_fuel;
       //! Read timestamp.
       double m_tstamp;
 
@@ -191,6 +221,58 @@ namespace Power
           param(option, m_args.servo_elabels[i]);
         }
 
+        param("Number of cells", m_args.number_cell)
+        .defaultValue("7")
+        .minimumValue("1")
+        .maximumValue("15")
+        .description("Number of cells to read.");
+
+        param("Scale Factor A/Ah", m_args.scale_factor)
+        .defaultValue("1")
+        .description("Scale Factor A/Ah.");
+
+        // Extract cell entity label
+        for (uint8_t i = 1; i < c_max_values_voltage; ++i)
+        {
+          option = String::str("Cell %u - Entity Label", i);
+          param(option, m_args.cell_elabels[i - 1])
+          .defaultValue("")
+          .description("Cell Entity Label");
+        }
+
+        param("Remaining Capacity - Entity Label", m_args.rcap_elabel)
+        .defaultValue("1")
+        .description("Remaining Capacity A/Ah.");
+
+        param("Full Capacity - Entity Label", m_args.fcap_elabel)
+        .defaultValue("1")
+        .description("Full Capacity A/Ah.");
+
+        param("Dispatch Fuel Level", m_args.dispatch_fuel_level)
+        .defaultValue("true")
+        .description("Dispatch Fuel Level.");
+
+        param("Warning Level", m_args.war_lvl)
+        .defaultValue("35.0")
+        .minimumValue("20.0")
+        .maximumValue("100.0")
+        .units(Units::Percentage)
+        .description("Level of battery below which a warning will be thrown");
+
+        param("Error Level", m_args.err_lvl)
+        .defaultValue("20.0")
+        .minimumValue("1.0")
+        .maximumValue("20.0")
+        .units(Units::Percentage)
+        .description("Level of battery below which an error will be thrown");
+
+        param("Error Voltage Value", m_args.err_volt_lvl)
+        .defaultValue("22.0")
+        .minimumValue("18.0")
+        .maximumValue("30.0")
+        .units(Units::Volt)
+        .description("Level of battery, in voltage, below which an error will be thrown");
+
         m_pwr_op.setDestination(getSystemId());
 
         // Register handler routines.
@@ -237,6 +319,19 @@ namespace Power
           m_leaks[i].description = DTR(Status::getString(Status::CODE_ACTIVE));
           m_leaks[i].setSourceEntity(reserveEntity(m_args.leak_elabels[i]));
         }
+
+        // Initialize batman messages/values
+        for (uint8_t i = 0; i < m_args.number_cell; ++i)
+        {
+          if (m_args.cell_elabels[i].empty())
+            continue;
+
+          m_volt_batman[i + 1].setSourceEntity(getEid(m_args.cell_elabels[i]));
+        }
+
+        m_bat_volt_batman.setSourceEntity(getEid("Batteries"));
+        m_amp_batman[1].setSourceEntity(getEid(m_args.rcap_elabel));
+        m_amp_batman[2].setSourceEntity(getEid(m_args.fcap_elabel));
       }
 
       //! Update parameters.
@@ -432,6 +527,15 @@ namespace Power
         {
           setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_ACTIVE);
           inf("Firmware Version: %s", m_parser->getFirmwareVersionInfo().c_str());
+        }
+
+        if (!m_driver->setCellNumber(m_args.number_cell))
+        {
+          war("Fail setting cell number : %d", m_args.number_cell);
+          m_driver->resetBoard();
+          m_uart->flush();
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }
 
         bool all_set_channel = true;

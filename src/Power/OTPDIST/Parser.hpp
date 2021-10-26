@@ -128,6 +128,10 @@ namespace Power
                   return false;
                 }
               }
+              else if(data_in[1] == OTP_ACK)
+              {
+                return true;
+              }
               else if(data_in[1] == OTP_SET_PO_STATE)
               {
                 if(data_in[4] == OTP_ACK)
@@ -263,7 +267,7 @@ namespace Power
         spewArray(uint8_t* data, uint16_t data_size)
         {
           for(int i = 0; i < data_size; i++)
-            m_task->spew("%02x | %c", data[i], data[i]);
+            m_task->war("%02x | %c", data[i], data[i]);
         }
 
         std::string

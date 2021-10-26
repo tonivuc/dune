@@ -43,6 +43,9 @@ enum DecodeData
 {
   OTP_PREAMBLE            = 0x2C,
   OTP_TERMINATOR          = 0x0A,
+  OTP_CELL_NUMBER         = 0x22,
+  OTP_SEND_BATMAN_DATA    = 0x23,
+  OTP_BATMAN_DATA         = 0x31,
   OTP_RESET               = 0x60,
   OTP_ACK                 = 0x61,
   OTP_NACK                = 0x62,

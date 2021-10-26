@@ -115,6 +115,23 @@ namespace Power
       }
 
       bool
+      setCellNumber(uint8_t number_cells)
+      {
+        if(number_cells > 15)
+          number_cells = 15;
+        else if(number_cells < 1)
+          number_cells = 1;
+        u_int8_t cmd_line[8];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_BATMAN_DATA;
+        cmd_line[2] = OTP_CELL_NUMBER;
+        cmd_line[3] = number_cells;
+        cmd_line[4] = '\0';
+        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        return sendCommand(cmd_line);
+      }
+
+      bool
       startAcquisition(void)
       {
         u_int8_t cmd_line[8];
@@ -167,9 +184,11 @@ namespace Power
       bool
       sendCommand(const u_int8_t* data)
       {
+        resetStateNewData();
         m_uart->flush();
         m_uart->writeString((char*)data);
-        m_wdog_com.setTop(0.5);
+        m_wdog_com.setTop(2.0);
+        m_wdog_com.reset();
         bool cmd_ok = false;
         while (!m_wdog_com.overflow() && !cmd_ok)
         {
