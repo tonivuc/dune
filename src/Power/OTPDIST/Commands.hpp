@@ -102,4 +102,11 @@ enum LeakStatus
   LEAK_OFF              = 0x54
 };
 
+//! Leaks messages status
+enum LeakStatusMessage
+{
+  LEAK_SEND_ON          = 0x21,
+  LEAK_SEND_OFF         = 0x31
+};
+
 #endif /* POWER_OTPDIST_COMMANDS_HPP_INCLUDED_ */

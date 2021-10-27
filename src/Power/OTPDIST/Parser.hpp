@@ -183,7 +183,7 @@ namespace Power
                   }
                   else
                   {
-                    m_task->debug("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
+                    m_task->war("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
                     return false;
                   }
                 }
@@ -230,7 +230,7 @@ namespace Power
                   }
                   else
                   {
-                    m_task->debug("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
+                    m_task->debug("Parser:Power:Servo:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
                     return false;
                   }
                 }

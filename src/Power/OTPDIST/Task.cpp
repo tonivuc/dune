@@ -520,6 +520,7 @@ namespace Power
           war(DTR("failed to get firmware version"));
           m_driver->resetBoard();
           m_uart->flush();
+          m_driver->resetStateNewData();
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }
@@ -534,11 +535,13 @@ namespace Power
           war("Fail setting cell number : %d", m_args.number_cell);
           m_driver->resetBoard();
           m_uart->flush();
+          m_driver->resetStateNewData();
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }
 
         bool all_set_channel = true;
+        inf("Setting Power Channels");
         IMC::PowerChannelState msg;
         for(int i = 0; i < c_max_channels; i++)
         {
@@ -589,10 +592,18 @@ namespace Power
           }
         }
 
+        if (!m_driver->sendLeakCommand())
+        {
+          war(DTR("failed sending leak command setting to board"));
+          all_set_channel = false;
+        }
+
         // Reset board if fail setting state of one power channel
         if(!all_set_channel)
         {
           m_driver->resetBoard();
+          m_uart->flush();
+          m_driver->resetStateNewData();
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
           throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
         }

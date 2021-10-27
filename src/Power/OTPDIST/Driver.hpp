@@ -77,6 +77,7 @@ namespace Power
       bool
       getFirmwareVersion(void)
       {
+        Delay::waitMsec(200);
         u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_VERSION;
@@ -89,12 +90,13 @@ namespace Power
       void
       resetBoard(void)
       {
+        Delay::waitMsec(200);
         u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_RESET;
         cmd_line[2] = OTP_TERMINATOR;
         cmd_line[3] = '\0';
-        m_task->debug("Driver:reset: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        m_task->war("Driver:reset: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
         sendCommand(cmd_line);
       }
 
@@ -117,6 +119,7 @@ namespace Power
       bool
       setCellNumber(uint8_t number_cells)
       {
+        Delay::waitMsec(200);
         if(number_cells > 15)
           number_cells = 15;
         else if(number_cells < 1)
@@ -126,8 +129,23 @@ namespace Power
         cmd_line[1] = OTP_BATMAN_DATA;
         cmd_line[2] = OTP_CELL_NUMBER;
         cmd_line[3] = number_cells;
+        cmd_line[4] = OTP_TERMINATOR;
+        cmd_line[5] = '\0';
+        m_task->debug("Driver:setCellNumber: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
+        return sendCommand(cmd_line);
+      }
+
+      bool
+      sendLeakCommand(void)
+      {
+        Delay::waitMsec(200);
+        u_int8_t cmd_line[8];
+        cmd_line[0] = OTP_PREAMBLE;
+        cmd_line[1] = OTP_LEAK;
+        cmd_line[2] = LEAK_SEND_ON;
+        cmd_line[3] = OTP_TERMINATOR;
         cmd_line[4] = '\0';
-        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
+        m_task->debug("Driver:sendLeakCommand: %02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3]);
         return sendCommand(cmd_line);
       }
 
@@ -158,6 +176,7 @@ namespace Power
       bool
       stopAcquisition(void)
       {
+        Delay::waitMsec(200);
         u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_STOP_ACQUISITION;
@@ -170,6 +189,7 @@ namespace Power
       bool
       setPowerChannelState(uint8_t channel, uint8_t state)
       {
+        Delay::waitMsec(200);
         u_int8_t cmd_line[8];
         cmd_line[0] = OTP_PREAMBLE;
         cmd_line[1] = OTP_SET_PO_STATE;
@@ -182,13 +202,13 @@ namespace Power
       }
 
       bool
-      sendCommand(const u_int8_t* data)
+      sendCommand(u_int8_t* data)
       {
-        resetStateNewData();
         m_uart->flush();
+        resetStateNewData();
         m_uart->writeString((char*)data);
-        m_wdog_com.setTop(2.0);
-        m_wdog_com.reset();
+        Counter<double> m_wdog_com;
+        m_wdog_com.setTop(0.5);
         bool cmd_ok = false;
         while (!m_wdog_com.overflow() && !cmd_ok)
         {
@@ -204,7 +224,7 @@ namespace Power
       haveNewData(void)
       {
         uint8_t bfr_uart[64];
-        if (Poll::poll(*m_uart, 0.001))
+        if (Poll::poll(*m_uart, 0.01))
         {
           int data_received_size = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
           if(data_received_size > 0)
@@ -248,8 +268,6 @@ namespace Power
       uint8_t m_bfr_data_rx[1024];
       //! Counter of data inside of m_bfr_data_rx
       uint16_t m_counter_data_rx;
-      //! Watchdog for serial com
-      Counter<double> m_wdog_com;
       //! Parser for messages received
       ParserOTPDIST* m_parser;
     };
