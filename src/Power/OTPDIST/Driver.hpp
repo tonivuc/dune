@@ -78,42 +78,26 @@ namespace Power
       getFirmwareVersion(void)
       {
         Delay::waitMsec(200);
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_VERSION;
-        cmd_line[2] = OTP_TERMINATOR;
-        cmd_line[3] = '\0';
-        m_task->debug("Driver:getFirmwareVersion: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
-        return sendCommand(cmd_line);
-      }
-
-      void
-      resetBoard(void)
-      {
-        Delay::waitMsec(200);
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_RESET;
-        cmd_line[2] = OTP_TERMINATOR;
-        cmd_line[3] = '\0';
-        m_task->war("Driver:reset: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
-        sendCommand(cmd_line);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c", OTP_PREAMBLE, OTP_VERSION, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:getFirmwareVersion: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
-      initOTPDIST(void)
+      resetBoard(void)
       {
-        /*char textCmd[32];
-            std::sprintf(textCmd, "@CELL,%d,*", cellNumber);
-            if(sendCommand(textCmd, "$RSP,ACK,,*"))
-            {
-              std::memset(&textCmd, '\0', sizeof(textCmd));
-              std::sprintf(textCmd, "@SCALE,%.2f,*", scale);
-              if(sendCommand(textCmd, "$RSP,ACK,,*"))
-                return true;
-            }*/
-
-        return false;
+        Delay::waitMsec(200);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c", OTP_PREAMBLE, OTP_RESET, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:reset: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
@@ -124,85 +108,100 @@ namespace Power
           number_cells = 15;
         else if(number_cells < 1)
           number_cells = 1;
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_BATMAN_DATA;
-        cmd_line[2] = OTP_CELL_NUMBER;
-        cmd_line[3] = number_cells;
-        cmd_line[4] = OTP_TERMINATOR;
-        cmd_line[5] = '\0';
-        m_task->debug("Driver:setCellNumber: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
-        return sendCommand(cmd_line);
+
+        char cmd_line[32];
+        char cmd_to_send[64];
+        std::sprintf(cmd_line, "%c,%c,%c,%d,%c,%c", OTP_PREAMBLE, OTP_BATMAN_DATA, OTP_CELL_NUMBER, number_cells, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:setCellNumber: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
-      sendLeakCommand(void)
+      setCFactor(float c_factor)
       {
         Delay::waitMsec(200);
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_LEAK;
-        cmd_line[2] = LEAK_SEND_ON;
-        cmd_line[3] = OTP_TERMINATOR;
-        cmd_line[4] = '\0';
-        m_task->debug("Driver:sendLeakCommand: %02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3]);
-        return sendCommand(cmd_line);
+        if(c_factor <= 0)
+          c_factor = 1;
+
+        char cmd_line[32];
+        char cmd_to_send[64];
+        std::sprintf(cmd_line, "%c,%c,%c,%f,%c,%c", OTP_PREAMBLE, OTP_BATMAN_DATA, OTP_C_FACTOR, c_factor, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:setCFactor: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
-      startAcquisition(void)
+      sendLeakCommand(bool start_sending_msg_leak)
       {
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_START_ACQUISITION;
-        cmd_line[2] = OTP_TERMINATOR;
-        cmd_line[3] = '\0';
-        m_task->debug("Driver:startAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
-        return sendCommand(cmd_line);
+        Delay::waitMsec(200);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        if(start_sending_msg_leak)
+          std::sprintf(cmd_line, "%c,%c,%c,%c,%c", OTP_PREAMBLE, OTP_LEAK, LEAK_SEND_ON, OTP_TERMINATOR, '\0');
+        else
+          std::sprintf(cmd_line, "%c,%c,%c,%c,%c", OTP_PREAMBLE, OTP_LEAK, LEAK_SEND_OFF, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:sendLeakCommand: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
       getSingleAcquisition(void)
       {
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_SINGLE_ACQUISITION;
-        cmd_line[2] = OTP_TERMINATOR;
-        cmd_line[3] = '\0';
-        m_task->debug("Driver:getSingleAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
-        return sendCommand(cmd_line);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c", OTP_PREAMBLE, OTP_SINGLE_ACQUISITION, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:getSingleAcquisition: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
       stopAcquisition(void)
       {
         Delay::waitMsec(200);
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_STOP_ACQUISITION;
-        cmd_line[2] = OTP_TERMINATOR;
-        cmd_line[3] = '\0';
-        m_task->debug("Driver:stopAcquisition: %02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2]);
-        return sendCommand(cmd_line);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c", OTP_PREAMBLE, OTP_STOP_ACQUISITION, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:stopAcquisition: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
       setPowerChannelState(uint8_t channel, uint8_t state)
       {
         Delay::waitMsec(200);
-        u_int8_t cmd_line[8];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_SET_PO_STATE;
-        cmd_line[2] = channel;
-        cmd_line[3] = state;
-        cmd_line[4] = OTP_TERMINATOR;
-        cmd_line[5] = '\0';
-        m_task->debug("Driver:setPowerChannelState: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
-        return sendCommand(cmd_line);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c,%c,%c", OTP_PREAMBLE, OTP_SET_PO_STATE, channel, state, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:setPowerChannelState: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
       }
 
       bool
-      sendCommand(u_int8_t* data)
+      getBatmanData(void)
+      {
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c,%c", OTP_PREAMBLE, OTP_BATMAN_DATA, OTP_SEND_BATMAN_DATA, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->debug("Driver:getBatmanData: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
+      }
+
+      bool
+      sendCommand(char* data)
       {
         m_uart->flush();
         resetStateNewData();
@@ -223,49 +222,65 @@ namespace Power
       bool
       haveNewData(void)
       {
-        uint8_t bfr_uart[64];
-        if (Poll::poll(*m_uart, 0.01))
+        char bfr_uart[64];
+        if (Poll::poll(*m_uart, 0.001))
         {
-          int data_received_size = m_uart->read(bfr_uart, sizeof((char *)bfr_uart));
+          int data_received_size = m_uart->read(bfr_uart, sizeof(bfr_uart));
           if(data_received_size > 0)
           {
             for(int i = 0; i < data_received_size; i++)
             {
-              m_bfr_data_rx[m_counter_data_rx++] = bfr_uart[i];
+              if(bfr_uart[i] == OTP_PREAMBLE)
+              {
+                m_counter_data_rx = 0;
+                m_bfr_data_rx[m_counter_data_rx++] = bfr_uart[i];
+              }
+              else if(bfr_uart[i] == '\n')
+              {
+                bool state_parser = m_parser->decodeMessage(m_bfr_data_rx, m_counter_data_rx);
+                resetStateNewData();
+                return state_parser;
+              }
+              else
+              {
+                m_bfr_data_rx[m_counter_data_rx++] = bfr_uart[i];
+              }
             }
-          }
-        }
-        else
-        {
-          if(m_counter_data_rx > 0)
-          {
-            bool state_parser = m_parser->decodeMessage(m_bfr_data_rx, m_counter_data_rx);
-            resetStateNewData();
-            return state_parser;
           }
         }
         return false;
       }
 
-      void
+      bool
       sendPowerOffCommand(void)
       {
-        u_int8_t cmd_line[16];
-        cmd_line[0] = OTP_PREAMBLE;
-        cmd_line[1] = OTP_SET_PO_STATE;
-        cmd_line[2] = 0x42;
-        cmd_line[3] = OTP_TURN_OFF;
-        cmd_line[4] = OTP_TERMINATOR;
-        cmd_line[5] = '\0';
-        m_task->debug("Driver:Turn off: %02x%02x%02x%02x%02x", cmd_line[0], cmd_line[1], cmd_line[2], cmd_line[3], cmd_line[4]);
-        sendCommand(cmd_line);
+        char cmd_line[16];
+        char cmd_to_send[32];
+        std::sprintf(cmd_line, "%c,%c,%c,%c", OTP_PREAMBLE, OTP_POWER_OFF_BOARD, OTP_TERMINATOR, '\0');
+        char csum = calcCRC8(cmd_line, std::strlen(cmd_line));
+        std::sprintf(cmd_to_send, "%s%c\n%c", cmd_line, csum, '\0');
+        m_task->war("Driver:Turn off: %s", cmd_to_send);
+        return sendCommand(cmd_to_send);
+      }
+
+      char
+      calcCRC8(char *data_in, uint8_t data_size)
+      {
+        char csum = 0x00;
+        uint8_t t = 0;
+        while (t < data_size)
+        {
+          csum ^= data_in[t];
+          t++;
+        }
+        return (csum | 0x80);
       }
 
     private:
       //! Parent task.
       DUNE::Tasks::Task *m_task;
       //! Buffer of data rx of uart
-      uint8_t m_bfr_data_rx[1024];
+      char m_bfr_data_rx[1024];
       //! Counter of data inside of m_bfr_data_rx
       uint16_t m_counter_data_rx;
       //! Parser for messages received

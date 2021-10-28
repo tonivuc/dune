@@ -40,6 +40,7 @@
 
 // Local headers
 #include "Commands.hpp"
+#include "../BATMANv2/Driver.hpp"
 
 namespace Power
 {
@@ -88,6 +89,9 @@ namespace Power
           for(int i = 0; i < 4; i++)
             m_otpdistData.leak_states[i] = false;
 
+          for(int t = 0; t < 8; t++)
+            m_batManData.state_new_data[t] = false;
+
           m_otpdistData.switch_on = false;
           m_new_data_leak = false;
         }
@@ -95,155 +99,223 @@ namespace Power
         ~ParserOTPDIST(void){}
 
         bool
-        decodeMessage(uint8_t* data_in, u_int16_t data_in_size)
+        decodeMessage(char* data_in, u_int16_t data_in_size)
         {
-          //spewArray(data_in, data_in_size);
           if(data_in_size >= 3)
           {
-            //m_task->spew("data in: %d", data_in_size);
-            //spewArray(data_in, data_in_size);
-            if(data_in[0] == OTP_PREAMBLE)
+            if(checkCSUMOfMessage(data_in))
             {
-              if(data_in[1] == OTP_VERSION)
+              char execute_cmd;
+              float voltage, current;
+              char channel;
+              int servo_id;
+              char batman_command;
+              std::sscanf(data_in, "$,%c,", &execute_cmd);
+              switch (execute_cmd)
               {
-                int data_payload_size = data_in[2];
-                char byte_data_version[64];
-                std::ostringstream firmware_version_decode;
-                for(u_int8_t i = 3; i < data_payload_size + 3; i++)
-                {
-                  firmware_version_decode << data_in[i];
-                  byte_data_version[i-3] = data_in[i];
-                }
-                uint8_t csum_rec = data_in[data_payload_size + 3];
-                uint8_t csum_calc = calcCRC8(byte_data_version, data_payload_size);
-                if(csum_calc == csum_rec)
-                {
-                  m_otpdistData.firm_version = firmware_version_decode.str();
+                case OTP_ACK:
+                  m_task->debug("Received ACK");
+                  return true;
+                  break;
+
+                case OTP_NACK:
+                  m_task->debug("Received NACK");
+                  return false;
+                  break;
+
+                case OTP_VERSION:
+                  m_otpdistData.firm_version = getTextBlockBySplit(data_in, ',', 2);
                   m_task->debug("Parser:Version: %s", m_otpdistData.firm_version.c_str());
                   return true;
-                }
-                else
-                {
-                  m_task->war("Parser:Version:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
-                  return false;
-                }
-              }
-              else if(data_in[1] == OTP_ACK)
-              {
-                return true;
-              }
-              else if(data_in[1] == OTP_SET_PO_STATE)
-              {
-                if(data_in[4] == OTP_ACK)
+                  break;
+
+                case OTP_LEAK:
+                  for(uint8_t i = 2; i < 6; i++)
+                  {
+                    char state_leak[8];
+                    std::sprintf(state_leak, "%s", getTextBlockBySplit(data_in, ',', i).c_str());
+                    if(state_leak[0] == LEAK_ON)
+                      m_otpdistData.leak_states[i - 2] = true;
+                    else
+                      m_otpdistData.leak_states[i - 2] = false;
+                  }
+                  m_new_data_leak = true;
                   return true;
-                else
-                  return false;
-              }
-              else if(data_in[1] == OTP_LEAK)
-              {
-                for(uint8_t i = 2; i < (4 + 2); i++)
-                {
-                  if(data_in[i] == LEAK_ON)
-                    m_otpdistData.leak_states[i - 2] = true;
-                  else
-                    m_otpdistData.leak_states[i - 2] = false;
-                }
-                m_new_data_leak = true;
-                return true;
-              }
-              else if(data_in[1] == OTP_SWITCH_ON && !m_otpdistData.switch_on)
-              {
-                m_otpdistData.switch_on = true;
-                return true;
-              }
-              else if(data_in[1] == OTP_SWITCH_OFF && m_otpdistData.switch_on)
-              {
-                m_otpdistData.switch_on = false;
-                return true;
-              }
-              else if(data_in[1] == OTP_POWER_DATA)
-              {
-                if(data_in[2] != PO_CH8)
-                {
-                  uint8_t csum_rec = data_in[11];
-                  uint8_t csum_calc = calcCRC8((char*)data_in, 11);
-                  if(csum_rec == csum_calc)
+                  break;
+
+                case OTP_POWER_DATA:
+                  std::sscanf(data_in, "$,P,%c,%f,%f,#,", &channel, &voltage, &current);
+                  m_task->debug("Parser:POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30 + 1, voltage, current);
+                  m_otpdistData.power_data[(channel - 0x30)].voltage = voltage;
+                  m_otpdistData.power_data[(channel - 0x30)].current = current;
+                  m_otpdistData.power_data[(channel - 0x30)].new_data = true;
+                  return true;
+                  break;
+
+                case OTP_POWER_DATA_SERVO:
+                  std::sscanf(data_in, "$,p,%d,%f,%f,#,", &servo_id, &voltage, &current);
+                  m_task->debug("Parser:POWER SERVO: channel: %d, %f (v) | %f (mA)", servo_id, voltage, current);
+                  m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo_id - 1].voltage = voltage;
+                  m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo_id - 1].current = current;
+                  m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo_id - 1].new_data = true;
+                  return true;
+                  break;
+
+                case OTP_SWITCH_ON:
+                  if(!m_otpdistData.switch_on)
+                    m_otpdistData.switch_on = true;
+
+                  return true;
+                  break;
+
+                case OTP_SWITCH_OFF:
+                  if(m_otpdistData.switch_on)
+                    m_otpdistData.switch_on = false;
+
+                  return true;
+                  break;
+
+                case OTP_BATMAN_DATA:
+                  std::sscanf(data_in, "$,B,%c,", &batman_command);
+                  char batman_parameter;
+                  int number_info_cells;
+                  switch (batman_command)
                   {
-                    uint8_t channel = data_in[2];
-                    uint8_t b_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
-                    uint8_t b_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
-                    float v, c;
-                    std::memcpy(&v, &b_v, sizeof(v));
-                    std::memcpy(&c, &b_c, sizeof(c));
-                    m_task->debug("Parser:POWER: channel: %d, %f (v) | %f (mA)", channel - 0x30 + 1, v, c);
-                    m_otpdistData.power_data[(channel - 0x30)].voltage = v;
-                    m_otpdistData.power_data[(channel - 0x30)].current = c;
-                    m_otpdistData.power_data[(channel - 0x30)].new_data = true;
-                    return true;
+                    case OTP_BATMAN_DATA_VALUES:
+                      std::sscanf(data_in, "$,B,v,%c,", &batman_parameter);
+                      switch (batman_parameter)
+                      {
+                        case 'V':
+                          std::sscanf(data_in, "$,B,v,V,%f,#", &m_batManData.voltage);
+                          m_task->debug("Volt: %.3f V", m_batManData.voltage);
+                          m_batManData.state_new_data[0] = true;
+                          return true;
+                          break;
+
+                        case 'A':
+                          std::sscanf(data_in, "$,B,v,A,%f,#", &m_batManData.current);
+                          m_task->debug("Ampe: %.3f A", m_batManData.current);
+                          m_batManData.state_new_data[1] = true;
+                          return true;
+                          break;
+
+                        case 'T':
+                          std::sscanf(data_in, "$,B,v,T,%f,#", &m_batManData.temperature);
+                          m_task->debug("Temp: %.3f C", m_batManData.temperature);
+                          m_batManData.state_new_data[2] = true;
+                          return true;
+                          break;
+
+                        case 'R':
+                          std::sscanf(data_in, "$,B,v,R,%f,#", &m_batManData.r_cap);
+                          m_task->debug("RCap: %.3f Ah", m_batManData.r_cap);
+                          m_batManData.state_new_data[3] = true;
+                          return true;
+                          break;
+
+                        case 'F':
+                          std::sscanf(data_in, "$,B,v,F,%f,#", &m_batManData.f_cap);
+                          m_task->debug("FCap: %.3f Ah", m_batManData.f_cap);
+                          m_batManData.state_new_data[4] = true;
+                          return true;
+                          break;
+
+                        case 'D':
+                          std::sscanf(data_in, "$,B,v,D,%f,#", &m_batManData.d_cap);
+                          m_task->debug("DCap: %.3f Ah", m_batManData.d_cap);
+                          m_batManData.state_new_data[5] = true;
+                          return true;
+                          break;
+
+                        case 'H':
+                          std::sscanf(data_in, "$,B,v,H,%d,#", &m_batManData.health);
+                          m_task->debug("Health: %d %%", m_batManData.health);
+                          m_batManData.state_new_data[6] = true;
+                          return true;
+                          break;
+
+                        case 'B':
+                          std::sscanf(data_in, "$,B,v,B,%f,%f,#", &m_batManData.time_empty, &m_batManData.time_full);
+                          if (m_batManData.time_empty == 65535)
+                            m_batManData.time_empty = -1;
+                          if (m_batManData.time_full == 65535)
+                            m_batManData.time_full = -1;
+                          m_task->debug("Average Time to Empty: %.0f min", m_batManData.time_empty);
+                          m_task->debug("Average Time to Full: %.0f min", m_batManData.time_full);
+                          m_batManData.state_new_data[8] = true;
+                          return true;
+                          break;
+
+                        default:
+                          m_task->debug("Parser:New message %s",  data_in);
+                          break;
+                      }
+                      break;
+
+                    case OTP_CELL_DATA:
+                      std::sscanf(data_in, "$,B,D,%d,", &number_info_cells);
+                      for(int i = 0; i < number_info_cells; i++)
+                      {
+                        m_batManData.cell_volt[i] = std::atof(getTextBlockBySplit(data_in, ',', i + 4).c_str());
+                        m_task->debug("Cell %d: %.3f V", i+1, m_batManData.cell_volt[i]);
+                      }
+                      m_batManData.state_new_data[7] = true;
+                      return true;
+                      break;
+
+                    default:
+                      m_task->debug("Parser:New message %s",  data_in);
+                      break;
                   }
-                  else
-                  {
-                    m_task->war("Parser:Power:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
-                    return false;
-                  }
-                }
-                else
-                {
-                  uint8_t csum_rec = data_in[35];
-                  uint8_t csum_calc = calcCRC8((char*)data_in, 35);
-                  if(csum_rec == csum_calc)
-                  {
-                    uint8_t s1_v[] = {data_in[3], data_in[4], data_in[5], data_in[6]};
-                    uint8_t s1_c[] = {data_in[7], data_in[8], data_in[9], data_in[10]};
-                    uint8_t s2_v[] = {data_in[11], data_in[12], data_in[13], data_in[14]};
-                    uint8_t s2_c[] = {data_in[15], data_in[16], data_in[17], data_in[18]};
-                    uint8_t s3_v[] = {data_in[19], data_in[20], data_in[21], data_in[22]};
-                    uint8_t s3_c[] = {data_in[23], data_in[24], data_in[25], data_in[26]};
-                    uint8_t s4_v[] = {data_in[27], data_in[28], data_in[29], data_in[30]};
-                    uint8_t s4_c[] = {data_in[31], data_in[32], data_in[33], data_in[34]};
-                    float v1, c1, v2, c2, v3, c3, v4, c4;
-                    std::memcpy(&v1, &s1_v, sizeof(v1));
-                    std::memcpy(&c1, &s1_c, sizeof(c1));
-                    std::memcpy(&v2, &s2_v, sizeof(v2));
-                    std::memcpy(&c2, &s2_c, sizeof(c2));
-                    std::memcpy(&v3, &s3_v, sizeof(v3));
-                    std::memcpy(&c3, &s3_c, sizeof(c3));
-                    std::memcpy(&v4, &s4_v, sizeof(v4));
-                    std::memcpy(&c4, &s4_c, sizeof(c4));
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].voltage = v1;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].current = c1;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[0].new_data = true;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].voltage = v2;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].current = c2;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[1].new_data = true;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].voltage = v3;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].current = c3;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[2].new_data = true;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].voltage = v4;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].current = c4;
-                    m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[3].new_data = true;
-                    m_task->debug("Parser:POWER: channel: %d : SERVO 1, %f (v) | %f (mA)", PO_CH8 - 0x30, v1, c1);
-                    m_task->debug("Parser:POWER: channel: %d : SERVO 2, %f (v) | %f (mA)", PO_CH8 - 0x30, v2, c2);
-                    m_task->debug("Parser:POWER: channel: %d : SERVO 3, %f (v) | %f (mA)", PO_CH8 - 0x30, v3, c3);
-                    m_task->debug("Parser:POWER: channel: %d : SERVO 4, %f (v) | %f (mA)", PO_CH8 - 0x30, v4, c4);
-                    return true;
-                  }
-                  else
-                  {
-                    m_task->debug("Parser:Power:Servo:Wrong CSUM (rec: %02x | cal: %02x)", csum_rec, csum_calc);
-                    return false;
-                  }
-                }
+                  break;
+
+                default:
+                  m_task->debug("Parser:New message %s",  data_in);
+                  break;
               }
-              /*else
-              {
-                m_task->spew("data in: %d", data_in_size);
-                spewArray(data_in, data_in_size);
-                return false;
-              }*/
             }
           }
           return false;
+        }
+
+        std::string
+        getTextBlockBySplit(char *input, char split_c, uint8_t block_id)
+        {
+          std::ostringstream firmware_version_decode;
+          char version[64][256];
+          uint8_t counter_c = 0;
+          uint8_t counter_l = 0;
+          for(uint16_t i = 0; i < std::strlen(input); i++)
+          {
+            if(input[i] != split_c)
+            {
+              version[counter_l][counter_c++] = input[i];
+            }
+            else
+            {
+              version[counter_l][counter_c] = '\0';
+              counter_l++;
+              counter_c = 0;
+            }
+          }
+          for(uint16_t t = 0; t < std::strlen(version[block_id]); t++)
+          {
+            firmware_version_decode << version[block_id][t];
+          }
+          return firmware_version_decode.str();
+        }
+
+        bool
+        checkCSUMOfMessage(char *input_data)
+        {
+          uint8_t size_rc = strlen(input_data);;
+          char csum = calcCRC8(input_data, size_rc - 1);
+          bool csum_ok = false;
+          csum_ok = (csum == input_data[size_rc - 1]);
+          m_task->debug("Parser:New message CSUM %s (%s | %d) (R:%c | C:%c)", csum_ok? "OK" : "FAIL", input_data, size_rc, csum, input_data[size_rc - 1]);
+          if(!csum_ok)
+            m_task->debug("Parser: Wrong CSUM");
+          return csum_ok;
         }
 
         uint8_t
@@ -261,13 +333,6 @@ namespace Power
         isSwitchOn(void)
         {
           return m_otpdistData.switch_on;
-        }
-
-        void
-        spewArray(uint8_t* data, uint16_t data_size)
-        {
-          for(int i = 0; i < data_size; i++)
-            m_task->war("%02x | %c", data[i], data[i]);
         }
 
         std::string
@@ -325,10 +390,10 @@ namespace Power
           current[0] = m_otpdistData.power_data[(PO_CH8 - 0x30)].servo_power_data[servo].current;
         }
 
-        uint8_t
+        char
         calcCRC8(char *data_in, uint8_t data_size)
         {
-          uint8_t csum = 0x00;
+          char csum = 0x00;
           uint8_t t = 0;
           while(t < data_size)
           {
@@ -339,6 +404,7 @@ namespace Power
         }
 
         OTPDISTData m_otpdistData;
+        BATMANv2::DriverBatMan::BatManData m_batManData;
 
       private:
         //! Parent task.

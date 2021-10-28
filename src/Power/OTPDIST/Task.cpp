@@ -52,6 +52,8 @@ namespace Power
     static const float c_delay_single_frame_read = 1.0f;
     static const uint8_t c_max_values_voltage = 16;
     static const uint8_t c_max_values_current = 3;
+    static const float c_delay_to_get_info_batman = 5.0f;
+    static const uint8_t c_max_data_slot_batman = 8;
 
     struct Arguments
     {
@@ -60,11 +62,9 @@ namespace Power
       //! Serial port baud rate.
       unsigned uart_baud;
       //! Input timeout.
-      double input_timeout;
-      //! Number of attempts before error
-      int number_attempts;
+      float input_timeout;
       //! Delay in seconds before turn of the OTPDIST
-      int delay_turn_off;
+      float delay_turn_off;
       //! Main power channel.
       std::string pwr_main;
       //! Channels names
@@ -119,8 +119,8 @@ namespace Power
       Counter<double> m_wdog_off;
       //! Watchdog for getting single read frame.
       Counter<double> m_wdog_single_read;
-      //! Count for attempts
-      int m_count_attempts;
+      //! Watchdog for getting frame of info from batman.
+      Counter<double> m_wdog_batman;
       //! Power down is in progress.
       bool m_pwr_down;
       //! Flag to control message PowerDown
@@ -141,6 +141,8 @@ namespace Power
       IMC::FuelLevel m_fuel;
       //! Read timestamp.
       double m_tstamp;
+      //! Buffer forEntityState
+      char m_bufer_entity[128];
 
       //! Constructor.
       //! @param[in] name task name.
@@ -164,9 +166,9 @@ namespace Power
         .description("Serial port baud rate");
 
         param("Input Timeout", m_args.input_timeout)
-        .defaultValue("3.0")
-        .minimumValue("2.0")
-        .maximumValue("4.0")
+        .defaultValue("4.0")
+        .minimumValue("3.0")
+        .maximumValue("6.0")
         .units(Units::Second)
         .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Amount of seconds to wait for data before reporting an error");
@@ -178,13 +180,6 @@ namespace Power
         .units(Units::Second)
         .visibility(Parameter::VISIBILITY_DEVELOPER)
         .description("Amount of seconds to wait before turn off OTPDIST.");
-
-        param("Number of attempts before error", m_args.number_attempts)
-        .defaultValue("5")
-        .minimumValue("1")
-        .maximumValue("10")
-        .visibility(Parameter::VISIBILITY_DEVELOPER)
-        .description("Number of attempts before error.");
 
         param("Channel Main Name", m_args.pwr_main)
         .defaultValue("System")
@@ -330,6 +325,8 @@ namespace Power
         }
 
         m_bat_volt_batman.setSourceEntity(getEid("Batteries"));
+        m_amp_batman[0].setSourceEntity(getEid("Batteries"));
+        m_tmp.setSourceEntity(getEid("Batteries"));
         m_amp_batman[1].setSourceEntity(getEid(m_args.rcap_elabel));
         m_amp_batman[2].setSourceEntity(getEid(m_args.fcap_elabel));
       }
@@ -389,7 +386,6 @@ namespace Power
           m_poll.add(*m_uart);
           m_parser = new ParserOTPDIST(this);
           m_driver = new DriverOTPDIST(this, m_uart, m_poll, m_parser);
-          m_count_attempts = 0;
         }
         catch (std::runtime_error& e)
         {
@@ -514,10 +510,10 @@ namespace Power
       void
       initBoard(void)
       {
-        setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("trying connecting to board")));
+        setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("Setting up board OTPDIST")));
         if (!m_driver->getFirmwareVersion())
         {
-          war(DTR("failed to get firmware version"));
+          war(DTR("Failed to get firmware version"));
           m_driver->resetBoard();
           m_uart->flush();
           m_driver->resetStateNewData();
@@ -533,6 +529,16 @@ namespace Power
         if (!m_driver->setCellNumber(m_args.number_cell))
         {
           war("Fail setting cell number : %d", m_args.number_cell);
+          m_driver->resetBoard();
+          m_uart->flush();
+          m_driver->resetStateNewData();
+          setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
+          throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
+        }
+
+        if (!m_driver->setCFactor(m_args.scale_factor))
+        {
+          war("Fail setting scale factor : %f", m_args.scale_factor);
           m_driver->resetBoard();
           m_uart->flush();
           m_driver->resetStateNewData();
@@ -592,7 +598,7 @@ namespace Power
           }
         }
 
-        if (!m_driver->sendLeakCommand())
+        if (!m_driver->sendLeakCommand(true))
         {
           war(DTR("failed sending leak command setting to board"));
           all_set_channel = false;
@@ -613,6 +619,8 @@ namespace Power
         m_wdog_com.reset();
         m_wdog_single_read.setTop(c_delay_single_frame_read);
         m_wdog_single_read.reset();
+        m_wdog_batman.setTop(c_delay_to_get_info_batman);
+        m_wdog_batman.reset();
       }
 
       //! Set Leak status.
@@ -682,58 +690,76 @@ namespace Power
             m_parser->clearNewData(i);
           }
         }
-        /*m_driver->resetStateNewData();
 
-        m_volt[0].setTimeStamp(m_tstamp);
-        m_volt[0].value = m_driver->m_batManData.voltage;
-        dispatch(m_volt[0], DF_KEEP_TIME);
-
-        m_bat_volt.setTimeStamp(m_tstamp);
-        m_bat_volt.value = m_driver->m_batManData.voltage;
-        dispatch(m_bat_volt, DF_KEEP_TIME);
-
-        m_amp[0].setTimeStamp(m_tstamp);
-        m_amp[0].value = m_driver->m_batManData.current;
-        dispatch(m_amp[0], DF_KEEP_TIME);
-
-        for (uint8_t id = 1; id <= m_args.number_cell; ++id)
+        for(uint8_t i = 0; i < c_max_data_slot_batman; i++)
         {
-          m_volt[id].setTimeStamp(m_tstamp);
-          m_volt[id].value = m_driver->m_batManData.cell_volt[id - 1];
-          dispatch(m_volt[id], DF_KEEP_TIME);
+          if(m_parser->m_batManData.state_new_data[i])
+          {
+            m_parser->m_batManData.state_new_data[i] = false;
+            switch (i)
+            {
+              case 0:
+                m_volt_batman[0].setTimeStamp(m_tstamp);
+                m_volt_batman[0].value = m_parser->m_batManData.voltage;
+                dispatch(m_volt[0], DF_KEEP_TIME);
+                m_bat_volt_batman.setTimeStamp(m_tstamp);
+                m_bat_volt_batman.value = m_parser->m_batManData.voltage;
+                dispatch(m_bat_volt_batman, DF_KEEP_TIME);
+                break;
+
+              case 1:
+                m_amp_batman[0].setTimeStamp(m_tstamp);
+                m_amp_batman[0].value = m_parser->m_batManData.current;
+                dispatch(m_amp_batman[0], DF_KEEP_TIME);
+                break;
+
+              case 2:
+                m_tmp.setTimeStamp(m_tstamp);
+                m_tmp.value = m_parser->m_batManData.temperature;
+                dispatch(m_tmp, DF_KEEP_TIME);
+                break;
+
+              case 3:
+                m_amp_batman[1].setTimeStamp(m_tstamp);
+                m_amp_batman[1].value = m_parser->m_batManData.r_cap;
+                dispatch(m_amp_batman[1], DF_KEEP_TIME);
+                break;
+
+              case 4:
+                m_amp_batman[2].setTimeStamp(m_tstamp);
+                m_amp_batman[2].value = m_parser->m_batManData.f_cap;
+                dispatch(m_amp_batman[2], DF_KEEP_TIME);
+                break;
+
+              case 7:
+                for (uint8_t id = 1; id <= m_args.number_cell; ++id)
+                {
+                  m_volt_batman[id].setTimeStamp(m_tstamp);
+                  m_volt_batman[id].value = m_parser->m_batManData.cell_volt[id - 1];
+                  dispatch(m_volt_batman[id], DF_KEEP_TIME);
+                }
+                break;
+
+              default:
+                break;
+            }
+          }
         }
-
-        m_tmp.setTimeStamp(m_tstamp);
-        m_tmp.value = m_driver->m_batManData.temperature;
-        dispatch(m_tmp, DF_KEEP_TIME);
-
-        m_amp[1].setTimeStamp(m_tstamp);
-        m_amp[1].value = m_driver->m_batManData.r_cap;
-        dispatch(m_amp[1], DF_KEEP_TIME);
-
-        m_amp[2].setTimeStamp(m_tstamp);
-        m_amp[2].value = m_driver->m_batManData.f_cap;
-        dispatch(m_amp[2], DF_KEEP_TIME);
 
         if(m_args.dispatch_fuel_level)
         {
           m_fuel.setTimeStamp(m_tstamp);
-          m_fuel.value = (m_driver->m_batManData.r_cap * 100) / m_driver->m_batManData.f_cap;
+          m_fuel.value = (m_parser->m_batManData.r_cap * 100) / m_parser->m_batManData.f_cap;
           m_fuel.confidence = 100;
           dispatch(m_fuel, DF_KEEP_TIME);
         }
 
-        if (m_fuel.value < m_args.err_lvl && m_driver->m_batManData.voltage < m_args.err_volt_lvl)
+        if (m_fuel.value < m_args.err_lvl)
         {
           std::memset(&m_bufer_entity, '\0', sizeof(m_bufer_entity));
-          if (m_driver->m_batManData.time_full > 0)
+          if((m_parser->m_batManData.time_empty > 0))
           {
-            std::sprintf(m_bufer_entity, "fuel reserve - ETF: %s", minutesToTime(m_driver->m_batManData.time_full).c_str());
-            setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR(m_bufer_entity)));
-          }
-          else if((m_driver->m_batManData.time_empty > 0))
-          {
-            std::sprintf(m_bufer_entity, "fuel reserve - ETD: %s", minutesToTime(m_driver->m_batManData.time_empty).c_str());
+            std::sprintf(m_bufer_entity, "fuel on reserve - ETD: %s", minutesToTime(m_parser->m_batManData.time_empty).c_str());
             setEntityState(IMC::EntityState::ESTA_ERROR, Utils::String::str(DTR(m_bufer_entity)));
           }
           else
@@ -741,35 +767,12 @@ namespace Power
             setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_FUEL_RESERVE);
           }
         }
-        else if (m_fuel.value < m_args.err_lvl)
-        {
-          std::memset(&m_bufer_entity, '\0', sizeof(m_bufer_entity));
-          if (m_driver->m_batManData.time_full > 0)
-          {
-            std::sprintf(m_bufer_entity, "fuel warming - ETF: %s", minutesToTime(m_driver->m_batManData.time_full).c_str());
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
-          }
-          else if((m_driver->m_batManData.time_empty > 0))
-          {
-            std::sprintf(m_bufer_entity, "fuel warming - ETD: %s", minutesToTime(m_driver->m_batManData.time_empty).c_str());
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
-          }
-          else
-          {
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Status::CODE_FUEL_RESERVE);
-          }
-        }
         else if (m_fuel.value < m_args.war_lvl)
         {
           std::memset(&m_bufer_entity, '\0', sizeof(m_bufer_entity));
-          if (m_driver->m_batManData.time_full > 0)
+          if ((m_parser->m_batManData.time_empty > 0))
           {
-            std::sprintf(m_bufer_entity, "fuel running low - ETF: %s", minutesToTime(m_driver->m_batManData.time_full).c_str());
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
-          }
-          else if ((m_driver->m_batManData.time_empty > 0))
-          {
-            std::sprintf(m_bufer_entity, "fuel running low - ETD: %s", minutesToTime(m_driver->m_batManData.time_empty).c_str());
+            std::sprintf(m_bufer_entity, "fuel running low - ETD: %s", minutesToTime(m_parser->m_batManData.time_empty).c_str());
             setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
           }
           else
@@ -780,30 +783,52 @@ namespace Power
         else
         {
           std::memset(&m_bufer_entity, '\0', sizeof(m_bufer_entity));
-
-          if (m_driver->m_batManData.time_full > 0)
+          if (m_parser->m_batManData.time_full > 0)
+          {
             std::sprintf(m_bufer_entity,
                          "H: %d %%, Volt: %.3f V, RCap: %.3f Ah, ETF: %s",
-                         m_driver->m_batManData.health,
-                         m_driver->m_batManData.voltage,
-                         m_driver->m_batManData.r_cap,
-                         minutesToTime(m_driver->m_batManData.time_full).c_str());
-          else if (m_driver->m_batManData.time_empty > 0)
+                         m_parser->m_batManData.health,
+                         m_parser->m_batManData.voltage,
+                         m_parser->m_batManData.r_cap,
+                         minutesToTime(m_parser->m_batManData.time_full).c_str());
+          }
+          else if (m_parser->m_batManData.time_empty > 0)
+          {
             std::sprintf(m_bufer_entity,
                          "H: %d %%, Volt: %.3f V, RCap: %.3f Ah, ETD: %s",
-                         m_driver->m_batManData.health,
-                         m_driver->m_batManData.voltage,
-                         m_driver->m_batManData.r_cap,
-                         minutesToTime(m_driver->m_batManData.time_empty).c_str());
+                         m_parser->m_batManData.health,
+                         m_parser->m_batManData.voltage,
+                         m_parser->m_batManData.r_cap,
+                         minutesToTime(m_parser->m_batManData.time_empty).c_str());
+          }
           else
+          {
             std::sprintf(m_bufer_entity,
                          "H: %d %%, Volt: %.3f V, RCap: %.3f Ah",
-                         m_driver->m_batManData.health,
-                         m_driver->m_batManData.voltage,
-                         m_driver->m_batManData.r_cap);
-
+                         m_parser->m_batManData.health,
+                         m_parser->m_batManData.voltage,
+                         m_parser->m_batManData.r_cap);
+          }
           setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR(m_bufer_entity)));
-        }*/
+        }
+      }
+
+      std::string
+      minutesToTime(int minutes)
+      {
+        char time_battery[32];
+        int hour = minutes / 60;
+        int day = hour / 24;
+        hour = hour - (24 * day);
+        int min = minutes % 60;
+        if (day > 0)
+          std::sprintf(time_battery, "%dd %dh %dm", day, hour, min);
+        else if (hour > 0)
+          std::sprintf(time_battery, "%dh %dm", hour, min);
+        else
+          std::sprintf(time_battery, "%dm", min);
+
+        return time_battery;
       }
 
       void
@@ -834,6 +859,7 @@ namespace Power
         }
         if (m_pwr_down && !m_send_power_down)
         {
+          war("PowerOff delay %.2f seconds", m_args.delay_turn_off);
           m_wdog_off.setTop(m_args.delay_turn_off);
           m_wdog_off.reset();
           m_send_power_down = true;
@@ -858,39 +884,32 @@ namespace Power
         {
           waitForMessages(0.01);
           dispatchData();
+          //! 1Sec
           if(m_wdog_single_read.overflow())
           {
             m_driver->getSingleAcquisition();
             m_wdog_single_read.reset();
           }
-          if (m_wdog_com.overflow())
-          {
-            if (m_count_attempts >= m_args.number_attempts)
-            {
-              m_driver->resetBoard();
-              m_uart->flush();
-              setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
-              throw RestartNeeded(DTR(Status::getString(CODE_COM_ERROR)), 10);
-            }
 
-            setEntityState(IMC::EntityState::ESTA_NORMAL, Utils::String::str(DTR("trying connecting to board")));
-            war(DTR("trying connecting to board"));
-            m_count_attempts++;
-            m_uart->flush();
-            initBoard();
+          // Get Batman info/data
+          if(m_wdog_batman.overflow())
+          {
+            m_driver->getBatmanData();
+            m_wdog_batman.reset();
           }
 
-          //TO remove- only for test
-          //m_wdog_com.reset();
-
-          //if (!Poll::poll(*m_uart, 0.001))
-          //  continue;
+          if (m_wdog_com.overflow())
+          {
+            m_driver->resetBoard();
+            m_uart->flush();
+            setEntityState(IMC::EntityState::ESTA_ERROR, DTR("Timeout for receiving messages from board."));
+            throw RestartNeeded(DTR("Timeout for receiving messages from board."), 10);
+          }
 
           if(m_driver->haveNewData())
           {
             m_tstamp = Clock::getSinceEpoch();
             checkInternalSensors();
-            m_count_attempts = 0;
             m_wdog_com.reset();
           }
           if(m_pwr_down && m_wdog_off.overflow())
@@ -899,8 +918,6 @@ namespace Power
             m_driver->sendPowerOffCommand();
           }
         }
-        debug("Sending stop acquisition to OTPDIST");
-        m_driver->stopAcquisition();
       }
     };
   }

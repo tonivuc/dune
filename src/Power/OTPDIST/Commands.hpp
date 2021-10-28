@@ -41,26 +41,32 @@
 //! Bytes Decode
 enum DecodeData
 {
-  OTP_PREAMBLE            = 0x2C,
-  OTP_TERMINATOR          = 0x0A,
-  OTP_CELL_NUMBER         = 0x22,
-  OTP_SEND_BATMAN_DATA    = 0x23,
-  OTP_BATMAN_DATA         = 0x31,
-  OTP_RESET               = 0x60,
-  OTP_ACK                 = 0x61,
-  OTP_NACK                = 0x62,
-  OTP_VERSION             = 0x50,
-  OTP_SET_PO_STATE        = 0x51,
-  OTP_GET_PO_STATE        = 0x52,
-  OTP_TURN_ON             = 0x1D,
-  OTP_TURN_OFF            = 0x1E,
-  OTP_LEAK                = 0x1F,
-  OTP_SWITCH_ON           = 0x63,
-  OTP_SWITCH_OFF          = 0x64,
-  OTP_START_ACQUISITION   = 0x65,
-  OTP_STOP_ACQUISITION    = 0x66,
-  OTP_POWER_DATA          = 0x67,
-  OTP_SINGLE_ACQUISITION  = 0x68
+  OTP_PREAMBLE            = '$',
+  OTP_TERMINATOR          = '#',
+  OTP_CELL_NUMBER         = 'C',
+  OTP_CELL_DATA           = 'D',
+  OTP_C_FACTOR            = 'c',
+  OTP_SEND_BATMAN_DATA    = 'b',
+  OTP_BATMAN_DATA         = 'B',
+  OTP_BATMAN_DATA_VALUES  = 'v',
+  OTP_RESET               = 'R',
+  OTP_ACK                 = 'A',
+  OTP_NACK                = 'N',
+  OTP_VERSION             = 'V',
+  OTP_SET_PO_STATE        = 'S',
+  OTP_GET_PO_STATE        = 'G',
+  OTP_LEAK                = 'L',
+  OTP_SERVOS              = 's',
+  OTP_SWITCH_ON           = 'O',
+  OTP_SWITCH_OFF          = 'F',
+  OTP_START_ACQUISITION   = 'T',
+  OTP_STOP_ACQUISITION    = 'E',
+  OTP_POWER_DATA          = 'P',
+  OTP_POWER_DATA_SERVO    = 'p',
+  OTP_SINGLE_ACQUISITION  = 'K',
+  OTP_TURN_ON             = 'H',
+  OTP_TURN_OFF            = 'L',
+  OTP_POWER_OFF_BOARD     = 'X'
 };
 
 //! Power channels
@@ -98,15 +104,15 @@ enum LeaksIds
 //! Leaks status
 enum LeakStatus
 {
-  LEAK_ON               = 0x53,
-  LEAK_OFF              = 0x54
+  LEAK_ON               = 'T',
+  LEAK_OFF              = 'F'
 };
 
 //! Leaks messages status
 enum LeakStatusMessage
 {
-  LEAK_SEND_ON          = 0x21,
-  LEAK_SEND_OFF         = 0x31
+  LEAK_SEND_ON          = 'T',
+  LEAK_SEND_OFF         = 'S'
 };
 
 #endif /* POWER_OTPDIST_COMMANDS_HPP_INCLUDED_ */
