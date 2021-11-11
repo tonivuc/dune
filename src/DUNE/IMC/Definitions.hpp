@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 92e85702ae29fe2fbab3b0c645e5ab8f                            *
+// IMC XML MD5: a125aaa4a156a5fa352c388c1fc3bc30                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25757,7 +25757,7 @@ namespace DUNE
     };
 
     //! ExpandingSquare.
-    class ExpandingSquare: public Message
+    class ExpandingSquare: public Maneuver
     {
     public:
       //! Flags.
