@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a125aaa4a156a5fa352c388c1fc3bc30                            *
+// IMC XML MD5: 8f9795208e5717ed821a0ff07614460f                            *
 //***************************************************************************
 
 // ISO C++ 98 headers.
@@ -27274,7 +27274,7 @@ namespace DUNE
       speed = 0;
       bearing = 0;
       width = 0;
-      length = 0;
+      hstep = 0;
       flags = 0;
     }
 
@@ -27289,7 +27289,7 @@ namespace DUNE
       if (speed != other__.speed) return false;
       if (bearing != other__.bearing) return false;
       if (width != other__.width) return false;
-      if (length != other__.length) return false;
+      if (hstep != other__.hstep) return false;
       if (flags != other__.flags) return false;
       return true;
     }
@@ -27301,7 +27301,7 @@ namespace DUNE
       if (lon < -3.141592653589793 || lon > 3.141592653589793) return false;
       if (bearing < 0 || bearing > 6.283185307179586) return false;
       if (width < 0) return false;
-      if (length < 0) return false;
+      if (hstep < 0) return false;
       return true;
     }
 
@@ -27316,7 +27316,7 @@ namespace DUNE
       ptr__ += IMC::serialize(speed, ptr__);
       ptr__ += IMC::serialize(bearing, ptr__);
       ptr__ += IMC::serialize(width, ptr__);
-      ptr__ += IMC::serialize(length, ptr__);
+      ptr__ += IMC::serialize(hstep, ptr__);
       ptr__ += IMC::serialize(flags, ptr__);
       return ptr__;
     }
@@ -27332,7 +27332,7 @@ namespace DUNE
       bfr__ += IMC::deserialize(speed, bfr__, size__);
       bfr__ += IMC::deserialize(bearing, bfr__, size__);
       bfr__ += IMC::deserialize(width, bfr__, size__);
-      bfr__ += IMC::deserialize(length, bfr__, size__);
+      bfr__ += IMC::deserialize(hstep, bfr__, size__);
       bfr__ += IMC::deserialize(flags, bfr__, size__);
       return bfr__ - start__;
     }
@@ -27348,7 +27348,7 @@ namespace DUNE
       bfr__ += IMC::reverseDeserialize(speed, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(bearing, bfr__, size__);
       bfr__ += IMC::reverseDeserialize(width, bfr__, size__);
-      bfr__ += IMC::reverseDeserialize(length, bfr__, size__);
+      bfr__ += IMC::reverseDeserialize(hstep, bfr__, size__);
       bfr__ += IMC::deserialize(flags, bfr__, size__);
       return bfr__ - start__;
     }
@@ -27363,7 +27363,7 @@ namespace DUNE
       IMC::toJSON(os__, "speed", speed, nindent__);
       IMC::toJSON(os__, "bearing", bearing, nindent__);
       IMC::toJSON(os__, "width", width, nindent__);
-      IMC::toJSON(os__, "length", length, nindent__);
+      IMC::toJSON(os__, "hstep", hstep, nindent__);
       IMC::toJSON(os__, "flags", flags, nindent__);
     }
   }

@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: a125aaa4a156a5fa352c388c1fc3bc30                            *
+// IMC XML MD5: 8f9795208e5717ed821a0ff07614460f                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25781,8 +25781,8 @@ namespace DUNE
       fp64_t bearing;
       //! Width.
       fp32_t width;
-      //! Length.
-      fp32_t length;
+      //! Horizontal step.
+      fp32_t hstep;
       //! Flags.
       uint8_t flags;
 
