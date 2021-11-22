@@ -74,7 +74,7 @@ main(int argc, char** argv)
     man.flags = IMC::ExpandingSquare::FLG_CURVE_RIGHT;
 
     IMC::PlanManeuver pman;
-    pman.maneuver_id = "m1";
+    pman.maneuver_id = "3001";
     pman.data.set(man);
 
     mission_spec.maneuvers.push_back(pman);
