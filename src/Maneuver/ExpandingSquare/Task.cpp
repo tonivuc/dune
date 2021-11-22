@@ -63,6 +63,7 @@ namespace Maneuver
       void
       consume(const IMC::ExpandingSquare* maneuver)
       {
+        war("Inside consume ExpandingSquare maneuver");
         if (maneuver->getSource() != getSystemId())
           return;
 
@@ -70,14 +71,21 @@ namespace Maneuver
 
 
         //New code!
+        //Get current location (probably from local variables?)
+
+        //Calculate path based on logic from 0
+
+        //generatePoints method:
+        
 
         //Send first DesiredPath based on manouver parameters.
 
-        //Get current location
+        
 
         //sendPath(lat, lon)
 
         //Store remaining points in an array in the object? (Not the best way, better to have a function always giving the next point, but this is easier)
+
 
         //Old code!!
         /*
@@ -131,9 +139,12 @@ namespace Maneuver
         */
       }
 
+
+
       void
       consume(const IMC::EstimatedState* msg)
       {
+        war("Inside consume EstimatedState");
         if (msg->getSource() != getSystemId())
           return;
 
@@ -265,6 +276,7 @@ namespace Maneuver
       void
       onMain(void)
       {
+        war("In expandingSquare onMain");
         while (!stopping())
         {
           waitForMessages(1.0);
