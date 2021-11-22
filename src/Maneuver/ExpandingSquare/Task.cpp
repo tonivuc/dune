@@ -29,6 +29,7 @@
 
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
+#include <utility>  
 
 namespace Maneuver
 {
@@ -39,6 +40,17 @@ namespace Maneuver
   namespace ExpandingSquare
   {
     using DUNE_NAMESPACES;
+
+    struct CoordinatePair
+    {
+      fp64_t lat;
+      fp64_t lon;
+
+      CoordinatePair(fp64_t latitude, fp64_t longtitude) {
+        lat = latitude;
+        lon = longtitude;
+      }
+    };
 
     struct Task: public Maneuvers::Maneuver
     {
@@ -57,7 +69,26 @@ namespace Maneuver
       {
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
-        //paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
+        // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
+      }
+
+      /*
+      //! Destructor
+      virtual
+      ~Task(void)
+      {
+        Memory::clear(m_stages_parser);
+        Memory::clear(m_alt_avrg);
+      }
+      */
+      
+      void
+      onManeuverDeactivation(void)
+      {
+        /*
+        Memory::clear(m_stages_parser);
+        Memory::clear(m_alt_avrg);
+        */
       }
 
       void
@@ -71,12 +102,18 @@ namespace Maneuver
 
 
         //New code!
-        //Get current location (probably from local variables?)
+        CoordinatePair initialCoord(m_maneuver.lat, m_maneuver.lon);
+        //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
+
+
+
+        m_maneuver.bearing 
+        
 
         //Calculate path based on logic from 0
 
         //generatePoints method:
-        
+
 
         //Send first DesiredPath based on manouver parameters.
 
