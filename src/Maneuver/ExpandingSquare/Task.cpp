@@ -91,13 +91,16 @@ namespace Maneuver
       {
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
-        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(100, 10, 0.0, true);
+
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(300, 40, 0.0, true);
         war("Have generated %u waypoints",relativeWaypoints.size());
         
         std::list<XyPair>::iterator it;
         for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
             war("x: %f, y: %f",it->x, it->y);
         }
+
+        std::list<CoordinatePair> absoluteWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, Angles::radians(41.1843982), Angles::radians(-8.70599224));
         // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
       }
 
@@ -118,6 +121,25 @@ namespace Maneuver
         Memory::clear(m_stages_parser);
         Memory::clear(m_alt_avrg);
         */
+      }
+
+      std::list<CoordinatePair>
+      convertToAbsoluteWaypoints(std::list<XyPair> relativeWaypoints, double vehicleLat, double vehicleLon) {
+        std::list<CoordinatePair> waypointCoordinates;
+        double lat = vehicleLat;
+        double lon = vehicleLon;
+        double hae = 0.00; //Dummy variable
+
+        std::list<XyPair>::iterator it;
+        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
+            Coordinates::WGS84::displace(it->y, it->x, 0.0, &lat, &lon, &hae); //Passing the address of lat and lon here
+            waypointCoordinates.push_back(CoordinatePair(lat,lon));
+
+            //Reset latitudes so calculation of offsets is correct
+            lat = vehicleLat;
+            lon = vehicleLon;
+        }
+        return waypointCoordinates;
       }
 
       //Function returns the original waypoint, but constrained if necessary so that it does not exceed the width of the maneuver
@@ -178,7 +200,7 @@ namespace Maneuver
         fp64_t initialY = 0.0;
         double initialHstep = hstep;
         double maxOffsetFromCentere = width/2;
-        std::list<XyPair> relativeWaypoints;;
+        std::list<XyPair> relativeWaypoints;
 
         relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
 
