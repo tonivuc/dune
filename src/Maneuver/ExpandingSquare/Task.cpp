@@ -91,6 +91,13 @@ namespace Maneuver
       {
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(100, 10, 0.0, true);
+        war("Have generated %u waypoints",relativeWaypoints.size());
+        
+        std::list<XyPair>::iterator it;
+        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
+            war("x: %f, y: %f",it->x, it->y);
+        }
         // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
       }
 
@@ -140,15 +147,17 @@ namespace Maneuver
 
       XyPair
       createNextPoint(XyPair prevPoint, direction movementDirection, double initialHstep, double hstepMultiplier) {
+          double stepLength = initialHstep * hstepMultiplier;
+
           switch (movementDirection) {
             case north:
-              return XyPair(prevPoint.x, prevPoint.y + initialHstep * hstepMultiplier);
+              return XyPair(prevPoint.x, prevPoint.y + stepLength);
             case east: 
-              return XyPair(prevPoint.x + initialHstep * hstepMultiplier, prevPoint.y);
+              return XyPair(prevPoint.x + stepLength, prevPoint.y);
             case south: 
-              return XyPair(prevPoint.x, prevPoint.y - initialHstep * hstepMultiplier);
+              return XyPair(prevPoint.x, prevPoint.y - stepLength);
             case west: 
-              return XyPair(prevPoint.x - initialHstep * hstepMultiplier, prevPoint.y);
+              return XyPair(prevPoint.x - stepLength, prevPoint.y);
           }
       }
 
@@ -169,7 +178,7 @@ namespace Maneuver
         fp64_t initialY = 0.0;
         double initialHstep = hstep;
         double maxOffsetFromCentere = width/2;
-        std::list<XyPair> relativeWaypoints;
+        std::list<XyPair> relativeWaypoints;;
 
         relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
 
@@ -177,7 +186,7 @@ namespace Maneuver
         direction movementDirection = north; //Initial direction is up/north
         
         int hstepMultiplier = 1; //Increases length of each maneuver length
-
+        
         while (!done) {
           XyPair prevPoint = relativeWaypoints.back();
           XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
@@ -187,10 +196,12 @@ namespace Maneuver
           relativeWaypoints.push_back(constrainedNextPoint);
 
           //Prepare for next loop
-          hstepMultiplier = relativeWaypoints.size()/2;
+          hstepMultiplier = (relativeWaypoints.size()+1)/2;
           movementDirection = changeMovementDirection(movementDirection);
           done = isManeuverDone(nextPoint, constrainedNextPoint);
         }
+        
+        return relativeWaypoints;
       }
 
       void
@@ -205,8 +216,6 @@ namespace Maneuver
 
 
         //New code!
-        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
-        
         //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
 
         
