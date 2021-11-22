@@ -81,7 +81,7 @@ namespace Maneuver
       //! DesiredPath
       IMC::DesiredPath m_path;
 
-      bool m_rotate_clockwise;
+      bool m_rotate_clockwise = true;
 
       //! Constructor.
       //! @param[in] name task name.
