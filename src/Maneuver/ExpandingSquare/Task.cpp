@@ -205,7 +205,7 @@ namespace Maneuver
 
 
         //New code!
-        std::list<XyPair> generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight)
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
         
         //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
 
