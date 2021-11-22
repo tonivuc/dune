@@ -56,7 +56,7 @@ main(int argc, char** argv)
 
     IMC::PlanSpecification mission_spec;
 
-    IMC::Goto man; // Replace Goto maneuver with the new one ExpandingSquare
+    IMC::ExpandingSquare man; // Replace Goto maneuver with the new one ExpandingSquare
     man.lat = Angles::radians(41.1843982);
     man.lon = Angles::radians(-8.70599224);
     man.z = 0;
@@ -64,6 +64,14 @@ main(int argc, char** argv)
     man.speed = 1.2;
     man.speed_units = IMC::SUNITS_METERS_PS;
     // Fill the rest of the fields
+    //Width?
+    man.width = 100.0;
+    //hstep?
+    man.hstep = 10.0;
+    //Bearing?
+    man.bearing = 0.0;
+    //First curve right?
+    man.flags = IMC::ExpandingSquare::FLG_CURVE_RIGHT;
 
     IMC::PlanManeuver pman;
     pman.maneuver_id = "m1";

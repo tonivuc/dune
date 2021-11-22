@@ -28,7 +28,7 @@
 //***************************************************************************
 // Automatically generated.                                                 *
 //***************************************************************************
-// IMC XML MD5: 8f9795208e5717ed821a0ff07614460f                            *
+// IMC XML MD5: 9ae866339171f93f5a8942d40d26086a                            *
 //***************************************************************************
 
 #ifndef DUNE_IMC_DEFINITIONS_HPP_INCLUDED_
@@ -25764,7 +25764,7 @@ namespace DUNE
       enum FlagsBits
       {
         //! First Curve Right.
-        FLG_CURVE_RIGHT = 0x02
+        FLG_CURVE_RIGHT = 0x01
       };
 
       //! Latitude WGS-84.
@@ -25777,6 +25777,8 @@ namespace DUNE
       uint8_t z_units;
       //! Speed.
       fp32_t speed;
+      //! Speed Units.
+      uint8_t speed_units;
       //! Bearing.
       fp64_t bearing;
       //! Width.
@@ -25833,7 +25835,7 @@ namespace DUNE
       unsigned
       getFixedSerializationSize(void) const
       {
-        return 42;
+        return 43;
       }
 
       void
