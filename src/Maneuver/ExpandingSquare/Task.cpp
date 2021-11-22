@@ -30,6 +30,7 @@
 // DUNE headers.
 #include <DUNE/DUNE.hpp>
 #include <utility>  
+#include <list>
 
 namespace Maneuver
 {
@@ -52,6 +53,17 @@ namespace Maneuver
       }
     };
 
+    struct XyPair
+    {
+      fp64_t x;
+      fp64_t y;
+
+      XyPair(fp64_t xValue, fp64_t yValue) {
+        x = xValue;
+        y = yValue;
+      }
+    };
+
     struct Task: public Maneuvers::Maneuver
     {
       //! Maneuver
@@ -60,6 +72,8 @@ namespace Maneuver
       IMC::EstimatedState m_state;
       //! DesiredPath
       IMC::DesiredPath m_path;
+
+      bool m_rotate_clockwise;
 
       //! Constructor.
       //! @param[in] name task name.
@@ -91,6 +105,57 @@ namespace Maneuver
         */
       }
 
+      //Function returns the original waypoint, but constrained so that it does not exceed the width of the maneuver
+      XyPair
+      constrainManeuver(double width, double angle, XyPair rotatedPoints) {
+        double borderX = width/2;
+        double borderY = width/2;
+        Angles::rotate(angle, m_rotate_clockwise, borderX, borderY);
+
+        if (borderX < rotatedPoints.x)  {
+          rotatedPoints.x = borderX;
+        }
+        if (borderY < rotatedPoints.y)  {
+          rotatedPoints.y = borderY;
+        }
+
+        return rotatedPoints;
+      }
+
+      bool 
+      isManeuverDone(XyPair rotatedPoints, XyPair constrainedRotatedPoints) {
+        if (rotatedPoints.x != constrainedRotatedPoints.x || rotatedPoints.y != constrainedRotatedPoints.y) {
+          return true;
+        }
+        return false;
+      }
+
+      void
+      generateWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
+        fp64_t initialX = 0.0;
+        fp64_t initialY = 0.0;
+        double currentHstep = hstep;
+
+        double maxOffsetFromCentere = width/2;
+
+
+        std::list<XyPair> relativeWaypoints;
+        relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
+
+        bool done = false;
+
+        int waypointsAdded = 1;
+        int hstepMultiplier = 1;
+        while (!done) {
+          XyPair prevPoint = relativeWaypoints.back();
+          XyPair nextPoint = XyPair(prevPoint.x, prevPoint.y + currentHstep * hstepMultiplier);
+          Angles::rotate(bearing, m_rotate_clockwise, nextPoint.x, nextPoint.y); //Rotates nextPoint according to bearing
+          relativeWaypoints.push_back(nextPoint);
+          waypointsAdded++;
+          hstepMultiplier = waypointsAdded/2;
+        }
+      }
+
       void
       consume(const IMC::ExpandingSquare* maneuver)
       {
@@ -105,9 +170,6 @@ namespace Maneuver
         CoordinatePair initialCoord(m_maneuver.lat, m_maneuver.lon);
         //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
 
-
-
-        m_maneuver.bearing 
         
 
         //Calculate path based on logic from 0
