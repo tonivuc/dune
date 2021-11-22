@@ -64,6 +64,14 @@ namespace Maneuver
       }
     };
 
+    enum direction 
+    {
+      north = 0, 
+      east = 1, 
+      south = 2,
+      west = 3
+    };
+
     struct Task: public Maneuvers::Maneuver
     {
       //! Maneuver
@@ -105,7 +113,7 @@ namespace Maneuver
         */
       }
 
-      //Function returns the original waypoint, but constrained so that it does not exceed the width of the maneuver
+      //Function returns the original waypoint, but constrained if necessary so that it does not exceed the width of the maneuver
       XyPair
       constrainManeuver(double width, double angle, XyPair rotatedPoints) {
         double borderX = width/2;
@@ -130,29 +138,58 @@ namespace Maneuver
         return false;
       }
 
-      void
-      generateWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
+      XyPair
+      createNextPoint(XyPair prevPoint, direction movementDirection, double initialHstep, double hstepMultiplier) {
+          switch (movementDirection) {
+            case north:
+              return XyPair(prevPoint.x, prevPoint.y + initialHstep * hstepMultiplier);
+            case east: 
+              return XyPair(prevPoint.x + initialHstep * hstepMultiplier, prevPoint.y);
+            case south: 
+              return XyPair(prevPoint.x, prevPoint.y - initialHstep * hstepMultiplier);
+            case west: 
+              return XyPair(prevPoint.x - initialHstep * hstepMultiplier, prevPoint.y);
+          }
+      }
+
+      direction
+      changeMovementDirection(direction previousDirection, bool curveRight=true) {
+        if ((int)previousDirection < 3) { //west
+          int newDirAsInt = (int)previousDirection+1;
+          return static_cast<direction>(newDirAsInt);
+        }
+        else {
+          return static_cast<direction>(0); //north
+        }
+      }
+
+      std::list<XyPair>
+      generateRelativeWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
         fp64_t initialX = 0.0;
         fp64_t initialY = 0.0;
-        double currentHstep = hstep;
-
+        double initialHstep = hstep;
         double maxOffsetFromCentere = width/2;
-
-
         std::list<XyPair> relativeWaypoints;
+
         relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
 
         bool done = false;
+        direction movementDirection = north; //Initial direction is up/north
+        
+        int hstepMultiplier = 1; //Increases length of each maneuver length
 
-        int waypointsAdded = 1;
-        int hstepMultiplier = 1;
         while (!done) {
           XyPair prevPoint = relativeWaypoints.back();
-          XyPair nextPoint = XyPair(prevPoint.x, prevPoint.y + currentHstep * hstepMultiplier);
+          XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
+           
           Angles::rotate(bearing, m_rotate_clockwise, nextPoint.x, nextPoint.y); //Rotates nextPoint according to bearing
-          relativeWaypoints.push_back(nextPoint);
-          waypointsAdded++;
-          hstepMultiplier = waypointsAdded/2;
+          XyPair constrainedNextPoint = constrainManeuver(width, bearing, nextPoint);
+          relativeWaypoints.push_back(constrainedNextPoint);
+
+          //Prepare for next loop
+          hstepMultiplier = relativeWaypoints.size()/2;
+          movementDirection = changeMovementDirection(movementDirection);
+          done = isManeuverDone(nextPoint, constrainedNextPoint);
         }
       }
 
@@ -164,10 +201,12 @@ namespace Maneuver
           return;
 
         m_maneuver = *maneuver;
+        bool curveRight = m_maneuver.flags; //Flag of 1 means true
 
 
         //New code!
-        CoordinatePair initialCoord(m_maneuver.lat, m_maneuver.lon);
+        std::list<XyPair> generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight)
+        
         //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
 
         
