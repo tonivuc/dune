@@ -24,7 +24,8 @@
 // https://github.com/LSTS/dune/blob/master/LICENCE.md and                  *
 // http://ec.europa.eu/idabc/eupl.html.                                     *
 //***************************************************************************
-// Author: Toni Vucic                                                       *
+// Author: Toni Vucic.                                                      *
+// Loosely based on RowsSquare maneuver by Paulo Dias and Pedro Calado      *
 //***************************************************************************
 
 // DUNE headers.
@@ -35,9 +36,9 @@
 
 namespace Maneuver
 {
-  //! Insert short task description here.
+  //! Maneuvers the drone in an expanding square pattern with sweep lines starting in the middle and expanding out in a square.
   //!
-  //! Insert explanation on task behaviour here.
+  //! The task is started when it receives an ExpandingSquare IMC message and ends when the maneuver has grown to the width specified in the IMC message.
   //! @author Toni Vucic
   namespace ExpandingSquare
   {
@@ -77,13 +78,11 @@ namespace Maneuver
     {
       //! Maneuver
       IMC::ExpandingSquare m_maneuver;
-      //! EstimatedState
-      IMC::EstimatedState m_state;
       //! DesiredPath
       IMC::DesiredPath m_path;
-      //!
+      //! Planned waypoints for the maneuver
       std::list<CoordinatePair> m_plannedWaypoints;
-
+      //! Task configuration deciding if rotations should be performed clockwise or not
       bool m_rotate_clockwise = true;
 
       //! Constructor.
@@ -92,14 +91,13 @@ namespace Maneuver
       Task(const std::string& name, Tasks::Context& ctx):
         DUNE::Maneuvers::Maneuver(name, ctx)
       {
-        war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
       }
 
       void
       onManeuverDeactivation(void)
       {
-        //No need to clear m_plannedWaypoints as waypoints are removed as the maneuver progresses.
+        //No need to clear m_plannedWaypoints as waypoints are removed as the maneuver progresses and it is overriden on next maneuver start.
       }
 
       //! Converts relative waypoints in meter offsets into a list of waypoints with GPS coordinates in radiants.
@@ -280,35 +278,19 @@ namespace Maneuver
 
         m_maneuver = *maneuver;
         bool curveRight = m_maneuver.flags; //Flag of 1 means true
-
-        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
-
-        m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
-
-        CoordinatePair firstWaypoint = m_plannedWaypoints.front();
-        m_plannedWaypoints.pop_front();
-
         setControl(IMC::CL_PATH);
         m_path.speed = maneuver->speed;
         m_path.speed_units = maneuver->speed_units;
         m_path.end_z = maneuver->z;
         m_path.end_z_units = maneuver->z_units;
+
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
+        m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
+
+        CoordinatePair firstWaypoint = m_plannedWaypoints.front();
+        m_plannedWaypoints.pop_front();
+
         sendPath(firstWaypoint.lat, firstWaypoint.lon);
-      }
-
-      void
-      consume(const IMC::EstimatedState* msg)
-      {
-        war("Inside consume EstimatedState");
-        if (msg->getSource() != getSystemId())
-          return;
-
-
-        //New code!
-        fp64_t lat = msg->lat;
-        fp64_t lon = msg->lon;
-
-
       }
 
       //! On PathControlState message
@@ -318,7 +300,7 @@ namespace Maneuver
       {
         if (pcs->flags & IMC::PathControlState::FL_NEAR) {
           if (m_plannedWaypoints.size() <= 0) {
-            war("No more waypoints");
+            inf("No more waypoints");
             signalCompletion();
             return;
           }
@@ -334,8 +316,6 @@ namespace Maneuver
       void
       sendPath(double lat, double lon)
       {
-        war("Inside sendPath");
-        // Calculate WGS-84 coordinates and fill DesiredPath message
         m_path.end_lat = lat;
         m_path.end_lon = lon;
         m_path.flags = 0;
