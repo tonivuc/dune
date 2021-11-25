@@ -36,7 +36,7 @@
 
 namespace Maneuver
 {
-  //! Maneuvers the drone in an expanding square pattern with sweep lines starting in the middle and expanding out in a square.
+  //! Maneuvers the drone in an expanding square pattern with sweep lines starting in the center and expanding out in a square.
   //!
   //! The task is started when it receives an ExpandingSquare IMC message and ends when the maneuver has grown to the width specified in the IMC message.
   //! @author Toni Vucic
@@ -98,6 +98,131 @@ namespace Maneuver
       onManeuverDeactivation(void)
       {
         //No need to clear m_plannedWaypoints as waypoints are removed as the maneuver progresses and it is overriden on next maneuver start.
+      }
+
+      void
+      consume(const IMC::ExpandingSquare* maneuver)
+      {
+        if (maneuver->getSource() != getSystemId())
+          return;
+
+        m_maneuver = *maneuver;
+        bool curveRight = m_maneuver.flags; //Flag of 1 means true
+        setControl(IMC::CL_PATH);
+        m_path.speed = maneuver->speed;
+        m_path.speed_units = maneuver->speed_units;
+        m_path.end_z = maneuver->z;
+        m_path.end_z_units = maneuver->z_units;
+
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
+        m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
+
+        CoordinatePair firstWaypoint = m_plannedWaypoints.front();
+        m_plannedWaypoints.pop_front();
+
+        sendPath(firstWaypoint.lat, firstWaypoint.lon);
+      }
+
+      //! On PathControlState message
+      //! @param[in] pcs pointer to PathControlState message
+      void
+      onPathControlState(const IMC::PathControlState* pcs)
+      {
+        if (pcs->flags & IMC::PathControlState::FL_NEAR) {
+          if (m_plannedWaypoints.size() <= 0) {
+            inf("No more waypoints");
+            signalCompletion();
+            return;
+          }
+          CoordinatePair nextWaypoint = m_plannedWaypoints.front();
+          m_plannedWaypoints.pop_front();
+          sendPath(nextWaypoint.lat, nextWaypoint.lon);
+        }
+      }
+
+      //! Generates waypoints with offsets from the start location (0,0) in meters
+      //! @param[in] width maneuver width.
+      //! @param[in] hstep spacing between sweep lines.
+      //! @param[in] bearing angle the maneuver is rotated by.
+      //! @param[in] curveRight if the maneuver should curve right or left.
+      //! @return a list of waypoints
+      std::list<XyPair>
+      generateRelativeWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
+        fp64_t initialX = 0.0;
+        fp64_t initialY = 0.0;
+        double initialHstep = hstep;
+        double maxOffsetFromCentere = width/2;
+        std::list<XyPair> relativeWaypoints;
+
+        relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
+
+        bool done = false;
+        direction movementDirection = north; //Initial direction is up/north
+        
+        int hstepMultiplier = 1; //Increases length of each maneuver length
+        
+        while (!done) {
+          XyPair prevPoint = relativeWaypoints.back();
+          XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
+          XyPair constrainedNextPoint = constrainManeuver(width, nextPoint);
+          relativeWaypoints.push_back(constrainedNextPoint);
+
+          //Prepare for next loop
+          hstepMultiplier = (relativeWaypoints.size()+1)/2;
+          movementDirection = changeMovementDirection(movementDirection, curveRight);
+          done = isManeuverDone(nextPoint, constrainedNextPoint);
+        }
+        
+        std::list<XyPair> rotatedRelativeWaypoints = rotatePoints(relativeWaypoints, bearing);
+
+        return rotatedRelativeWaypoints;
+      }
+
+            //! Creates a waypoint with a offset in the right direction
+      //! @param[in] prevPoint previous point.
+      //! @param[in] movementDirection which compass direction to move towards.
+      //! @param[in] initialHstep length of each sweep line before multiplier has been applied.
+      //! @param[in] hstepMultiplier a factor to multiply the initialHstep with to get the current sweep line length.
+      //! @return a waypoint.
+      XyPair
+      createNextPoint(XyPair prevPoint, direction movementDirection, double initialHstep, double hstepMultiplier) {
+          double stepLength = initialHstep * hstepMultiplier;
+
+          switch (movementDirection) {
+            case north:
+              return XyPair(prevPoint.x, prevPoint.y + stepLength);
+            case east: 
+              return XyPair(prevPoint.x + stepLength, prevPoint.y);
+            case south: 
+              return XyPair(prevPoint.x, prevPoint.y - stepLength);
+            case west: 
+              return XyPair(prevPoint.x - stepLength, prevPoint.y);
+          }
+      }
+
+      //! Takes the previous movement direction and returns the next one.
+      //! @param[in] previousDirection previous movement direction.
+      //! @param[in] curveRight if the maneuver should curve right or left.
+      //! @return the next movement direction
+      direction
+      changeMovementDirection(direction previousDirection, bool curveRight=true) {
+        if (curveRight) {
+          if ((int)previousDirection < 3) { //everything except west
+            int newDirAsInt = (int)previousDirection+1;
+            return static_cast<direction>(newDirAsInt);
+          }
+          else { //If the last one was west
+            return north;
+          }
+        } else {
+          if (previousDirection == north) {
+            return west;
+          }
+          else if ((int)previousDirection > 0) {
+            int newDirAsInt = (int)previousDirection-1;
+            return static_cast<direction>(newDirAsInt);
+          }
+        }
       }
 
       //! Converts relative waypoints in meter offsets into a list of waypoints with GPS coordinates in radiants.
@@ -165,92 +290,6 @@ namespace Maneuver
         return false;
       }
 
-      //! Creates a waypoint with a offset in the right direction
-      //! @param[in] prevPoint previous point.
-      //! @param[in] movementDirection which compass direction to move towards.
-      //! @param[in] initialHstep length of each sweep line before multiplier has been applied.
-      //! @param[in] hstepMultiplier a factor to multiply the initialHstep with to get the current sweep line length.
-      //! @return a waypoint.
-      XyPair
-      createNextPoint(XyPair prevPoint, direction movementDirection, double initialHstep, double hstepMultiplier) {
-          double stepLength = initialHstep * hstepMultiplier;
-
-          switch (movementDirection) {
-            case north:
-              return XyPair(prevPoint.x, prevPoint.y + stepLength);
-            case east: 
-              return XyPair(prevPoint.x + stepLength, prevPoint.y);
-            case south: 
-              return XyPair(prevPoint.x, prevPoint.y - stepLength);
-            case west: 
-              return XyPair(prevPoint.x - stepLength, prevPoint.y);
-          }
-      }
-
-      //! Takes the previous movement direction and returns the next one.
-      //! @param[in] previousDirection previous movement direction.
-      //! @param[in] curveRight if the maneuver should curve right or left.
-      //! @return the next movement direction
-      direction
-      changeMovementDirection(direction previousDirection, bool curveRight=true) {
-        if (curveRight) {
-          if ((int)previousDirection < 3) { //everything except west
-            int newDirAsInt = (int)previousDirection+1;
-            return static_cast<direction>(newDirAsInt);
-          }
-          else { //If the last one was west
-            return north;
-          }
-        } else {
-          if (previousDirection == north) {
-            return west;
-          }
-          else if ((int)previousDirection > 0) {
-            int newDirAsInt = (int)previousDirection-1;
-            return static_cast<direction>(newDirAsInt);
-          }
-        }
-
-      }
-
-      //! Generates waypoints with offsets from the start location (0,0) in meters
-      //! @param[in] width maneuver width.
-      //! @param[in] hstep spacing between sweep lines.
-      //! @param[in] bearing angle the maneuver is rotated by.
-      //! @param[in] curveRight if the maneuver should curve right or left.
-      //! @return a list of waypoints
-      std::list<XyPair>
-      generateRelativeWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
-        fp64_t initialX = 0.0;
-        fp64_t initialY = 0.0;
-        double initialHstep = hstep;
-        double maxOffsetFromCentere = width/2;
-        std::list<XyPair> relativeWaypoints;
-
-        relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
-
-        bool done = false;
-        direction movementDirection = north; //Initial direction is up/north
-        
-        int hstepMultiplier = 1; //Increases length of each maneuver length
-        
-        while (!done) {
-          XyPair prevPoint = relativeWaypoints.back();
-          XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
-          XyPair constrainedNextPoint = constrainManeuver(width, nextPoint);
-          relativeWaypoints.push_back(constrainedNextPoint);
-
-          //Prepare for next loop
-          hstepMultiplier = (relativeWaypoints.size()+1)/2;
-          movementDirection = changeMovementDirection(movementDirection, curveRight);
-          done = isManeuverDone(nextPoint, constrainedNextPoint);
-        }
-        
-        std::list<XyPair> rotatedRelativeWaypoints = rotatePoints(relativeWaypoints, bearing);
-
-        return rotatedRelativeWaypoints;
-      }
-
       //! Returns the supplied waypoints, but rotated.
       //! @param[in] points points to rotate.
       //! @param[in] angle angle to rotate by.
@@ -268,46 +307,6 @@ namespace Maneuver
           rotatedPointsList.push_back(rotatedPoint);
         }
         return rotatedPointsList;
-      }
-
-      void
-      consume(const IMC::ExpandingSquare* maneuver)
-      {
-        if (maneuver->getSource() != getSystemId())
-          return;
-
-        m_maneuver = *maneuver;
-        bool curveRight = m_maneuver.flags; //Flag of 1 means true
-        setControl(IMC::CL_PATH);
-        m_path.speed = maneuver->speed;
-        m_path.speed_units = maneuver->speed_units;
-        m_path.end_z = maneuver->z;
-        m_path.end_z_units = maneuver->z_units;
-
-        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
-        m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
-
-        CoordinatePair firstWaypoint = m_plannedWaypoints.front();
-        m_plannedWaypoints.pop_front();
-
-        sendPath(firstWaypoint.lat, firstWaypoint.lon);
-      }
-
-      //! On PathControlState message
-      //! @param[in] pcs pointer to PathControlState message
-      void
-      onPathControlState(const IMC::PathControlState* pcs)
-      {
-        if (pcs->flags & IMC::PathControlState::FL_NEAR) {
-          if (m_plannedWaypoints.size() <= 0) {
-            inf("No more waypoints");
-            signalCompletion();
-            return;
-          }
-          CoordinatePair nextWaypoint = m_plannedWaypoints.front();
-          m_plannedWaypoints.pop_front();
-          sendPath(nextWaypoint.lat, nextWaypoint.lon);
-        }
       }
 
       //! Send new desired path as a DesiredPath IMC message
