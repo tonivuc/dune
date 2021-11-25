@@ -94,29 +94,19 @@ namespace Maneuver
       {
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
-
-        // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
       }
 
-      /*
-      //! Destructor
-      virtual
-      ~Task(void)
-      {
-        Memory::clear(m_stages_parser);
-        Memory::clear(m_alt_avrg);
-      }
-      */
-      
       void
       onManeuverDeactivation(void)
       {
-        /*
-        Memory::clear(m_stages_parser);
-        Memory::clear(m_alt_avrg);
-        */
+        //No need to clear m_plannedWaypoints as waypoints are removed as the maneuver progresses.
       }
 
+      //! Converts relative waypoints in meter offsets into a list of waypoints with GPS coordinates in radiants.
+      //! @param[in] relativeWaypoints number used to limit the other number if it exceeds it.
+      //! @param[in] vehicleLat latitude where the maneuver starts.
+      //! @param[in] vehicleLon longtitude where the maneuver starts.
+      //! @return a list of waypoints with GPS coordinates in radiants
       std::list<CoordinatePair>
       convertToAbsoluteWaypoints(std::list<XyPair> relativeWaypoints, double vehicleLat, double vehicleLon) {
         std::list<CoordinatePair> waypointCoordinates;
@@ -136,56 +126,53 @@ namespace Maneuver
         return waypointCoordinates;
       }
 
-      //Constrains number to the positiveLimitNumber, 
-      //but if the input number is negative it is constrained to the negative version of the positiveLimitNumber.
+      //! Constrains number to the positiveLimitNumber, but if the input number is negative it is constrained to the negative version of the positiveLimitNumber.
+      //! @param[in] positiveLimitNumber number used to limit the other number if it exceeds it.
+      //! @param[in] number number to be limited if it exceeds the positiveLimitNumber.
+      //! @return returns the number parameter unless it's absolute value is larger than the positiveLimitNumber, then that is returned instead with the same sgn as the number parameter.
       double
       constrainNumber(double positiveLimitNumber, double number) {
-        if (number >= 0) { //Positive
+        if (number >= 0) {
           return std::min(positiveLimitNumber, number);
         }
-        else { //Negative
+        else {
           double negativeLimitValue = positiveLimitNumber*-1;
           return std::max(negativeLimitValue, number);
         }
       }
 
-      //Function returns the original waypoint, but constrained if necessary so that it does not exceed the width of the maneuver
+      //! Returns the original waypoint, but constrained if necessary so that it does not exceed the width of the maneuver
+      //! @param[in] width width of the maneuver.
+      //! @param[in] rotatedPoint the original point before it has been checked against constraint/width rules.
+      //! @return a waypoint, possibly constrained in length
       XyPair
-      constrainManeuver(double width, double angle, XyPair rotatedPoints) {
-
+      constrainManeuver(double width, XyPair rotatedPoint) {
         double borderX = width/2;
         double borderY = width/2;
 
-        rotatedPoints.x = constrainNumber(borderX, rotatedPoints.x);
-        rotatedPoints.y = constrainNumber(borderY, rotatedPoints.y);
-
-        /*
-        war("Original border x and y %f, %f",borderX, borderY);
-        war("Angle input is %f", angle);
-        war("RotateClockwise is %d",m_rotate_clockwise);
-        Angles::rotate(angle, m_rotate_clockwise, borderX, borderY);
-        war("RotatedPoints %f, %f while border is %f, %f", rotatedPoints.x, rotatedPoints.y, borderX, borderY);
-        if (abs(borderX) < abs(rotatedPoints.x))  {
-          war("When generating the maneuver, x tried to be %f but was constrained to %f",rotatedPoints.x,borderX);
-          rotatedPoints.x = borderX;
-        }
-        if (abs(borderY) < abs(rotatedPoints.y))  {
-          war("When generating the maneuver, y tried to be %f but was constrained to %f",rotatedPoints.y,borderY);
-          rotatedPoints.y = borderY;
-        }
-        */
-
-        return rotatedPoints;
+        rotatedPoint.x = constrainNumber(borderX, rotatedPoint.x);
+        rotatedPoint.y = constrainNumber(borderY, rotatedPoint.y);
+        return rotatedPoint;
       }
 
+      //! Checks if the maneuver is done
+      //! @param[in] rotatedPoint the original point before it has been checked against constraint/width rules.
+      //! @param[in] constrainedRotatedPoint the point after being constrained by the width of the maneuver.
+      //! @return true if the maneuver is done, false otherwise.
       bool 
-      isManeuverDone(XyPair rotatedPoints, XyPair constrainedRotatedPoints) {
-        if (rotatedPoints.x != constrainedRotatedPoints.x || rotatedPoints.y != constrainedRotatedPoints.y) {
+      isManeuverDone(XyPair rotatedPoint, XyPair constrainedRotatedPoint) {
+        if (rotatedPoint.x != constrainedRotatedPoint.x || rotatedPoint.y != constrainedRotatedPoint.y) {
           return true;
         }
         return false;
       }
 
+      //! Creates a waypoint with a offset in the right direction
+      //! @param[in] prevPoint previous point.
+      //! @param[in] movementDirection which compass direction to move towards.
+      //! @param[in] initialHstep length of each sweep line before multiplier has been applied.
+      //! @param[in] hstepMultiplier a factor to multiply the initialHstep with to get the current sweep line length.
+      //! @return a waypoint.
       XyPair
       createNextPoint(XyPair prevPoint, direction movementDirection, double initialHstep, double hstepMultiplier) {
           double stepLength = initialHstep * hstepMultiplier;
@@ -202,6 +189,10 @@ namespace Maneuver
           }
       }
 
+      //! Takes the previous movement direction and returns the next one.
+      //! @param[in] previousDirection previous movement direction.
+      //! @param[in] curveRight if the maneuver should curve right or left.
+      //! @return the next movement direction
       direction
       changeMovementDirection(direction previousDirection, bool curveRight=true) {
         if (curveRight) {
@@ -224,6 +215,12 @@ namespace Maneuver
 
       }
 
+      //! Generates waypoints with offsets from the start location (0,0) in meters
+      //! @param[in] width maneuver width.
+      //! @param[in] hstep spacing between sweep lines.
+      //! @param[in] bearing angle the maneuver is rotated by.
+      //! @param[in] curveRight if the maneuver should curve right or left.
+      //! @return a list of waypoints
       std::list<XyPair>
       generateRelativeWaypoints(double width, double hstep, double bearing, bool curveRight=true) {
         fp64_t initialX = 0.0;
@@ -242,7 +239,7 @@ namespace Maneuver
         while (!done) {
           XyPair prevPoint = relativeWaypoints.back();
           XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
-          XyPair constrainedNextPoint = constrainManeuver(width, bearing, nextPoint);
+          XyPair constrainedNextPoint = constrainManeuver(width, nextPoint);
           relativeWaypoints.push_back(constrainedNextPoint);
 
           //Prepare for next loop
@@ -256,9 +253,12 @@ namespace Maneuver
         return rotatedRelativeWaypoints;
       }
 
+      //! Returns the supplied waypoints, but rotated.
+      //! @param[in] points points to rotate.
+      //! @param[in] angle angle to rotate by.
+      //! @return a list of rotated waypoints
       std::list<XyPair>
       rotatePoints(std::list<XyPair> points, double angle) {
-        
         std::list<XyPair> rotatedPointsList;
 
         std::list<XyPair>::iterator it;
@@ -275,7 +275,6 @@ namespace Maneuver
       void
       consume(const IMC::ExpandingSquare* maneuver)
       {
-        war("Inside consume ExpandingSquare maneuver");
         if (maneuver->getSource() != getSystemId())
           return;
 
@@ -283,20 +282,8 @@ namespace Maneuver
         bool curveRight = m_maneuver.flags; //Flag of 1 means true
 
         std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
-        std::list<XyPair>::iterator it;
-        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
-            war("As degrees: x & y: %f,%f",it->x, it->y);
-        }
-
 
         m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
-
-        /*
-        std::list<XyPair>::iterator it;
-        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
-            war("As degrees: lat & lon: %f,%f",Angles::degrees(it->x), Angles::degrees(it->y));
-        }
-        */
 
         CoordinatePair firstWaypoint = m_plannedWaypoints.front();
         m_plannedWaypoints.pop_front();
@@ -307,82 +294,7 @@ namespace Maneuver
         m_path.end_z = maneuver->z;
         m_path.end_z_units = maneuver->z_units;
         sendPath(firstWaypoint.lat, firstWaypoint.lon);
-
-
-
-
-        //New code!
-        //std::pair <fp64_t,fp64_t> product2(m_maneuver.lon,m_maneuver.lat); 
-
-        
-
-        //Calculate path based on logic from 0
-
-        //generatePoints method:
-
-
-        //Send first DesiredPath based on manouver parameters.
-
-        
-
-        //sendPath(lat, lon)
-
-        //Store remaining points in an array in the object? (Not the best way, better to have a function always giving the next point, but this is easier)
-
-
-        //Old code!!
-        /*
-        double hstep;
-        if (maneuver->angaperture <= 0)
-          hstep = 2 * maneuver->range;
-        else
-          hstep = 2 * maneuver->range * std::sin(maneuver->angaperture / 2);
-
-        m_alt_min = -1;
-        m_cov_pred = hstep * (1 - maneuver->overlap / 200.);
-        m_cov_actual_min = m_cov_pred;
-        m_cur_hstep = m_cov_pred;
-
-        m_stage = 0;
-
-        // Creates a new instance as this is the only way to change window size
-        Memory::clear(m_alt_avrg);
-        m_alt_avrg = new Math::MovingAverage<float>(m_args.altitude_average_size);
-
-        Memory::clear(m_stages_parser);
-        try
-        {
-          m_stages_parser = new Maneuvers::RowsStages(maneuver->lat, maneuver->lon, maneuver->bearing,
-                                                      maneuver->cross_angle, maneuver->width,
-                                                      maneuver->length, hstep, maneuver->coff, 100,
-                                                      maneuver->flags, this);
-        }
-        catch (std::runtime_error& e)
-        {
-          signalError(e.what());
-          return;
-        }
-
-        setControl(IMC::CL_PATH);
-        m_path.speed = maneuver->speed;
-        m_path.speed_units = maneuver->speed_units;
-        m_path.end_z = maneuver->z;
-        m_path.end_z_units = maneuver->z_units;
-
-        double lat;
-        double lon;
-
-        if (m_stages_parser->getFirstPoint(&lat, &lon))
-        {
-          signalCompletion();
-          return;
-        }
-
-        sendPath(lat, lon);
-        */
       }
-
-
 
       void
       consume(const IMC::EstimatedState* msg)
@@ -391,32 +303,12 @@ namespace Maneuver
         if (msg->getSource() != getSystemId())
           return;
 
-        /*
-        if (m_alt_avrg == NULL)
-          return;
-        */
 
         //New code!
         fp64_t lat = msg->lat;
         fp64_t lon = msg->lon;
 
-        war("Estimated latitude and longtitude are %f and %f", lat, lon);
 
-        //Old code
-        /*
-        if (msg->alt > m_args.min_altitude)
-        {
-          m_alt_avrg->update(msg->alt);
-          if (m_alt_avrg->sampleSize() >= m_alt_avrg->windowSize())
-          {
-            float avg = m_alt_avrg->mean();
-            if (m_alt_min < 0)
-              m_alt_min = avg;
-            else
-              m_alt_min = std::min(m_alt_min, avg);
-          }
-        }
-        */
       }
 
       //! On PathControlState message
@@ -424,14 +316,6 @@ namespace Maneuver
       void
       onPathControlState(const IMC::PathControlState* pcs)
       {
-        
-        /*
-        if (m_alt_avrg == NULL)
-          return;
-        */
-
-
-        //New code!
         if (pcs->flags & IMC::PathControlState::FL_NEAR) {
           if (m_plannedWaypoints.size() <= 0) {
             war("No more waypoints");
@@ -442,76 +326,6 @@ namespace Maneuver
           m_plannedWaypoints.pop_front();
           sendPath(nextWaypoint.lat, nextWaypoint.lon);
         }
-        
-
-
-        //Check if close to/reached point (can set a static 3m radius for close enough)
-        //If close enough send the next waypoint
-
-
-        //Old code!
-        /*
-        std::stringstream ss;
-        ss << "waypoint=" << m_stages_parser->getIndex();
-        ss << "; stage=" << m_stage;
-        ss << "; minAlt=" << m_alt_min;
-        ss << "; curHstep=" << m_cur_hstep;
-        ss << "; stdHstep=" << m_cov_pred;
-
-
-        if (!(pcs->flags & IMC::PathControlState::FL_NEAR))
-        {
-          signalProgress(pcs->eta, ss.str());
-          return;
-        }
-
-        double lat;
-        double lon;
-
-        bool last_pt;
-        switch (m_stage)
-        {
-          case 2:
-            m_alt_min = std::min(m_alt_min, m_alt_avrg->mean());
-            if (m_alt_min > 0)
-            {
-              m_cov_actual_min = 2 * m_alt_min * std::tan(m_maneuver.angaperture / 2);
-              m_cov_actual_min = m_cov_actual_min * (1 - m_maneuver.overlap / 200.);
-              m_cur_hstep = std::min(m_cov_pred, m_cov_actual_min);
-              last_pt = m_stages_parser->getNextPoint(&lat, &lon, m_cur_hstep);
-              ss << "; calculated=" << m_cur_hstep;
-            }
-            else
-            {
-              m_cur_hstep = m_cov_pred;
-              last_pt = m_stages_parser->getNextPoint(&lat, &lon, m_cur_hstep);
-              ss << "; not-calculated=" << m_cov_pred;
-            }
-            break;
-          default:
-            last_pt = m_stages_parser->getNextPoint(&lat, &lon);
-            break;
-        }
-
-        signalProgress(pcs->eta, ss.str());
-
-        m_alt_avrg->clear();
-        m_alt_min = -1;
-
-        if (last_pt)
-        {
-          signalCompletion();
-          return;
-        }
-
-        m_stage++;
-        unsigned num_stages = (m_maneuver.flags & IMC::ExpandingSquare::FLG_SQUARE_CURVE) ? 3 : 2;
-
-        if (m_stage > num_stages)
-          m_stage = 1;
-
-        sendPath(lat, lon);
-        */
       }
 
       //! Send new desired path as a DesiredPath IMC message
