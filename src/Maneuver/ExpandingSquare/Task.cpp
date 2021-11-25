@@ -440,17 +440,6 @@ namespace Maneuver
         m_path.flags = 0;
         dispatch(m_path);
       }
-      
-      //! Main loop.
-      void
-      onMain(void)
-      {
-        war("In expandingSquare onMain");
-        while (!stopping())
-        {
-          waitForMessages(1.0);
-        }
-      }
     };
   }
 }
