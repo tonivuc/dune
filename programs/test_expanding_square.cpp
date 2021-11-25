@@ -65,9 +65,9 @@ main(int argc, char** argv)
     man.speed_units = IMC::SUNITS_METERS_PS;
     // Fill the rest of the fields
     //Width?
-    man.width = 300.0;
+    man.width = 200.0;
     //hstep?
-    man.hstep = 40.0;
+    man.hstep = 30.0;
     //Bearing?
     man.bearing = 0.0;
     //First curve right?

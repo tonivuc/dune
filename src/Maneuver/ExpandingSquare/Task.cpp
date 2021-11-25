@@ -80,6 +80,8 @@ namespace Maneuver
       IMC::EstimatedState m_state;
       //! DesiredPath
       IMC::DesiredPath m_path;
+      //!
+      std::list<CoordinatePair> m_plannedWaypoints;
 
       bool m_rotate_clockwise = true;
 
@@ -238,12 +240,24 @@ namespace Maneuver
         }
         */
 
-        std::list<CoordinatePair> absoluteWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
+        m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
 
+        CoordinatePair firstWaypoint = m_plannedWaypoints.front();
+        m_plannedWaypoints.pop_front();
+
+        setControl(IMC::CL_PATH);
+        m_path.speed = maneuver->speed;
+        m_path.speed_units = maneuver->speed_units;
+        m_path.end_z = maneuver->z;
+        m_path.end_z_units = maneuver->z_units;
+        sendPath(firstWaypoint.lat, firstWaypoint.lon);
+
+        /*
         std::list<CoordinatePair>::iterator it;
-        for (it = absoluteWaypoints.begin(); it != absoluteWaypoints.end(); ++it){
+        for (it = m_plannedWaypoints.begin(); it != absoluteWaypoints.end(); ++it){
             war("As radians: lat: %f, lon: %f",it->lat, it->lon);
         }
+        */
 
 
         //New code!
@@ -359,7 +373,7 @@ namespace Maneuver
       void
       onPathControlState(const IMC::PathControlState* pcs)
       {
-        inf("Inside onPathControlState");
+        
         /*
         if (m_alt_avrg == NULL)
           return;
@@ -367,7 +381,15 @@ namespace Maneuver
 
 
         //New code!
+        if (pcs->flags & IMC::PathControlState::FL_NEAR) {
+          war("Near waypoint, send next coordinate");
+          CoordinatePair nextWaypoint = m_plannedWaypoints.front();
+          m_plannedWaypoints.pop_front();
+          sendPath(nextWaypoint.lat, nextWaypoint.lon);
+        }
         
+
+
         //Check if close to/reached point (can set a static 3m radius for close enough)
         //If close enough send the next waypoint
 
@@ -443,6 +465,7 @@ namespace Maneuver
       void
       sendPath(double lat, double lon)
       {
+        war("Inside sendPath");
         // Calculate WGS-84 coordinates and fill DesiredPath message
         m_path.end_lat = lat;
         m_path.end_lon = lon;
