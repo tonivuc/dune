@@ -179,13 +179,24 @@ namespace Maneuver
 
       direction
       changeMovementDirection(direction previousDirection, bool curveRight=true) {
-        if ((int)previousDirection < 3) { //west
-          int newDirAsInt = (int)previousDirection+1;
-          return static_cast<direction>(newDirAsInt);
+        if (curveRight) {
+          if ((int)previousDirection < 3) { //everything except west
+            int newDirAsInt = (int)previousDirection+1;
+            return static_cast<direction>(newDirAsInt);
+          }
+          else { //If the last one was west
+            return north;
+          }
+        } else {
+          if (previousDirection == north) {
+            return west;
+          }
+          else if ((int)previousDirection > 0) {
+            int newDirAsInt = (int)previousDirection-1;
+            return static_cast<direction>(newDirAsInt);
+          }
         }
-        else {
-          return static_cast<direction>(0); //north
-        }
+
       }
 
       std::list<XyPair>
@@ -213,7 +224,7 @@ namespace Maneuver
 
           //Prepare for next loop
           hstepMultiplier = (relativeWaypoints.size()+1)/2;
-          movementDirection = changeMovementDirection(movementDirection);
+          movementDirection = changeMovementDirection(movementDirection, curveRight);
           done = isManeuverDone(nextPoint, constrainedNextPoint);
         }
         
@@ -231,14 +242,6 @@ namespace Maneuver
         bool curveRight = m_maneuver.flags; //Flag of 1 means true
 
         std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
-
-        /*
-        war("Have generated %u waypoints",relativeWaypoints.size());
-        std::list<XyPair>::iterator it;
-        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
-            war("x: %f, y: %f",it->x, it->y);
-        }
-        */
 
         m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
 
