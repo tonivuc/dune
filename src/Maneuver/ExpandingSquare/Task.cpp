@@ -215,12 +215,12 @@ namespace Maneuver
             return north;
           }
         } else {
-          if (previousDirection == north) {
-            return west;
-          }
-          else if ((int)previousDirection > 0) {
+          if ((int)previousDirection > 0) {
             int newDirAsInt = (int)previousDirection-1;
             return static_cast<direction>(newDirAsInt);
+          }
+          else { //If it was 0 then it was north, and west is next
+            return west;
           }
         }
       }
