@@ -31,6 +31,7 @@
 #include <DUNE/DUNE.hpp>
 #include <utility>  
 #include <list>
+#include <algorithm>
 
 namespace Maneuver
 {
@@ -94,7 +95,6 @@ namespace Maneuver
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
 
-
         // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
       }
 
@@ -136,19 +136,44 @@ namespace Maneuver
         return waypointCoordinates;
       }
 
+      //Constrains number to the positiveLimitNumber, 
+      //but if the input number is negative it is constrained to the negative version of the positiveLimitNumber.
+      double
+      constrainNumber(double positiveLimitNumber, double number) {
+        if (number >= 0) { //Positive
+          return std::min(positiveLimitNumber, number);
+        }
+        else { //Negative
+          double negativeLimitValue = positiveLimitNumber*-1;
+          return std::max(negativeLimitValue, number);
+        }
+      }
+
       //Function returns the original waypoint, but constrained if necessary so that it does not exceed the width of the maneuver
       XyPair
       constrainManeuver(double width, double angle, XyPair rotatedPoints) {
+
         double borderX = width/2;
         double borderY = width/2;
-        Angles::rotate(angle, m_rotate_clockwise, borderX, borderY);
 
-        if (borderX < rotatedPoints.x)  {
+        rotatedPoints.x = constrainNumber(borderX, rotatedPoints.x);
+        rotatedPoints.y = constrainNumber(borderY, rotatedPoints.y);
+
+        /*
+        war("Original border x and y %f, %f",borderX, borderY);
+        war("Angle input is %f", angle);
+        war("RotateClockwise is %d",m_rotate_clockwise);
+        Angles::rotate(angle, m_rotate_clockwise, borderX, borderY);
+        war("RotatedPoints %f, %f while border is %f, %f", rotatedPoints.x, rotatedPoints.y, borderX, borderY);
+        if (abs(borderX) < abs(rotatedPoints.x))  {
+          war("When generating the maneuver, x tried to be %f but was constrained to %f",rotatedPoints.x,borderX);
           rotatedPoints.x = borderX;
         }
-        if (borderY < rotatedPoints.y)  {
+        if (abs(borderY) < abs(rotatedPoints.y))  {
+          war("When generating the maneuver, y tried to be %f but was constrained to %f",rotatedPoints.y,borderY);
           rotatedPoints.y = borderY;
         }
+        */
 
         return rotatedPoints;
       }
@@ -242,8 +267,20 @@ namespace Maneuver
         bool curveRight = m_maneuver.flags; //Flag of 1 means true
 
         std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
+        std::list<XyPair>::iterator it;
+        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
+            war("As degrees: x & y: %f,%f",it->x, it->y);
+        }
+
 
         m_plannedWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
+
+        /*
+        std::list<XyPair>::iterator it;
+        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
+            war("As degrees: lat & lon: %f,%f",Angles::degrees(it->x), Angles::degrees(it->y));
+        }
+        */
 
         CoordinatePair firstWaypoint = m_plannedWaypoints.front();
         m_plannedWaypoints.pop_front();
@@ -255,12 +292,7 @@ namespace Maneuver
         m_path.end_z_units = maneuver->z_units;
         sendPath(firstWaypoint.lat, firstWaypoint.lon);
 
-        /*
-        std::list<CoordinatePair>::iterator it;
-        for (it = m_plannedWaypoints.begin(); it != absoluteWaypoints.end(); ++it){
-            war("As radians: lat: %f, lon: %f",it->lat, it->lon);
-        }
-        */
+
 
 
         //New code!
