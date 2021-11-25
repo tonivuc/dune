@@ -382,7 +382,11 @@ namespace Maneuver
 
         //New code!
         if (pcs->flags & IMC::PathControlState::FL_NEAR) {
-          war("Near waypoint, send next coordinate");
+          if (m_plannedWaypoints.size() <= 0) {
+            war("No more waypoints");
+            signalCompletion();
+            return;
+          }
           CoordinatePair nextWaypoint = m_plannedWaypoints.front();
           m_plannedWaypoints.pop_front();
           sendPath(nextWaypoint.lat, nextWaypoint.lon);

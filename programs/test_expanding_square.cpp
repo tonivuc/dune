@@ -61,13 +61,13 @@ main(int argc, char** argv)
     man.lon = Angles::radians(-8.70599224);
     man.z = 0;
     man.z_units = IMC::Z_DEPTH;
-    man.speed = 1.2;
+    man.speed = 3;
     man.speed_units = IMC::SUNITS_METERS_PS;
     // Fill the rest of the fields
     //Width?
-    man.width = 200.0;
+    man.width = 30.0;
     //hstep?
-    man.hstep = 30.0;
+    man.hstep = 10.0;
     //Bearing?
     man.bearing = 0.0;
     //First curve right?
