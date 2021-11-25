@@ -151,7 +151,6 @@ namespace Maneuver
         fp64_t initialX = 0.0;
         fp64_t initialY = 0.0;
         double initialHstep = hstep;
-        double maxOffsetFromCentere = width/2;
         std::list<XyPair> relativeWaypoints;
 
         relativeWaypoints.push_back(XyPair(initialX,initialY)); //Start position
@@ -178,7 +177,7 @@ namespace Maneuver
         return rotatedRelativeWaypoints;
       }
 
-            //! Creates a waypoint with a offset in the right direction
+      //! Creates a waypoint with a offset in the right direction
       //! @param[in] prevPoint previous point.
       //! @param[in] movementDirection which compass direction to move towards.
       //! @param[in] initialHstep length of each sweep line before multiplier has been applied.
@@ -198,6 +197,8 @@ namespace Maneuver
             case west: 
               return XyPair(prevPoint.x - stepLength, prevPoint.y);
           }
+          war("Something went wrong in createNextPoint inside the ExpandingSquare task.");
+          return XyPair(0.0,0.0);
       }
 
       //! Takes the previous movement direction and returns the next one.
