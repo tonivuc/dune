@@ -242,8 +242,6 @@ namespace Maneuver
         while (!done) {
           XyPair prevPoint = relativeWaypoints.back();
           XyPair nextPoint = createNextPoint(prevPoint, movementDirection, initialHstep, hstepMultiplier);
-           
-          Angles::rotate(bearing, m_rotate_clockwise, nextPoint.x, nextPoint.y); //Rotates nextPoint according to bearing
           XyPair constrainedNextPoint = constrainManeuver(width, bearing, nextPoint);
           relativeWaypoints.push_back(constrainedNextPoint);
 
@@ -253,7 +251,25 @@ namespace Maneuver
           done = isManeuverDone(nextPoint, constrainedNextPoint);
         }
         
-        return relativeWaypoints;
+        std::list<XyPair> rotatedRelativeWaypoints = rotatePoints(relativeWaypoints, bearing);
+
+        return rotatedRelativeWaypoints;
+      }
+
+      std::list<XyPair>
+      rotatePoints(std::list<XyPair> points, double angle) {
+        
+        std::list<XyPair> rotatedPointsList;
+
+        std::list<XyPair>::iterator it;
+        for (it = points.begin(); it != points.end(); ++it){
+          XyPair rotatedPoint(0.0,0.0);
+          rotatedPoint.x = it->x;
+          rotatedPoint.y = it->y;
+          Angles::rotate(angle, m_rotate_clockwise, rotatedPoint.x, rotatedPoint.y);
+          rotatedPointsList.push_back(rotatedPoint);
+        }
+        return rotatedPointsList;
       }
 
       void

@@ -64,13 +64,9 @@ main(int argc, char** argv)
     man.speed = 5;
     man.speed_units = IMC::SUNITS_METERS_PS;
     // Fill the rest of the fields
-    //Width?
-    man.width = 160.0;
-    //hstep?
+    man.width = 100.0;
     man.hstep = 20.0;
-    //Bearing?
-    man.bearing = Angles::radians(30.0);
-    //First curve right?
+    man.bearing = Angles::radians(-90.0);
     man.flags = IMC::ExpandingSquare::FLG_CURVE_RIGHT;
 
     IMC::PlanManeuver pman;
