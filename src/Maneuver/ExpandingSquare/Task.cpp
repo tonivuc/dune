@@ -92,15 +92,7 @@ namespace Maneuver
         war("Inside ExpandingSquare task constructor");
         bindToManeuver<Task, IMC::ExpandingSquare>();
 
-        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(300, 40, 0.0, true);
-        war("Have generated %u waypoints",relativeWaypoints.size());
-        
-        std::list<XyPair>::iterator it;
-        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
-            war("x: %f, y: %f",it->x, it->y);
-        }
 
-        std::list<CoordinatePair> absoluteWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, Angles::radians(41.1843982), Angles::radians(-8.70599224));
         // maybe doesn't need to be activable? cuz started by consume message paramActive(Tasks::Parameter::SCOPE_GLOBAL, Tasks::Parameter::VISIBILITY_USER, true); //Required to support task activation and deactivation
       }
 
@@ -235,6 +227,23 @@ namespace Maneuver
 
         m_maneuver = *maneuver;
         bool curveRight = m_maneuver.flags; //Flag of 1 means true
+
+        std::list<XyPair> relativeWaypoints = generateRelativeWaypoints(m_maneuver.width, m_maneuver.hstep, m_maneuver.bearing, curveRight);
+
+        /*
+        war("Have generated %u waypoints",relativeWaypoints.size());
+        std::list<XyPair>::iterator it;
+        for (it = relativeWaypoints.begin(); it != relativeWaypoints.end(); ++it){
+            war("x: %f, y: %f",it->x, it->y);
+        }
+        */
+
+        std::list<CoordinatePair> absoluteWaypoints = convertToAbsoluteWaypoints(relativeWaypoints, m_maneuver.lat, m_maneuver.lon);
+
+        std::list<CoordinatePair>::iterator it;
+        for (it = absoluteWaypoints.begin(); it != absoluteWaypoints.end(); ++it){
+            war("As radians: lat: %f, lon: %f",it->lat, it->lon);
+        }
 
 
         //New code!
