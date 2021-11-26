@@ -27,13 +27,13 @@ First there are some prerequisites to using DUNE at all. See them [here](https:/
   
   
 
-1. Create a dedicated folder for DUNE's compiled binaries:
+1. Inside the cloned DUNE project folder create a dedicated folder for DUNE's compiled binaries:
 
   
 
 ```sh
 
-mkdir $HOME/dune/build
+mkdir build
 
 ```
 
@@ -47,7 +47,7 @@ created.
 
 ```sh
 
-cd  $HOME/dune/build
+cd  build
 
 ```
 
